@@ -47,12 +47,12 @@ namespace RevitMCPPlugin.Core
                     "Revit may be busy with another operation.");
             }
 
-            // Timeout after 30 seconds — prevents permanent hanging if Revit is frozen
-            var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            // Timeout after 5 minutes — export operations can take significant time on large models
+            var cts = new CancellationTokenSource(TimeSpan.FromSeconds(300));
             try
             {
                 using (cts.Token.Register(() => tcs.TrySetException(
-                    new TimeoutException($"Command '{commandName}' timed out after 30s. Revit may be busy."))))
+                    new TimeoutException($"Command '{commandName}' timed out after 5 minutes. Revit may be busy."))))
                 {
                     return await tcs.Task;
                 }

@@ -13,7 +13,7 @@
 
   <PropertyGroup>
     <!-- Revit API version - change based on target -->
-    <RevitVersion>2024</RevitVersion>
+    <RevitVersion>2025</RevitVersion>
   </PropertyGroup>
 
   <ItemGroup>
@@ -37,5 +37,7 @@
     <Reference Include="PresentationFramework" />
     <Reference Include="WindowsBase" />
     <Reference Include="System.Xaml" />
+    <Reference Include="System.Net.Http" />
+    <Reference Include="System.Windows.Forms" />
   </ItemGroup>
 </Project>

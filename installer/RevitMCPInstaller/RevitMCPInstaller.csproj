@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <AssemblyName>RevitMCP-Setup</AssemblyName>
+    <RootNamespace>RevitMCPInstaller</RootNamespace>
+    <AssemblyTitle>Revit MCP Installer</AssemblyTitle>
+    <Company>Hassan Ahmed Elmathary</Company>
+    <Product>Revit MCP Plugin</Product>
+    <Version>1.1.0</Version>
+    <UseWPF>true</UseWPF>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+  </ItemGroup>
+
+</Project>
