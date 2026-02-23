@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -6,6 +7,8 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Effects;
+using DB = Autodesk.Revit.DB;
+using RevitMCPPlugin.Core;
 using RevitMCPPlugin.UI.Themes;
 
 namespace RevitMCPPlugin.UI.Tools
@@ -27,6 +30,7 @@ namespace RevitMCPPlugin.UI.Tools
         private TextBlock _selectionStatus;
         private readonly List<CheckBox> _itemCheckboxes = new List<CheckBox>();
         private bool _showingSheets = true;
+        private TextBlock _validationMsg;
 
         // ── Tab 2: Format checkboxes ──────────────────────────────────
         private CheckBox _fmtPdf, _fmtDwg, _fmtDgn, _fmtDwf, _fmtNwc, _fmtIfc, _fmtImg;
@@ -59,29 +63,9 @@ namespace RevitMCPPlugin.UI.Tools
         // State
         private int _activeTab = 0;
 
-        // Sample data
-        private static readonly string[][] SampleSheets = new[]
-        {
-            new[] { "A101", "Ground Floor Plan", "", "A0" },
-            new[] { "A102", "First Floor Plan", "", "A0" },
-            new[] { "A103", "Second Floor Plan", "", "A0" },
-            new[] { "A104", "Roof Plan", "", "A1" },
-            new[] { "A201", "North Elevation", "", "A1" },
-            new[] { "A202", "South Elevation", "", "A1" },
-            new[] { "A301", "Section A-A", "", "A2" },
-            new[] { "A401", "Wall Details", "", "A3" }
-        };
-
-        private static readonly string[][] SampleViews = new[]
-        {
-            new[] { "Level 0 - Floor Plan", "FloorPlan", "" },
-            new[] { "Level 1 - Floor Plan", "FloorPlan", "" },
-            new[] { "Level 2 - Floor Plan", "FloorPlan", "" },
-            new[] { "North Elevation", "Elevation", "" },
-            new[] { "South Elevation", "Elevation", "" },
-            new[] { "Section A-A", "Section", "" },
-            new[] { "3D - Working", "3D View", "" }
-        };
+        // Real Revit data (populated from document)
+        private List<string[]> _realSheets = new List<string[]>();
+        private List<string[]> _realViews = new List<string[]>();
 
         // ══════════════════════════════════════════════════════════════
         // ██ Constructor ██
@@ -324,6 +308,18 @@ namespace RevitMCPPlugin.UI.Tools
             DockPanel.SetDock(showActiveCheck, Dock.Right);
             bottomRow.Children.Add(showActiveCheck);
             content.Children.Add(bottomRow);
+
+            // ── Validation message (hidden by default) ──
+            _validationMsg = new TextBlock
+            {
+                Text = "",
+                FontSize = 12,
+                Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0xCC, 0x00)),
+                Margin = new Thickness(0, 8, 0, 0),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Visibility = Visibility.Collapsed
+            };
+            content.Children.Add(_validationMsg);
 
             sheetsRadio.Checked += (s, e) => { _showingSheets = true; PopulateItems(); };
             viewsRadio.Checked += (s, e) => { _showingSheets = false; PopulateItems(); };
@@ -822,6 +818,18 @@ namespace RevitMCPPlugin.UI.Tools
 
         private void NextBtn_Click(object sender, RoutedEventArgs e)
         {
+            // Validate selection before leaving Tab 1
+            if (_activeTab == 0)
+            {
+                var selectedCount = _itemCheckboxes.Count(cb => cb.IsChecked == true);
+                if (selectedCount == 0)
+                {
+                    ShowValidationMessage("⚠ Please select at least one sheet or view before proceeding.");
+                    return;
+                }
+                HideValidationMessage();
+            }
+
             if (_activeTab < 2)
             {
                 SwitchTab(_activeTab + 1);
@@ -833,20 +841,102 @@ namespace RevitMCPPlugin.UI.Tools
             }
         }
 
+        private void ShowValidationMessage(string msg)
+        {
+            if (_validationMsg != null)
+            {
+                _validationMsg.Text = msg;
+                _validationMsg.Visibility = Visibility.Visible;
+            }
+        }
+
+        private void HideValidationMessage()
+        {
+            if (_validationMsg != null)
+                _validationMsg.Visibility = Visibility.Collapsed;
+        }
+
         // ══════════════════════════════════════════════════════════════
         // ██ Data Population ██
         // ══════════════════════════════════════════════════════════════
+        private void LoadRevitData()
+        {
+            _realSheets.Clear();
+            _realViews.Clear();
+
+            try
+            {
+                var uiApp = Core.Application.ActiveUIApp;
+                if (uiApp?.ActiveUIDocument?.Document == null) return;
+                var doc = uiApp.ActiveUIDocument.Document;
+
+                // Get all sheets
+                var sheets = new DB.FilteredElementCollector(doc)
+                    .OfClass(typeof(DB.ViewSheet))
+                    .Cast<DB.ViewSheet>()
+                    .Where(s => !s.IsTemplate)
+                    .OrderBy(s => s.SheetNumber)
+                    .ToList();
+
+                foreach (var sheet in sheets)
+                {
+                    var rev = "";
+                    try { rev = sheet.get_Parameter(DB.BuiltInParameter.SHEET_CURRENT_REVISION)?.AsString() ?? ""; } catch { }
+                    _realSheets.Add(new[] { sheet.SheetNumber, sheet.Name, rev, "", sheet.Id.ToString() });
+                }
+
+                // Get all printable views (exclude templates, sheets, and internal views)
+                var views = new DB.FilteredElementCollector(doc)
+                    .OfClass(typeof(DB.View))
+                    .Cast<DB.View>()
+                    .Where(v => !v.IsTemplate && !(v is DB.ViewSheet) && v.CanBePrinted)
+                    .OrderBy(v => v.ViewType.ToString())
+                    .ThenBy(v => v.Name)
+                    .ToList();
+
+                foreach (var view in views)
+                {
+                    _realViews.Add(new[] { view.Name, view.ViewType.ToString(), view.Id.ToString() });
+                }
+
+                Logger.Log($"Export Manager loaded {_realSheets.Count} sheets and {_realViews.Count} views from document.");
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError("Failed to load Revit data for Export Manager", ex);
+            }
+        }
+
         private void PopulateItems()
         {
             _itemListPanel.Children.Clear();
             _itemCheckboxes.Clear();
+            HideValidationMessage();
+
+            // Load real data from Revit document if not yet loaded
+            if (_realSheets.Count == 0 && _realViews.Count == 0)
+                LoadRevitData();
 
             if (_showingSheets)
             {
-                foreach (var sheet in SampleSheets)
+                if (_realSheets.Count == 0)
+                {
+                    _itemListPanel.Children.Add(new TextBlock
+                    {
+                        Text = "No sheets found in the current document.",
+                        FontSize = 12,
+                        Foreground = DarkTheme.FgDim,
+                        Margin = new Thickness(12, 20, 12, 20),
+                        HorizontalAlignment = HorizontalAlignment.Center
+                    });
+                    UpdateSelectionStatus();
+                    return;
+                }
+
+                foreach (var sheet in _realSheets)
                 {
                     var cb = DarkTheme.MakeCheckBox("", false);
-                    cb.Checked += (s, e) => UpdateSelectionStatus();
+                    cb.Checked += (s, e) => { UpdateSelectionStatus(); HideValidationMessage(); };
                     cb.Unchecked += (s, e) => UpdateSelectionStatus();
                     _itemCheckboxes.Add(cb);
 
@@ -895,10 +985,24 @@ namespace RevitMCPPlugin.UI.Tools
             }
             else
             {
-                foreach (var view in SampleViews)
+                if (_realViews.Count == 0)
+                {
+                    _itemListPanel.Children.Add(new TextBlock
+                    {
+                        Text = "No printable views found in the current document.",
+                        FontSize = 12,
+                        Foreground = DarkTheme.FgDim,
+                        Margin = new Thickness(12, 20, 12, 20),
+                        HorizontalAlignment = HorizontalAlignment.Center
+                    });
+                    UpdateSelectionStatus();
+                    return;
+                }
+
+                foreach (var view in _realViews)
                 {
                     var cb = DarkTheme.MakeCheckBox("", false);
-                    cb.Checked += (s, e) => UpdateSelectionStatus();
+                    cb.Checked += (s, e) => { UpdateSelectionStatus(); HideValidationMessage(); };
                     cb.Unchecked += (s, e) => UpdateSelectionStatus();
                     _itemCheckboxes.Add(cb);
 
@@ -990,19 +1094,19 @@ namespace RevitMCPPlugin.UI.Tools
 
             if (_showingSheets)
             {
-                for (int i = 0; i < _itemCheckboxes.Count && i < SampleSheets.Length; i++)
+                for (int i = 0; i < _itemCheckboxes.Count && i < _realSheets.Count; i++)
                 {
                     if (_itemCheckboxes[i].IsChecked != true) continue;
-                    var s = SampleSheets[i];
+                    var s = _realSheets[i];
                     AddQueueRow(s[0], s[1], fmtStr, s[3], "Auto");
                 }
             }
             else
             {
-                for (int i = 0; i < _itemCheckboxes.Count && i < SampleViews.Length; i++)
+                for (int i = 0; i < _itemCheckboxes.Count && i < _realViews.Count; i++)
                 {
                     if (_itemCheckboxes[i].IsChecked != true) continue;
-                    var v = SampleViews[i];
+                    var v = _realViews[i];
                     AddQueueRow("", v[0], fmtStr, "—", "—");
                 }
             }
