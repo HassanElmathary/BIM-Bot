@@ -1064,6 +1064,7 @@ namespace RevitMCPPlugin.UI.Tools
                     row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(30) });
                     row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
                     row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(100) });
+                    row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(130) });
 
                     var rowBorder = new Border
                     {
@@ -1085,6 +1086,22 @@ namespace RevitMCPPlugin.UI.Tools
                     var typeText = new TextBlock { Text = view[1], FontSize = 11, Foreground = DarkTheme.FgDim, VerticalAlignment = VerticalAlignment.Center };
                     Grid.SetColumn(typeText, 2);
                     row.Children.Add(typeText);
+
+                    var customNameBox = new TextBox
+                    {
+                        Text = "",
+                        FontSize = 11,
+                        Foreground = DarkTheme.FgLight,
+                        Background = Brushes.Transparent,
+                        BorderThickness = new Thickness(0, 0, 0, 1),
+                        BorderBrush = DarkTheme.BorderDim,
+                        VerticalAlignment = VerticalAlignment.Center,
+                        Padding = new Thickness(2, 1, 2, 1)
+                    };
+                    customNameBox.GotFocus += (s, e) => customNameBox.BorderBrush = DarkTheme.CatExport;
+                    customNameBox.LostFocus += (s, e) => customNameBox.BorderBrush = DarkTheme.BorderDim;
+                    Grid.SetColumn(customNameBox, 3);
+                    row.Children.Add(customNameBox);
 
                     row.Tag = $"{view[0]} {view[1]}".ToLower();
 

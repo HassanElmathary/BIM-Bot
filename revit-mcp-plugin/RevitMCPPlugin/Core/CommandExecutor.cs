@@ -1081,21 +1081,59 @@ namespace RevitMCPPlugin.Core
 
             try
             {
-                var views = new FilteredElementCollector(doc)
-                    .OfClass(typeof(View))
-                    .Cast<View>()
-                    .Where(v => !v.IsTemplate && v.CanBePrinted)
-                    .ToList();
+                // Collect specified views/sheets, or fall back to active view only
+                var viewIds = new List<ElementId>();
+
+                var viewIdStr = parameters?["viewIds"]?.ToString();
+                if (!string.IsNullOrWhiteSpace(viewIdStr))
+                {
+                    foreach (var idStr in viewIdStr.Split(','))
+                    {
+                        if (long.TryParse(idStr.Trim(), out var id))
+                        {
+                            var elem = doc.GetElement(new ElementId(id));
+                            if (elem is View v && !v.IsTemplate && v.CanBePrinted)
+                                viewIds.Add(v.Id);
+                        }
+                    }
+                }
+
+                var sheetIdStr = parameters?["sheetIds"]?.ToString();
+                if (!string.IsNullOrWhiteSpace(sheetIdStr))
+                {
+                    foreach (var idStr in sheetIdStr.Split(','))
+                    {
+                        if (long.TryParse(idStr.Trim(), out var id))
+                        {
+                            var elem = doc.GetElement(new ElementId(id));
+                            if (elem is ViewSheet)
+                                viewIds.Add(elem.Id);
+                        }
+                    }
+                }
+
+                // If no specific views provided, use active view
+                if (viewIds.Count == 0)
+                {
+                    var activeView = doc.ActiveView;
+                    if (activeView != null && !activeView.IsTemplate && activeView.CanBePrinted)
+                        viewIds.Add(activeView.Id);
+                }
+
+                if (viewIds.Count == 0)
+                    return new JObject { ["message"] = "⚠ No exportable views found." };
 
                 var dwgOpts = new DWGExportOptions();
                 int exported = 0;
-                foreach (var view in views.Take(100))
+                foreach (var vid in viewIds.Take(50))
                 {
                     try
                     {
-                        var viewIds = new List<ElementId> { view.Id };
+                        var view = doc.GetElement(vid) as View;
+                        if (view == null) continue;
+                        var ids = new List<ElementId> { vid };
                         var cleanName = CleanFileName(view.Name);
-                        doc.Export(outputFolder, cleanName, viewIds, dwgOpts);
+                        doc.Export(outputFolder, cleanName, ids, dwgOpts);
                         exported++;
                     }
                     catch { }
