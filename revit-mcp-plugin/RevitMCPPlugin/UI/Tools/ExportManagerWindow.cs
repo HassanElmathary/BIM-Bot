@@ -811,7 +811,21 @@ namespace RevitMCPPlugin.UI.Tools
             panel.Children.Add(indicator);
 
             var idx = index;
-            panel.MouseLeftButtonUp += (s, e) => SwitchTab(idx);
+            panel.MouseLeftButtonUp += (s, e) =>
+            {
+                // Validate: can't leave Selection tab without selecting something
+                if (_activeTab == 0 && idx > 0)
+                {
+                    var selectedCount = _itemCheckboxes.Count(cb => cb.IsChecked == true);
+                    if (selectedCount == 0)
+                    {
+                        ShowValidationMessage("⚠ Please select at least one sheet or view before proceeding.");
+                        return;
+                    }
+                    HideValidationMessage();
+                }
+                SwitchTab(idx);
+            };
 
             return panel;
         }
@@ -969,13 +983,53 @@ namespace RevitMCPPlugin.UI.Tools
                     Grid.SetColumn(nameText, 2);
                     row.Children.Add(nameText);
 
-                    var revText = new TextBlock { Text = sheet[2], FontSize = 11, Foreground = DarkTheme.FgDim, VerticalAlignment = VerticalAlignment.Center };
-                    Grid.SetColumn(revText, 3);
-                    row.Children.Add(revText);
+                    var revBox = new TextBox
+                    {
+                        Text = sheet[2],
+                        FontSize = 11,
+                        Foreground = DarkTheme.FgLight,
+                        Background = Brushes.Transparent,
+                        BorderThickness = new Thickness(0, 0, 0, 1),
+                        BorderBrush = DarkTheme.BorderDim,
+                        VerticalAlignment = VerticalAlignment.Center,
+                        Padding = new Thickness(2, 1, 2, 1)
+                    };
+                    revBox.GotFocus += (s, e) => revBox.BorderBrush = DarkTheme.CatExport;
+                    revBox.LostFocus += (s, e) => revBox.BorderBrush = DarkTheme.BorderDim;
+                    Grid.SetColumn(revBox, 3);
+                    row.Children.Add(revBox);
 
-                    var sizeText = new TextBlock { Text = sheet[3], FontSize = 11, Foreground = DarkTheme.FgDim, VerticalAlignment = VerticalAlignment.Center };
-                    Grid.SetColumn(sizeText, 4);
-                    row.Children.Add(sizeText);
+                    var sizeBox = new TextBox
+                    {
+                        Text = sheet[3],
+                        FontSize = 11,
+                        Foreground = DarkTheme.FgLight,
+                        Background = Brushes.Transparent,
+                        BorderThickness = new Thickness(0, 0, 0, 1),
+                        BorderBrush = DarkTheme.BorderDim,
+                        VerticalAlignment = VerticalAlignment.Center,
+                        Padding = new Thickness(2, 1, 2, 1)
+                    };
+                    sizeBox.GotFocus += (s, e) => sizeBox.BorderBrush = DarkTheme.CatExport;
+                    sizeBox.LostFocus += (s, e) => sizeBox.BorderBrush = DarkTheme.BorderDim;
+                    Grid.SetColumn(sizeBox, 4);
+                    row.Children.Add(sizeBox);
+
+                    var customNameBox = new TextBox
+                    {
+                        Text = "",
+                        FontSize = 11,
+                        Foreground = DarkTheme.FgLight,
+                        Background = Brushes.Transparent,
+                        BorderThickness = new Thickness(0, 0, 0, 1),
+                        BorderBrush = DarkTheme.BorderDim,
+                        VerticalAlignment = VerticalAlignment.Center,
+                        Padding = new Thickness(2, 1, 2, 1)
+                    };
+                    customNameBox.GotFocus += (s, e) => customNameBox.BorderBrush = DarkTheme.CatExport;
+                    customNameBox.LostFocus += (s, e) => customNameBox.BorderBrush = DarkTheme.BorderDim;
+                    Grid.SetColumn(customNameBox, 5);
+                    row.Children.Add(customNameBox);
 
                     row.Tag = $"{sheet[0]} {sheet[1]}".ToLower();
 
