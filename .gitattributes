@@ -1,0 +1,2 @@
+dist/RevitMCP/nodejs/node.exe filter=lfs diff=lfs merge=lfs -text
+*.exe filter=lfs diff=lfs merge=lfs -text
