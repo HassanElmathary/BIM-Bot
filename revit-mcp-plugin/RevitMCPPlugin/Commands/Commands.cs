@@ -2,6 +2,7 @@ using Autodesk.Revit.Attributes;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
 using RevitMCPPlugin.Core;
+using RevitMCPPlugin.UI;
 
 namespace RevitMCPPlugin.Commands
 {
@@ -61,24 +62,13 @@ namespace RevitMCPPlugin.Commands
 
                 if (updateInfo.UpdateAvailable)
                 {
-                    var result = TaskDialog.Show(
-                        "Revit MCP Update Available",
-                        $"A new version is available!\n\n" +
-                        $"Current: v{Application.Version}\n" +
-                        $"Latest: {updateInfo.LatestVersion}\n\n" +
-                        $"Changelog:\n{updateInfo.Changelog}\n\n" +
-                        $"Would you like to download the update?",
-                        TaskDialogCommonButtons.Yes | TaskDialogCommonButtons.No
-                    );
-
-                    if (result == TaskDialogResult.Yes)
-                    {
-                        System.Diagnostics.Process.Start(updateInfo.DownloadUrl);
-                    }
+                    // Show the modern update notification window
+                    var window = new UpdateNotificationWindow(updateInfo);
+                    window.ShowDialog();
                 }
                 else
                 {
-                    TaskDialog.Show("Revit MCP", $"You're up to date! (v{Application.Version})");
+                    TaskDialog.Show("Revit MCP", $"✅ You're up to date! (v{Application.Version})");
                 }
 
                 return Result.Succeeded;

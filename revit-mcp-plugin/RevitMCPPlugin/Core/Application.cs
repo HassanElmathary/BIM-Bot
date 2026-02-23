@@ -1,9 +1,12 @@
 using System;
 using System.IO;
 using System.Reflection;
+using System.Threading.Tasks;
 using System.Windows.Media.Imaging;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
+using Autodesk.Revit.UI.Events;
+using RevitMCPPlugin.UI;
 
 namespace RevitMCPPlugin.Core
 {
@@ -17,6 +20,7 @@ namespace RevitMCPPlugin.Core
         public static UIApplication? ActiveUIApp { get; set; }
         private static SocketService? _socketService;
         private static ExternalEventManager? _eventManager;
+        private static bool _startupUpdateChecked = false;
 
         public static SocketService? SocketServiceInstance => _socketService;
         public static ExternalEventManager? EventManagerInstance => _eventManager;
@@ -189,6 +193,9 @@ namespace RevitMCPPlugin.Core
                 // Initialize the external event manager
                 _eventManager = new ExternalEventManager();
 
+                // Register Idling event for one-time startup update check
+                application.Idling += OnRevitIdling;
+
                 Logger.Log("Revit MCP Plugin started successfully — all ribbon buttons registered");
                 return Result.Succeeded;
             }
@@ -240,5 +247,52 @@ namespace RevitMCPPlugin.Core
         }
 
         public static bool IsServiceRunning => _socketService?.IsRunning ?? false;
+
+        /// <summary>
+        /// One-time Idling handler that checks for updates in the background on Revit startup.
+        /// </summary>
+        private static async void OnRevitIdling(object? sender, IdlingEventArgs e)
+        {
+            if (_startupUpdateChecked) return;
+            _startupUpdateChecked = true;
+
+            // Unsubscribe immediately — only need this once
+            if (sender is UIApplication uiApp)
+            {
+                ActiveUIApp = uiApp;
+                uiApp.Idling -= OnRevitIdling;
+            }
+
+            try
+            {
+                var checker = new UpdateChecker();
+                var updateInfo = await Task.Run(() => checker.CheckForUpdateAsync());
+
+                if (updateInfo.UpdateAvailable)
+                {
+                    // Check if user already skipped this version
+                    var skippedVersion = UpdateChecker.GetSkippedVersion();
+                    if (skippedVersion == updateInfo.LatestVersion)
+                    {
+                        Logger.Log($"Update {updateInfo.LatestVersion} available but skipped by user.");
+                        return;
+                    }
+
+                    Logger.Log($"Update available: {updateInfo.LatestVersion}");
+
+                    // Show notification window on the UI thread
+                    var window = new UpdateNotificationWindow(updateInfo);
+                    window.ShowDialog();
+                }
+                else
+                {
+                    Logger.Log("Plugin is up to date.");
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError("Startup update check failed (non-critical)", ex);
+            }
+        }
     }
 }
