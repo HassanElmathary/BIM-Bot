@@ -84,21 +84,7 @@ namespace RevitMCPPlugin.Core
                     }) as PulldownButton;
 
                 AddPulldownItem(exportPd, "ExportManager", "📦 Export Manager", asm,
-                    "RevitMCPPlugin.Commands.Tool_ExportManager", "Unified export manager with multi-format support");
-                AddPulldownItem(exportPd, "ExportPdf", "📄 Export to PDF", asm,
-                    "RevitMCPPlugin.Commands.Tool_ExportToPdf", "Export sheets/views to PDF");
-                AddPulldownItem(exportPd, "ExportDwg", "📐 Export to DWG", asm,
-                    "RevitMCPPlugin.Commands.Tool_ExportToDwg", "Export views to DWG (AutoCAD)");
-                AddPulldownItem(exportPd, "ExportDwf", "📋 Export to DWF", asm,
-                    "RevitMCPPlugin.Commands.Tool_ExportToDwf", "Export sheets/views to DWF");
-                AddPulldownItem(exportPd, "ExportDgn", "📊 Export to DGN", asm,
-                    "RevitMCPPlugin.Commands.Tool_ExportToDgn", "Export views to DGN");
-                AddPulldownItem(exportPd, "ExportIfc", "🏗️ Export to IFC", asm,
-                    "RevitMCPPlugin.Commands.Tool_ExportToIfc", "Export model to IFC");
-                AddPulldownItem(exportPd, "ExportNwc", "🔗 Export to NWC", asm,
-                    "RevitMCPPlugin.Commands.Tool_ExportToNwc", "Export model to NWC (Navisworks)");
-                AddPulldownItem(exportPd, "ExportImages", "🖼️ Export to Images", asm,
-                    "RevitMCPPlugin.Commands.Tool_ExportToImages", "Export views to PNG, JPEG, TIFF, BMP");
+                    "RevitMCPPlugin.Commands.Tool_ExportManager", "Unified export manager — PDF, DWG, DWF, DGN, IFC, NWC, Images");
                 AddPulldownItem(exportPd, "ExportSchedule", "📊 Export Schedule", asm,
                     "RevitMCPPlugin.Commands.Tool_ExportScheduleData", "Export schedule data to CSV");
                 AddPulldownItem(exportPd, "ExportParams", "📋 Export Parameters", asm,

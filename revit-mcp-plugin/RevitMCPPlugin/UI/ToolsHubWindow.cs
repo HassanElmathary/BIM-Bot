@@ -287,19 +287,14 @@ namespace RevitMCPPlugin.UI
                 switch (tool.Name)
                 {
                     case "export_to_pdf":
-                        dialog = new Tools.ExportToPdfWindow { Owner = this };
-                        break;
                     case "export_to_ifc":
-                        dialog = new Tools.ExportToIfcWindow { Owner = this };
-                        break;
                     case "export_to_images":
-                        dialog = new Tools.ExportToImagesWindow { Owner = this };
-                        break;
                     case "export_to_dgn":
-                        dialog = new Tools.ExportToDgnWindow { Owner = this };
-                        break;
+                    case "export_to_dwg":
+                    case "export_to_dwf":
                     case "export_to_nwc":
-                        dialog = new Tools.ExportToNwcWindow { Owner = this };
+                    case "export_manager":
+                        dialog = new Tools.ExportManagerWindow { Owner = this };
                         break;
                     case "export_schedule_data":
                         dialog = new Tools.ExportScheduleWindow { Owner = this };

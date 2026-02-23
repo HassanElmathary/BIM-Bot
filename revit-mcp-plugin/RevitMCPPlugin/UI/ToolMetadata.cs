@@ -53,69 +53,14 @@ namespace RevitMCPPlugin.UI
             return new List<ToolInfo>
             {
                 // ===== EXPORT TOOLS =====
-                new ToolInfo("export_to_pdf", "Export to PDF", "Batch export sheets and views to PDF files", "📄", "Export")
+                new ToolInfo("export_manager", "Export Manager", "Unified batch export — PDF, DWG, DWF, DGN, IFC, NWC, Images", "📦", "Export")
                 {
                     Parameters = new List<ToolParam>
                     {
+                        new ToolParam("formats", "Export Formats", "text", hint: "PDF, DWG, DWF, DGN, IFC, NWC, IMG"),
+                        new ToolParam("folder", "Output Folder", "text", hint: @"e.g. C:\Export"),
                         new ToolParam("sheetIds", "Sheet IDs", "text", hint: "Comma-separated IDs (empty = all sheets)"),
-                        new ToolParam("viewIds", "View IDs", "text", hint: "Comma-separated view IDs"),
-                        new ToolParam("folder", "Output Folder", "text", hint: @"e.g. C:\Export"),
-                        new ToolParam("combinePdf", "Combine into one PDF", "bool", def: "false")
-                    }
-                },
-                new ToolInfo("export_to_ifc", "Export to IFC", "Export model to IFC for BIM coordination", "🏗️", "Export")
-                {
-                    Parameters = new List<ToolParam>
-                    {
-                        new ToolParam("folder", "Output Folder", "text", hint: @"e.g. C:\Export"),
-                        new ToolParam("ifcVersion", "IFC Version", "dropdown", def: "IFC2x3", options: new[] { "IFC2x3", "IFC4" }),
-                        new ToolParam("fileName", "File Name", "text", hint: "Custom filename (optional)")
-                    }
-                },
-                new ToolInfo("export_to_images", "Export to Images", "Export views to PNG, JPEG, TIFF, or BMP", "🖼️", "Export")
-                {
-                    Parameters = new List<ToolParam>
-                    {
-                        new ToolParam("viewIds", "View IDs", "text", required: true, hint: "Comma-separated view IDs"),
-                        new ToolParam("folder", "Output Folder", "text", hint: @"e.g. C:\Export"),
-                        new ToolParam("format", "Image Format", "dropdown", def: "PNG", options: new[] { "PNG", "JPEG", "TIFF", "BMP" }),
-                        new ToolParam("resolution", "DPI Resolution", "dropdown", def: "150", options: new[] { "72", "150", "300", "600" })
-                    }
-                },
-                new ToolInfo("export_to_dgn", "Export to DGN", "Export views to MicroStation DGN format", "📐", "Export")
-                {
-                    Parameters = new List<ToolParam>
-                    {
-                        new ToolParam("viewIds", "View IDs", "text", required: true, hint: "Comma-separated view IDs"),
-                        new ToolParam("folder", "Output Folder", "text", hint: @"e.g. C:\Export")
-                    }
-                },
-                new ToolInfo("export_to_dwg", "Export to DWG (AutoCAD)", "Export views to AutoCAD DWG format", "📏", "Export")
-                {
-                    Parameters = new List<ToolParam>
-                    {
-                        new ToolParam("viewIds", "View IDs", "text", required: true, hint: "Comma-separated view IDs"),
-                        new ToolParam("folder", "Output Folder", "text", hint: @"e.g. C:\Export"),
-                        new ToolParam("dwgVersion", "DWG Version", "dropdown", def: "AutoCAD2018", options: new[] { "AutoCAD2013", "AutoCAD2018", "AutoCAD2024" }),
-                        new ToolParam("layerSettings", "Layer Mapping", "dropdown", def: "AIA", options: new[] { "AIA", "ISO", "BS1192", "ExportLayersDefault" })
-                    }
-                },
-                new ToolInfo("export_to_dwf", "Export to DWF", "Export sheets/views to DWF/DWFx format", "📑", "Export")
-                {
-                    Parameters = new List<ToolParam>
-                    {
-                        new ToolParam("sheetIds", "Sheet IDs", "text", hint: "Comma-separated IDs (empty = all sheets)"),
-                        new ToolParam("viewIds", "View IDs", "text", hint: "Comma-separated view IDs"),
-                        new ToolParam("folder", "Output Folder", "text", hint: @"e.g. C:\Export"),
-                        new ToolParam("format", "Format", "dropdown", def: "DWFx", options: new[] { "DWF", "DWFx" })
-                    }
-                },
-                new ToolInfo("export_to_nwc", "Export to NWC", "Export model to Navisworks NWC format", "🔷", "Export")
-                {
-                    Parameters = new List<ToolParam>
-                    {
-                        new ToolParam("folder", "Output Folder", "text", hint: @"e.g. C:\Export"),
-                        new ToolParam("fileName", "File Name", "text", hint: "Custom filename (optional)")
+                        new ToolParam("viewIds", "View IDs", "text", hint: "Comma-separated view IDs")
                     }
                 },
                 new ToolInfo("export_schedule_data", "Export Schedule", "Export a Revit schedule to CSV file", "📊", "Export")

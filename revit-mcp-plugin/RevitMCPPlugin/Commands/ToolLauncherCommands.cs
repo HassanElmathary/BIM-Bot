@@ -26,13 +26,13 @@ namespace RevitMCPPlugin.Commands
         }
     }
 
-    // ===== EXPORT TOOLS =====
+    // ===== EXPORT TOOLS (All redirect to Export Manager) =====
     [Transaction(TransactionMode.Manual)]
     public class Tool_ExportToPdf : IExternalCommand
     {
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
-            try { new ExportToPdfWindow().ShowDialog(); return Result.Succeeded; }
+            try { new ExportManagerWindow().ShowDialog(); return Result.Succeeded; }
             catch (System.Exception ex) { message = ex.Message; return Result.Failed; }
         }
     }
@@ -42,7 +42,7 @@ namespace RevitMCPPlugin.Commands
     {
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
-            try { new ExportToIfcWindow().ShowDialog(); return Result.Succeeded; }
+            try { new ExportManagerWindow().ShowDialog(); return Result.Succeeded; }
             catch (System.Exception ex) { message = ex.Message; return Result.Failed; }
         }
     }
@@ -52,7 +52,7 @@ namespace RevitMCPPlugin.Commands
     {
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
-            try { new ExportToImagesWindow().ShowDialog(); return Result.Succeeded; }
+            try { new ExportManagerWindow().ShowDialog(); return Result.Succeeded; }
             catch (System.Exception ex) { message = ex.Message; return Result.Failed; }
         }
     }
@@ -62,7 +62,7 @@ namespace RevitMCPPlugin.Commands
     {
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
-            try { new ExportToDgnWindow().ShowDialog(); return Result.Succeeded; }
+            try { new ExportManagerWindow().ShowDialog(); return Result.Succeeded; }
             catch (System.Exception ex) { message = ex.Message; return Result.Failed; }
         }
     }
@@ -72,7 +72,7 @@ namespace RevitMCPPlugin.Commands
     {
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
-            try { DirectExecutor.RunAsync("export_to_dwg", DirectExecutor.Params(), "Export to DWG"); return Result.Succeeded; }
+            try { new ExportManagerWindow().ShowDialog(); return Result.Succeeded; }
             catch (System.Exception ex) { message = ex.Message; return Result.Failed; }
         }
     }
@@ -82,7 +82,7 @@ namespace RevitMCPPlugin.Commands
     {
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
-            try { new ExportToPdfWindow().ShowDialog(); return Result.Succeeded; } // DWF uses PDF-style export
+            try { new ExportManagerWindow().ShowDialog(); return Result.Succeeded; }
             catch (System.Exception ex) { message = ex.Message; return Result.Failed; }
         }
     }
@@ -92,7 +92,7 @@ namespace RevitMCPPlugin.Commands
     {
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
-            try { new ExportToNwcWindow().ShowDialog(); return Result.Succeeded; }
+            try { new ExportManagerWindow().ShowDialog(); return Result.Succeeded; }
             catch (System.Exception ex) { message = ex.Message; return Result.Failed; }
         }
     }
