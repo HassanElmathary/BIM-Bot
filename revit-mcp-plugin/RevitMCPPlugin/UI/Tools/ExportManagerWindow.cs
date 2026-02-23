@@ -29,6 +29,8 @@ namespace RevitMCPPlugin.UI.Tools
         private TextBox _searchBox;
         private TextBlock _selectionStatus;
         private readonly List<CheckBox> _itemCheckboxes = new List<CheckBox>();
+        private readonly List<string> _itemElementIds = new List<string>();
+        private readonly List<TextBox> _customFileNames = new List<TextBox>();
         private bool _showingSheets = true;
         private TextBlock _validationMsg;
 
@@ -896,7 +898,7 @@ namespace RevitMCPPlugin.UI.Tools
                 {
                     var rev = "";
                     try { rev = sheet.get_Parameter(DB.BuiltInParameter.SHEET_CURRENT_REVISION)?.AsString() ?? ""; } catch { }
-                    _realSheets.Add(new[] { sheet.SheetNumber, sheet.Name, rev, "", sheet.Id.ToString() });
+                    _realSheets.Add(new[] { sheet.SheetNumber, sheet.Name, rev, "", sheet.Id.Value.ToString() });
                 }
 
                 // Get all printable views (exclude templates, sheets, and internal views)
@@ -910,7 +912,7 @@ namespace RevitMCPPlugin.UI.Tools
 
                 foreach (var view in views)
                 {
-                    _realViews.Add(new[] { view.Name, view.ViewType.ToString(), view.Id.ToString() });
+                    _realViews.Add(new[] { view.Name, view.ViewType.ToString(), view.Id.Value.ToString() });
                 }
 
                 Logger.Log($"Export Manager loaded {_realSheets.Count} sheets and {_realViews.Count} views from document.");
@@ -925,6 +927,8 @@ namespace RevitMCPPlugin.UI.Tools
         {
             _itemListPanel.Children.Clear();
             _itemCheckboxes.Clear();
+            _itemElementIds.Clear();
+            _customFileNames.Clear();
             HideValidationMessage();
 
             // Load real data from Revit document if not yet loaded
@@ -999,21 +1003,22 @@ namespace RevitMCPPlugin.UI.Tools
                     Grid.SetColumn(revBox, 3);
                     row.Children.Add(revBox);
 
-                    var sizeBox = new TextBox
+                    var sizeCombo = new ComboBox
                     {
-                        Text = sheet[3],
                         FontSize = 11,
                         Foreground = DarkTheme.FgLight,
-                        Background = Brushes.Transparent,
+                        Background = DarkTheme.BgCard,
                         BorderThickness = new Thickness(0, 0, 0, 1),
                         BorderBrush = DarkTheme.BorderDim,
                         VerticalAlignment = VerticalAlignment.Center,
-                        Padding = new Thickness(2, 1, 2, 1)
+                        Padding = new Thickness(2, 1, 2, 1),
+                        IsEditable = false
                     };
-                    sizeBox.GotFocus += (s, e) => sizeBox.BorderBrush = DarkTheme.CatExport;
-                    sizeBox.LostFocus += (s, e) => sizeBox.BorderBrush = DarkTheme.BorderDim;
-                    Grid.SetColumn(sizeBox, 4);
-                    row.Children.Add(sizeBox);
+                    var sizes = new[] { "", "A0", "A1", "A2", "A3", "A4", "B1", "B2", "B3", "B4", "B5", "Letter", "Legal", "Tabloid" };
+                    foreach (var sz in sizes) sizeCombo.Items.Add(sz);
+                    sizeCombo.SelectedIndex = 0;
+                    Grid.SetColumn(sizeCombo, 4);
+                    row.Children.Add(sizeCombo);
 
                     var customNameBox = new TextBox
                     {
@@ -1030,6 +1035,8 @@ namespace RevitMCPPlugin.UI.Tools
                     customNameBox.LostFocus += (s, e) => customNameBox.BorderBrush = DarkTheme.BorderDim;
                     Grid.SetColumn(customNameBox, 5);
                     row.Children.Add(customNameBox);
+                    _customFileNames.Add(customNameBox);
+                    _itemElementIds.Add(sheet.Length > 4 ? sheet[4] : "");
 
                     row.Tag = $"{sheet[0]} {sheet[1]}".ToLower();
 
@@ -1102,6 +1109,8 @@ namespace RevitMCPPlugin.UI.Tools
                     customNameBox.LostFocus += (s, e) => customNameBox.BorderBrush = DarkTheme.BorderDim;
                     Grid.SetColumn(customNameBox, 3);
                     row.Children.Add(customNameBox);
+                    _customFileNames.Add(customNameBox);
+                    _itemElementIds.Add(view.Length > 2 ? view[2] : "");
 
                     row.Tag = $"{view[0]} {view[1]}".ToLower();
 
@@ -1251,10 +1260,21 @@ namespace RevitMCPPlugin.UI.Tools
                 return;
             }
 
-            // Build parameters
+            // Build parameters — include selected IDs so export targets the right items
             var folder = GetTextValue(_outputFolderBox);
+
+            // Collect selected element IDs
+            var selectedIds = new List<string>();
+            for (int i = 0; i < _itemCheckboxes.Count && i < _itemElementIds.Count; i++)
+            {
+                if (_itemCheckboxes[i].IsChecked == true && !string.IsNullOrEmpty(_itemElementIds[i]))
+                    selectedIds.Add(_itemElementIds[i]);
+            }
+
+            var idsCsv = string.Join(",", selectedIds);
             var baseParams = DirectExecutor.Params(
-                ("outputFolder", folder ?? "")
+                ("outputFolder", folder ?? ""),
+                (_showingSheets ? "sheetIds" : "viewIds", idsCsv)
             );
 
             // Close Export Manager and show Progress Window
