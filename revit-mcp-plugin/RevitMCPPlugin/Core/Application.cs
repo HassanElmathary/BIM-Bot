@@ -60,6 +60,16 @@ namespace RevitMCPPlugin.Core
                 };
                 corePanel.AddItem(chatData);
 
+                // --- Connect Claude ---
+                var claudeData = new PushButtonData("MCPClaudeConnect", "Connect\nClaude", asm,
+                    "RevitMCPPlugin.Commands.ConnectToClaudeCommand")
+                {
+                    ToolTip = "Automatically configure the Claude Desktop app to connect to Revit MCP",
+                    LargeImage = RibbonIcons.Settings(32), // Using settings icon as fallback
+                    Image = RibbonIcons.Settings(16)
+                };
+                corePanel.AddItem(claudeData);
+
                 // --- Tools Hub ---
                 var hubData = new PushButtonData("MCPToolsHub", "Tools\nHub", asm,
                     "RevitMCPPlugin.Commands.ToolsHubCommand")

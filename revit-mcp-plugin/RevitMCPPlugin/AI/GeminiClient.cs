@@ -768,6 +768,67 @@ Be concise and helpful. You are talking to engineers and architects.";
                 PropArrayReq("viewIds", "View element IDs to apply template to", new JObject { ["type"] = "integer" }),
                 PropReq("templateName", "string", "View template name")));
 
+            // ===== VIEW & PROJECT SETTINGS =====
+
+            // 38. Set View Properties
+            decls.Add(Fn("set_view_properties", "Modify view settings: scale, detail level, visual/display style, discipline, phase, name, crop box. Use this for changing view appearance.",
+                Prop("viewId", "integer", "View ID (default: active view)"),
+                Prop("scale", "integer", "View scale denominator, e.g. 100 for 1:100"),
+                Prop("detailLevel", "string", "View detail level: Coarse, Medium, or Fine"),
+                Prop("displayStyle", "string", "Visual/display style: Wireframe, HiddenLine, Shading, ShadingWithEdges, or Realistic"),
+                Prop("discipline", "string", "View discipline: Architectural, Structural, Mechanical, Electrical, Plumbing, Coordination"),
+                Prop("phaseName", "string", "Phase to show in this view"),
+                Prop("viewName", "string", "New name for the view"),
+                Prop("showCropBox", "boolean", "Enable/disable crop box")));
+
+            // 39. Override Element in View
+            decls.Add(Fn("override_element_in_view", "Apply graphic overrides to elements in the current view (color, line weight, transparency, halftone, hide)",
+                PropArrayReq("elementIds", "Element IDs to override", new JObject { ["type"] = "integer" }),
+                Prop("colorR", "integer", "Override color Red (0-255)"),
+                Prop("colorG", "integer", "Override color Green (0-255)"),
+                Prop("colorB", "integer", "Override color Blue (0-255)"),
+                Prop("lineWeight", "integer", "Override line weight (1-16)"),
+                Prop("transparency", "integer", "Surface transparency (0-100)"),
+                Prop("halftone", "boolean", "Apply halftone effect"),
+                Prop("visible", "boolean", "Set to false to hide elements in view")));
+
+            // 40. Modify Object Styles
+            decls.Add(Fn("modify_object_styles", "Modify default line weight and color for a category (Object Styles)",
+                PropReq("category", "string", "Category name (Walls, Doors, Furniture, etc.)"),
+                Prop("subcategory", "string", "Subcategory name"),
+                Prop("lineWeight", "integer", "Projection line weight (1-16)"),
+                Prop("colorR", "integer", "Line color Red (0-255)"),
+                Prop("colorG", "integer", "Line color Green (0-255)"),
+                Prop("colorB", "integer", "Line color Blue (0-255)")));
+
+            // 39. Override Element in View
+            decls.Add(Fn("override_element_in_view", "Apply graphic overrides to elements in the current view (color, line weight, transparency, halftone, hide)",
+                PropArrayReq("elementIds", "Element IDs to override", new JObject { ["type"] = "integer" }),
+                Prop("colorR", "integer", "Override color Red (0-255)"),
+                Prop("colorG", "integer", "Override color Green (0-255)"),
+                Prop("colorB", "integer", "Override color Blue (0-255)"),
+                Prop("lineWeight", "integer", "Override line weight (1-16)"),
+                Prop("transparency", "integer", "Surface transparency (0-100)"),
+                Prop("halftone", "boolean", "Apply halftone effect"),
+                Prop("visible", "boolean", "Set to false to hide elements in view")));
+
+            // 40. Modify Object Styles
+            decls.Add(Fn("modify_object_styles", "Modify default line weight and color for a category (Object Styles)",
+                PropReq("category", "string", "Category name (Walls, Doors, Furniture, etc.)"),
+                Prop("subcategory", "string", "Subcategory name"),
+                Prop("lineWeight", "integer", "Projection line weight (1-16)"),
+                Prop("colorR", "integer", "Line color Red (0-255)"),
+                Prop("colorG", "integer", "Line color Green (0-255)"),
+                Prop("colorB", "integer", "Line color Blue (0-255)")));
+
+            // 41. Open View
+            decls.Add(Fn("open_view", "Open a specific view in the Revit UI",
+                PropReq("viewId", "integer", "The Element ID of the view to open")));
+
+            // 42. Close View
+            decls.Add(Fn("close_view", "Close a specific view in the Revit UI",
+                Prop("viewId", "integer", "The Element ID of the view to close. If not provided, closes the active view.")));
+
             return decls;
         }
 

@@ -41,6 +41,7 @@ namespace RevitMCPPlugin.UI.Tools
         // PDF settings
         private ComboBox _pdfPaperSize, _pdfOrientation, _pdfDpi, _pdfColor, _pdfRasterQuality;
         private CheckBox _pdfCombine, _pdfHideCrop, _pdfHideScope, _pdfHideRef;
+        private RadioButton _radioCenter, _radioVector, _radioFit;
 
         // DWG settings
         private ComboBox _dwgVersion;
@@ -258,7 +259,7 @@ namespace RevitMCPPlugin.UI.Tools
             headerRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(120) }); // Sheet Number
             headerRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }); // Sheet Name
             headerRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(80) });  // Revision
-            headerRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(50) });  // Size
+            headerRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(90) });  // Size
             headerRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(130) }); // Custom File Name
 
             var allCheck = DarkTheme.MakeCheckBox("", false);
@@ -390,9 +391,9 @@ namespace RevitMCPPlugin.UI.Tools
 
             var ppGroup = new StackPanel();
             ppGroup.Children.Add(MakeGroupLabel("Paper Placement"));
-            var radioCenter = new RadioButton { Content = "Center", IsChecked = true, Foreground = DarkTheme.FgLight, FontSize = 12, GroupName = "Placement", Margin = new Thickness(0, 4, 0, 2) };
+            _radioCenter = new RadioButton { Content = "Center", IsChecked = true, Foreground = DarkTheme.FgLight, FontSize = 12, GroupName = "Placement", Margin = new Thickness(0, 4, 0, 2) };
             var radioOffset = new RadioButton { Content = "Offset from corner", Foreground = DarkTheme.FgLight, FontSize = 12, GroupName = "Placement" };
-            ppGroup.Children.Add(radioCenter);
+            ppGroup.Children.Add(_radioCenter);
             ppGroup.Children.Add(radioOffset);
 
             var offsetRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(20, 4, 0, 0) };
@@ -419,9 +420,9 @@ namespace RevitMCPPlugin.UI.Tools
 
             // Zoom group
             var zoomGroup = new StackPanel();
-            var radioFit = new RadioButton { Content = "Fit to Page", IsChecked = true, Foreground = DarkTheme.FgLight, FontSize = 12, GroupName = "Zoom", Margin = new Thickness(0, 0, 0, 2) };
+            _radioFit = new RadioButton { Content = "Fit to Page", IsChecked = true, Foreground = DarkTheme.FgLight, FontSize = 12, GroupName = "Zoom", Margin = new Thickness(0, 0, 0, 2) };
             var radioZoom = new RadioButton { Content = "Zoom", Foreground = DarkTheme.FgLight, FontSize = 12, GroupName = "Zoom" };
-            zoomGroup.Children.Add(radioFit);
+            zoomGroup.Children.Add(_radioFit);
             zoomGroup.Children.Add(radioZoom);
             leftCol.Children.Add(DarkTheme.MakeGroupBox("Zoom", zoomGroup));
 
@@ -441,9 +442,9 @@ namespace RevitMCPPlugin.UI.Tools
 
             var hlvGroup = new StackPanel();
             hlvGroup.Children.Add(new TextBlock { Text = "Remove Lines Using", FontSize = 11, Foreground = DarkTheme.FgDim, Margin = new Thickness(0, 0, 0, 6) });
-            var radioVector = new RadioButton { Content = "Vector Processing", IsChecked = true, Foreground = DarkTheme.FgLight, FontSize = 12, GroupName = "HLV", Margin = new Thickness(0, 0, 0, 2) };
+            _radioVector = new RadioButton { Content = "Vector Processing", IsChecked = true, Foreground = DarkTheme.FgLight, FontSize = 12, GroupName = "HLV", Margin = new Thickness(0, 0, 0, 2) };
             var radioRaster = new RadioButton { Content = "Raster Processing", Foreground = DarkTheme.FgLight, FontSize = 12, GroupName = "HLV" };
-            hlvGroup.Children.Add(radioVector);
+            hlvGroup.Children.Add(_radioVector);
             hlvGroup.Children.Add(radioRaster);
             midCol.Children.Add(DarkTheme.MakeGroupBox("Hidden Line Views", hlvGroup));
 
@@ -507,18 +508,6 @@ namespace RevitMCPPlugin.UI.Tools
             _keepPaperSize.Margin = new Thickness(0, 8, 0, 4);
             fileGroup.Children.Add(_keepPaperSize);
 
-            var customNameBtn = DarkTheme.MakeCancelButton("Custom File Name");
-            customNameBtn.Padding = new Thickness(12, 6, 12, 6);
-            customNameBtn.FontSize = 11;
-            customNameBtn.Margin = new Thickness(0, 4, 0, 4);
-            customNameBtn.HorizontalAlignment = HorizontalAlignment.Left;
-            fileGroup.Children.Add(customNameBtn);
-
-            var orderBtn = DarkTheme.MakeCancelButton("Order sheets and views");
-            orderBtn.Padding = new Thickness(12, 6, 12, 6);
-            orderBtn.FontSize = 11;
-            orderBtn.HorizontalAlignment = HorizontalAlignment.Left;
-            fileGroup.Children.Add(orderBtn);
 
             rightCol.Children.Add(DarkTheme.MakeGroupBox("File", fileGroup));
 
@@ -963,7 +952,7 @@ namespace RevitMCPPlugin.UI.Tools
                     row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(120) });
                     row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
                     row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(80) });
-                    row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(50) });
+                    row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(90) });
                     row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(130) });
 
                     var rowBorder = new Border
@@ -1003,19 +992,10 @@ namespace RevitMCPPlugin.UI.Tools
                     Grid.SetColumn(revBox, 3);
                     row.Children.Add(revBox);
 
-                    var sizeCombo = new ComboBox
-                    {
-                        FontSize = 11,
-                        Foreground = DarkTheme.FgLight,
-                        Background = DarkTheme.BgCard,
-                        BorderThickness = new Thickness(0, 0, 0, 1),
-                        BorderBrush = DarkTheme.BorderDim,
-                        VerticalAlignment = VerticalAlignment.Center,
-                        Padding = new Thickness(2, 1, 2, 1),
-                        IsEditable = false
-                    };
                     var sizes = new[] { "", "A0", "A1", "A2", "A3", "A4", "B1", "B2", "B3", "B4", "B5", "Letter", "Legal", "Tabloid" };
-                    foreach (var sz in sizes) sizeCombo.Items.Add(sz);
+                    var sizeCombo = DarkTheme.MakeComboBox(sizes);
+                    sizeCombo.FontSize = 11;
+                    sizeCombo.Padding = new Thickness(2, 1, 2, 1);
                     sizeCombo.SelectedIndex = 0;
                     Grid.SetColumn(sizeCombo, 4);
                     row.Children.Add(sizeCombo);
@@ -1274,7 +1254,17 @@ namespace RevitMCPPlugin.UI.Tools
             var idsCsv = string.Join(",", selectedIds);
             var baseParams = DirectExecutor.Params(
                 ("outputFolder", folder ?? ""),
-                (_showingSheets ? "sheetIds" : "viewIds", idsCsv)
+                (_showingSheets ? "sheetIds" : "viewIds", idsCsv),
+                // Format tab settings
+                ("combine", _pdfCombine?.IsChecked == true ? "true" : "false"),
+                ("rasterQuality", (_pdfRasterQuality?.SelectedItem ?? "").ToString()),
+                ("color", (_pdfColor?.SelectedItem ?? "").ToString()),
+                ("hideScopeBox", _pdfHideScope?.IsChecked == true ? "true" : "false"),
+                ("hideRefPlane", _pdfHideRef?.IsChecked == true ? "true" : "false"),
+                ("hideCropBoundary", _pdfHideCrop?.IsChecked == true ? "true" : "false"),
+                ("paperPlacement", _radioCenter?.IsChecked == true ? "center" : "offset"),
+                ("hiddenLineProcessing", _radioVector?.IsChecked == true ? "vector" : "raster"),
+                ("zoom", _radioFit?.IsChecked == true ? "fitToPage" : "zoom")
             );
 
             // Close Export Manager and show Progress Window

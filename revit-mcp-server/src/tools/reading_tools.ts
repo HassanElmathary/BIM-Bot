@@ -268,4 +268,41 @@ export function registerReadingTools(server: McpServer) {
             }
         }
     );
+        // 16. Open View
+    server.tool(
+        "open_view",
+        "Open a specific view in the Revit UI so the user can see it.",
+        {
+            viewId: z.number().describe("The Element ID of the view to open")
+        },
+        async (args) => {
+            try {
+                const response = await withRevitConnection(async (client) =>
+                    client.sendCommand("open_view", args)
+                );
+                return { content: [{ type: "text", text: `Opened view successfully: ${JSON.stringify(response)}` }] };
+            } catch (error) {
+                return { content: [{ type: "text", text: `Failed: ${error instanceof Error ? error.message : String(error)}` }] };
+            }
+        }
+    );
+
+    // 17. Close View
+    server.tool(
+        "close_view",
+        "Close a specific view in the Revit UI.",
+        {
+            viewId: z.number().optional().describe("The Element ID of the view to close. If not provided, it attempts to close the active view.")
+        },
+        async (args) => {
+            try {
+                const response = await withRevitConnection(async (client) =>
+                    client.sendCommand("close_view", args)
+                );
+                return { content: [{ type: "text", text: `Closed view successfully: ${JSON.stringify(response)}` }] };
+            } catch (error) {
+                return { content: [{ type: "text", text: `Failed: ${error instanceof Error ? error.message : String(error)}` }] };
+            }
+        }
+    );
 }
