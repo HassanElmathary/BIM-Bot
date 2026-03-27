@@ -17,16 +17,27 @@
   "files": [
     "build"
   ],
-  "keywords": ["revit", "mcp", "gemini", "bim", "automation"],
+  "keywords": [
+    "revit",
+    "mcp",
+    "gemini",
+    "bim",
+    "automation"
+  ],
   "author": "RevitMCP",
   "license": "MIT",
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.7.0",
     "@google/genai": "^1.0.0",
-    "zod": "^3.24.2",
-    "open": "^10.1.0"
+    "@modelcontextprotocol/sdk": "^1.7.0",
+    "@notionhq/client": "^5.11.0",
+    "better-sqlite3": "^12.6.2",
+    "exceljs": "^4.4.0",
+    "googleapis": "^171.4.0",
+    "open": "^10.1.0",
+    "zod": "^3.24.2"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.13.10",
     "rimraf": "^5.0.10",
     "typescript": "^5.8.2"

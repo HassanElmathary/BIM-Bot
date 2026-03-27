@@ -10,13 +10,13 @@ $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 if (-not (Test-Path "$root\revit-mcp-plugin")) { $root = $PSScriptRoot | Split-Path }
 
-# 1. Build plugin
-Write-Host "[1/4] Building Revit Plugin..."
+# 1. Build plugin (multi-target: net48 + net8.0-windows)
+Write-Host "[1/4] Building Revit Plugin (multi-target)..."
 Push-Location "$root\revit-mcp-plugin\RevitMCPPlugin"
 dotnet build -c Release 2>&1 | Out-Null
 if ($LASTEXITCODE -ne 0) { Write-Host "FAILED to build plugin!"; exit 1 }
 Pop-Location
-Write-Host "  [OK] Plugin built"
+Write-Host "  [OK] Plugin built (net48 + net8.0-windows)"
 
 # 2. Build installer
 Write-Host "[2/4] Building Installer..."
@@ -33,14 +33,16 @@ if (Test-Path $distDir) { Remove-Item $distDir -Recurse -Force }
 New-Item -ItemType Directory -Path $distDir -Force | Out-Null
 
 # Copy installer EXE
-Copy-Item "$root\installer\RevitMCPInstaller\bin\Release\net48\RevitMCP-Setup.exe" -Destination $distDir
-Copy-Item "$root\installer\RevitMCPInstaller\bin\Release\net48\Newtonsoft.Json.dll" -Destination $distDir
+Copy-Item "$root\installer\RevitMCPInstaller\bin\Release\net8.0-windows\RevitMCP-Setup.exe" -Destination $distDir
+Copy-Item "$root\installer\RevitMCPInstaller\bin\Release\net8.0-windows\Newtonsoft.Json.dll" -Destination $distDir
 
-# Copy plugin files
-$pluginDir = "$distDir\plugin"
-New-Item -ItemType Directory -Path $pluginDir -Force | Out-Null
-Copy-Item "$root\revit-mcp-plugin\RevitMCPPlugin\bin\Release\net48\RevitMCPPlugin.dll" -Destination $pluginDir
-Copy-Item "$root\revit-mcp-plugin\RevitMCPPlugin\bin\Release\net48\Newtonsoft.Json.dll" -Destination $pluginDir
+# Copy plugin files (both framework builds)
+$pluginNet48 = "$distDir\plugin\net48"
+$pluginNet8 = "$distDir\plugin\net8"
+New-Item -ItemType Directory -Path $pluginNet48 -Force | Out-Null
+New-Item -ItemType Directory -Path $pluginNet8 -Force | Out-Null
+Copy-Item "$root\revit-mcp-plugin\RevitMCPPlugin\bin\Release\net48\*" -Destination $pluginNet48 -Recurse
+Copy-Item "$root\revit-mcp-plugin\RevitMCPPlugin\bin\Release\net8.0-windows\*" -Destination $pluginNet8 -Recurse
 
 # Copy MCP server (build + node_modules + package.json)
 $serverDest = "$distDir\server"

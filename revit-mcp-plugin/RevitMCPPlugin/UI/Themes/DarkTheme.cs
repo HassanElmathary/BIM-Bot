@@ -407,6 +407,70 @@ namespace RevitMCPPlugin.UI.Themes
             };
         }
 
+        // ── Toggle Switch ─────────────────────────────────────────────
+
+        /// <summary>Creates a premium animated toggle switch (on/off pill).</summary>
+        /// <param name="isOn">Initial state</param>
+        /// <param name="onChanged">Callback when toggled. Receives new state.</param>
+        /// <returns>A Border containing the toggle switch. Tag = current bool state.</returns>
+        public static Border MakeToggleSwitch(bool isOn, System.Action<bool> onChanged = null)
+        {
+            var knob = new Border
+            {
+                Width = 18,
+                Height = 18,
+                CornerRadius = new CornerRadius(9),
+                Background = FgWhite,
+                HorizontalAlignment = HorizontalAlignment.Left,
+                Margin = isOn ? new Thickness(22, 0, 0, 0) : new Thickness(2, 0, 0, 0),
+                Effect = new DropShadowEffect
+                {
+                    Color = Colors.Black,
+                    ShadowDepth = 1,
+                    Opacity = 0.3,
+                    BlurRadius = 4,
+                    Direction = 270
+                }
+            };
+
+            var track = new Border
+            {
+                Width = 44,
+                Height = 24,
+                CornerRadius = new CornerRadius(12),
+                Background = isOn ? FgGreen : BgCancel,
+                Padding = new Thickness(0),
+                Cursor = Cursors.Hand,
+                VerticalAlignment = VerticalAlignment.Center,
+                Child = knob,
+                Tag = isOn   // Store state in Tag
+            };
+
+            track.MouseLeftButtonUp += (s, e) =>
+            {
+                var current = (bool)track.Tag;
+                var newState = !current;
+                track.Tag = newState;
+                track.Background = newState ? FgGreen : BgCancel;
+                knob.Margin = newState ? new Thickness(22, 0, 0, 0) : new Thickness(2, 0, 0, 0);
+                onChanged?.Invoke(newState);
+            };
+
+            // Hover glow
+            track.MouseEnter += (s, e) =>
+            {
+                var on = (bool)track.Tag;
+                track.Background = on ? B(0x66, 0xBB, 0x6A) : BgCancelHover;
+            };
+            track.MouseLeave += (s, e) =>
+            {
+                var on = (bool)track.Tag;
+                track.Background = on ? FgGreen : BgCancel;
+            };
+
+            return track;
+        }
+
         // ── Utility ───────────────────────────────────────────────────
 
         /// <summary>Creates Grid ColumnDefinitions for ComboBox template (content + arrow).</summary>

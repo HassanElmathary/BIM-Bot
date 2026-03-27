@@ -60,6 +60,26 @@ namespace RevitMCPPlugin.Core
                 };
                 corePanel.AddItem(chatData);
 
+                // --- Antigravity (removed from ribbon — now accessible via AI Chat) ---
+                // var antigravityData = new PushButtonData("MCPAntigravity", "Antigravity", asm,
+                //     "RevitMCPPlugin.Antigravity.AntigravityCommand")
+                // {
+                //     ToolTip = "Chat with the Antigravity IDE agent — send and receive messages via file bridge",
+                //     LargeImage = RevitMCPPlugin.Antigravity.AntigravityIcons.RibbonIcon(32),
+                //     Image = RevitMCPPlugin.Antigravity.AntigravityIcons.RibbonIcon(16)
+                // };
+                // corePanel.AddItem(antigravityData);
+
+                // --- Project Files ---
+                var projectFilesData = new PushButtonData("MCPProjectFiles", "Project\nFiles", asm,
+                    "RevitMCPPlugin.Commands.Tool_ProjectFiles")
+                {
+                    ToolTip = "Manage project files — add documents, send to AI for analysis, and work with results",
+                    LargeImage = RibbonIcons.ProjectFiles(32),
+                    Image = RibbonIcons.ProjectFiles(16)
+                };
+                corePanel.AddItem(projectFilesData);
+
                 // --- Connect Claude ---
                 var claudeData = new PushButtonData("MCPClaudeConnect", "Connect\nClaude", asm,
                     "RevitMCPPlugin.Commands.ConnectToClaudeCommand")
@@ -69,6 +89,16 @@ namespace RevitMCPPlugin.Core
                     Image = RibbonIcons.Settings(16)
                 };
                 corePanel.AddItem(claudeData);
+
+                // --- Local AI ---
+                var localAiData = new PushButtonData("MCPLocalAI", "Local\nAI", asm,
+                    "RevitMCPPlugin.Commands.LocalAICommand")
+                {
+                    ToolTip = "Manage local AI models (Ollama) — free, unlimited, private",
+                    LargeImage = RibbonIcons.LocalAI(32),
+                    Image = RibbonIcons.LocalAI(16)
+                };
+                corePanel.AddItem(localAiData);
 
                 // --- Tools Hub ---
                 var hubData = new PushButtonData("MCPToolsHub", "Tools\nHub", asm,
@@ -101,6 +131,8 @@ namespace RevitMCPPlugin.Core
                     "RevitMCPPlugin.Commands.Tool_ExportParametersToCsv", "Export element parameters to CSV");
                 AddPulldownItem(exportPd, "ImportParams", "📥 Import Parameters", asm,
                     "RevitMCPPlugin.Commands.Tool_ImportParametersFromCsv", "Import parameters from CSV file");
+                AddPulldownItem(exportPd, "ExportPowerBI", "⚡ Export to Power BI", asm,
+                    "RevitMCPPlugin.Commands.Tool_ExportToPowerBI", "Export 3D model with geometry to SQLite for Power BI visualization");
 
                 // ========================================
                 // Families Pulldown

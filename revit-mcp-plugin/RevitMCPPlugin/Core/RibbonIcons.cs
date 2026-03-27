@@ -236,6 +236,63 @@ namespace RevitMCPPlugin.Core
             });
         }
 
+        /// <summary>Project Files — warm green folder with document</summary>
+        public static BitmapSource ProjectFiles(int size = 32)
+        {
+            return Render(size, (dc, s) =>
+            {
+                DrawCircleBg(dc, s, Color.FromRgb(0x66, 0xBB, 0x6A));
+                // Folder body
+                var folderGeo = new StreamGeometry();
+                using (var ctx = folderGeo.Open())
+                {
+                    ctx.BeginFigure(new Point(s * 0.20, s * 0.35), true, true);
+                    ctx.LineTo(new Point(s * 0.20, s * 0.75), true, false);
+                    ctx.LineTo(new Point(s * 0.80, s * 0.75), true, false);
+                    ctx.LineTo(new Point(s * 0.80, s * 0.35), true, false);
+                    ctx.LineTo(new Point(s * 0.52, s * 0.35), true, false);
+                    ctx.LineTo(new Point(s * 0.46, s * 0.27), true, false);
+                    ctx.LineTo(new Point(s * 0.20, s * 0.27), true, false);
+                }
+                dc.DrawGeometry(Brushes.White, null, folderGeo);
+                // Small document inside
+                var docBrush = new SolidColorBrush(Color.FromRgb(0x66, 0xBB, 0x6A));
+                dc.DrawRectangle(docBrush, null, new Rect(s * 0.42, s * 0.44, s * 0.24, s * 0.04));
+                dc.DrawRectangle(docBrush, null, new Rect(s * 0.42, s * 0.54, s * 0.20, s * 0.04));
+                dc.DrawRectangle(docBrush, null, new Rect(s * 0.42, s * 0.64, s * 0.22, s * 0.04));
+            });
+        }
+
+        /// <summary>Local AI — emerald green chip/CPU icon</summary>
+        public static BitmapSource LocalAI(int size = 32)
+        {
+            return Render(size, (dc, s) =>
+            {
+                DrawCircleBg(dc, s, Color.FromRgb(0x00, 0xC8, 0x53)); // Emerald green
+                // CPU/chip body (rounded square)
+                var chipRect = new Rect(s * 0.30, s * 0.30, s * 0.40, s * 0.40);
+                dc.DrawRoundedRectangle(Brushes.White, null, chipRect, 3, 3);
+                // Inner circuit (small square)
+                var innerBrush = new SolidColorBrush(Color.FromRgb(0x00, 0xC8, 0x53));
+                var innerRect = new Rect(s * 0.38, s * 0.38, s * 0.24, s * 0.24);
+                dc.DrawRoundedRectangle(innerBrush, null, innerRect, 2, 2);
+                // Pins on each side (top, bottom, left, right)
+                var pinPen = new Pen(Brushes.White, s * 0.05) { StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round };
+                // Top pins
+                dc.DrawLine(pinPen, new Point(s * 0.42, s * 0.22), new Point(s * 0.42, s * 0.30));
+                dc.DrawLine(pinPen, new Point(s * 0.58, s * 0.22), new Point(s * 0.58, s * 0.30));
+                // Bottom pins
+                dc.DrawLine(pinPen, new Point(s * 0.42, s * 0.70), new Point(s * 0.42, s * 0.78));
+                dc.DrawLine(pinPen, new Point(s * 0.58, s * 0.70), new Point(s * 0.58, s * 0.78));
+                // Left pins
+                dc.DrawLine(pinPen, new Point(s * 0.22, s * 0.42), new Point(s * 0.30, s * 0.42));
+                dc.DrawLine(pinPen, new Point(s * 0.22, s * 0.58), new Point(s * 0.30, s * 0.58));
+                // Right pins
+                dc.DrawLine(pinPen, new Point(s * 0.70, s * 0.42), new Point(s * 0.78, s * 0.42));
+                dc.DrawLine(pinPen, new Point(s * 0.70, s * 0.58), new Point(s * 0.78, s * 0.58));
+            });
+        }
+
         // ===== Generic sub-item icons for pulldown menus =====
 
         /// <summary>Small colored circle icon for pulldown sub-items</summary>

@@ -23,3 +23,14 @@ installer/nodejs/node.exe
 # Temp
 *.tsbuildinfo
 *.log
+
+# Antigravity / agent configs
+.agents/
+.gemini/
+
+# Unrelated files
+penpot_sync.py
+ui_schema.json
+google sheets json file/
+_deploy_status.txt
+SETUP_ANTIGRAVITY.md

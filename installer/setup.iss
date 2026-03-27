@@ -54,8 +54,9 @@ Source: "..\revit-mcp-server\build\*"; DestDir: "{app}\server\build"; Flags: ign
 Source: "..\revit-mcp-server\node_modules\*"; DestDir: "{app}\server\node_modules"; Flags: ignoreversion recursesubdirs; Components: server
 Source: "..\revit-mcp-server\package.json"; DestDir: "{app}\server"; Flags: ignoreversion; Components: server
 
-; Revit Plugin DLL
-Source: "..\revit-mcp-plugin\RevitMCPPlugin\bin\Release\net48\*"; DestDir: "{app}\plugin"; Flags: ignoreversion recursesubdirs; Components: plugin
+; Revit Plugin DLL (both framework builds)
+Source: "..\revit-mcp-plugin\RevitMCPPlugin\bin\Release\net48\*"; DestDir: "{app}\plugin\net48"; Flags: ignoreversion recursesubdirs; Components: plugin
+Source: "..\revit-mcp-plugin\RevitMCPPlugin\bin\Release\net8.0-windows\*"; DestDir: "{app}\plugin\net8"; Flags: ignoreversion recursesubdirs; Components: plugin
 
 ; Add-in manifest for each Revit version
 Source: "..\revit-mcp-plugin\RevitMCPPlugin\RevitMCP.addin"; DestDir: "{app}\plugin"; Flags: ignoreversion; Components: plugin
@@ -83,20 +84,34 @@ begin
   Result := ExpandConstant('{commonappdata}\Autodesk\Revit\Addins\' + Year);
 end;
 
+// Get the correct plugin subfolder based on Revit year
+function GetPluginSubfolder(YearInt: Integer): string;
+begin
+  if YearInt <= 2024 then
+    Result := 'net48'
+  else
+    Result := 'net8';
+end;
+
 procedure InstallAddinForRevit(Year: string);
 var
   AddInDir: string;
   AddinContent: string;
+  PluginFolder: string;
+  YearInt: Integer;
 begin
   AddInDir := GetRevitAddInsDir(Year);
   ForceDirectories(AddInDir);
 
-  // Create the .addin file pointing to our plugin
+  YearInt := StrToInt(Year);
+  PluginFolder := GetPluginSubfolder(YearInt);
+
+  // Create the .addin file pointing to the correct framework build
   AddinContent := '<?xml version="1.0" encoding="utf-8"?>' + #13#10 +
     '<RevitAddIns>' + #13#10 +
     '  <AddIn Type="Application">' + #13#10 +
     '    <Name>Revit MCP Plugin</Name>' + #13#10 +
-    '    <Assembly>' + ExpandConstant('{app}') + '\plugin\RevitMCPPlugin.dll</Assembly>' + #13#10 +
+    '    <Assembly>' + ExpandConstant('{app}') + '\plugin\' + PluginFolder + '\RevitMCPPlugin.dll</Assembly>' + #13#10 +
     '    <FullClassName>RevitMCPPlugin.Core.Application</FullClassName>' + #13#10 +
     '    <ClientId>A1B2C3D4-E5F6-7890-ABCD-EF1234567890</ClientId>' + #13#10 +
     '    <VendorId>RevitMCP</VendorId>' + #13#10 +

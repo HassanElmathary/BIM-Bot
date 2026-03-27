@@ -17,11 +17,15 @@ namespace RevitMCPPlugin.UI
         public GeminiSettings ResultSettings { get; private set; }
 
         private readonly TextBox _apiKeyBox;
+        private readonly TextBlock _apiKeyLabel;
+        private readonly TextBlock _modelLabel;
+
         private readonly ComboBox _modelCombo;
         private readonly ComboBox _providerCombo;
+        private Button _getKeyBtn;
 
         // Model lists per provider
-        private static readonly string[] GeminiModels = { "gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash", "gemini-2.0-pro" };
+        private static readonly string[] GeminiModels = { "gemini-2.0-flash", "gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-pro" };
         private static readonly string[] DeepSeekModels = { "deepseek-chat", "deepseek-reasoner" };
         private static readonly string[] PerplexityModels = { "sonar", "sonar-pro", "sonar-reasoning", "sonar-reasoning-pro" };
         private static readonly string[] OpenRouterModels = {
@@ -32,6 +36,10 @@ namespace RevitMCPPlugin.UI
             "meta-llama/llama-4-maverick",
             "qwen/qwen3-235b-a22b"
         };
+        private static readonly string[] OllamaModels = { "qwen2.5:7b", "qwen2.5:14b", "llama3.1:8b", "mistral:7b", "codellama:7b" };
+        private static readonly string[] CerebrasModels = { "llama-3.3-70b", "llama3.1-8b", "llama3.1-70b" };
+        private static readonly string[] GroqModels = { "llama-3.3-70b-versatile", "llama-3.1-8b-instant", "mixtral-8x7b-32768", "gemma2-9b-it", "qwen-qwq-32b" };
+        private static readonly string[] OpenAIModels = { "gpt-4o", "gpt-4o-mini", "gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano", "o3-mini" };
 
         public SettingsWindow(GeminiSettings currentSettings)
         {
@@ -59,7 +67,7 @@ namespace RevitMCPPlugin.UI
             stack.Children.Add(DarkTheme.MakeLabel("Provider"));
 
             _providerCombo = DarkTheme.MakeComboBox(
-                new[] { "Gemini", "DeepSeek", "Perplexity", "OpenRouter" },
+                new[] { "Gemini", "OpenAI", "DeepSeek", "Perplexity", "OpenRouter", "Cerebras", "Groq", "Ollama (Local)" },
                 MatchProvider(currentSettings.Provider ?? "gemini")
             );
             _providerCombo.Margin = new Thickness(0, 0, 0, 16);
@@ -67,7 +75,8 @@ namespace RevitMCPPlugin.UI
             stack.Children.Add(_providerCombo);
 
             // --- API Key ---
-            stack.Children.Add(DarkTheme.MakeLabel("API Key"));
+            _apiKeyLabel = DarkTheme.MakeLabel("API Key");
+            stack.Children.Add(_apiKeyLabel);
 
             _apiKeyBox = DarkTheme.MakeTextBox(currentSettings.ApiKey, "Paste your API key here...");
             _apiKeyBox.FontFamily = new FontFamily("Consolas");
@@ -75,12 +84,15 @@ namespace RevitMCPPlugin.UI
             stack.Children.Add(_apiKeyBox);
 
             // --- Model ---
-            stack.Children.Add(DarkTheme.MakeLabel("Model"));
+            _modelLabel = DarkTheme.MakeLabel("Model");
+            stack.Children.Add(_modelLabel);
 
             _modelCombo = DarkTheme.MakeComboBox(new string[0]);
             _modelCombo.Margin = new Thickness(0, 0, 0, 24);
             PopulateModels(currentSettings.Provider ?? "gemini", currentSettings.Model);
             stack.Children.Add(_modelCombo);
+
+
 
             // Buttons
             var btnPanel = new StackPanel
@@ -110,11 +122,18 @@ namespace RevitMCPPlugin.UI
                     url = "https://www.perplexity.ai/settings/api";
                 else if (provider == "openrouter")
                     url = "https://openrouter.ai/keys";
+                else if (provider == "cerebras")
+                    url = "https://cloud.cerebras.ai/";
+                else if (provider == "groq")
+                    url = "https://console.groq.com/keys";
+                else if (provider == "openai")
+                    url = "https://platform.openai.com/api-keys";
                 else
                     url = "https://aistudio.google.com/apikey";
                 try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); }
                 catch { }
             };
+            _getKeyBtn = getKeyBtn;
             btnPanel.Children.Add(getKeyBtn);
 
             var cancelBtn = DarkTheme.MakeCancelButton();
@@ -145,9 +164,14 @@ namespace RevitMCPPlugin.UI
             if (string.IsNullOrEmpty(provider)) return "Gemini";
             switch (provider.ToLowerInvariant())
             {
+
                 case "deepseek": return "DeepSeek";
                 case "perplexity": return "Perplexity";
                 case "openrouter": return "OpenRouter";
+                case "ollama": return "Ollama (Local)";
+                case "cerebras": return "Cerebras";
+                case "groq": return "Groq";
+                case "openai": return "OpenAI";
                 default: return "Gemini";
             }
         }
@@ -155,12 +179,14 @@ namespace RevitMCPPlugin.UI
         private string GetSelectedProvider()
         {
             var sel = GetComboText(_providerCombo) ?? "Gemini";
+            // Map display names back to storage keys
+            if (sel.StartsWith("Ollama", StringComparison.OrdinalIgnoreCase)) return "ollama";
             return sel.ToLowerInvariant();
         }
 
         private string GetSelectedModel()
         {
-            return GetComboText(_modelCombo) ?? "gemini-2.5-flash";
+            return GetComboText(_modelCombo) ?? "gemini-2.0-flash";
         }
 
         private string GetComboText(ComboBox combo)
@@ -176,6 +202,13 @@ namespace RevitMCPPlugin.UI
         {
             var provider = GetSelectedProvider();
             PopulateModels(provider, null);
+            var hideFields = provider == "ollama";
+            _apiKeyBox.Visibility = hideFields ? Visibility.Collapsed : Visibility.Visible;
+            _apiKeyLabel.Visibility = hideFields ? Visibility.Collapsed : Visibility.Visible;
+            _modelCombo.Visibility = Visibility.Visible;
+            _modelLabel.Visibility = Visibility.Visible;
+            if (_getKeyBtn != null)
+                _getKeyBtn.Visibility = hideFields ? Visibility.Collapsed : Visibility.Visible;
         }
 
         private void PopulateModels(string provider, string selectedModel)
@@ -187,6 +220,10 @@ namespace RevitMCPPlugin.UI
                 case "deepseek": models = DeepSeekModels; break;
                 case "perplexity": models = PerplexityModels; break;
                 case "openrouter": models = OpenRouterModels; break;
+                case "ollama": models = OllamaModels; break;
+                case "cerebras": models = CerebrasModels; break;
+                case "groq": models = GroqModels; break;
+                case "openai": models = OpenAIModels; break;
                 default: models = GeminiModels; break;
             }
 

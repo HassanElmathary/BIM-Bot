@@ -27,12 +27,16 @@ export function registerReadingTools(server: McpServer) {
     // 2. Get current view elements
     server.tool(
         "get_current_view_elements",
-        "Get all elements visible in the current Revit view. Optionally filter by category.",
-        { category: z.string().optional().describe("Optional category filter, e.g. 'Walls', 'Doors', 'Windows'") },
-        async ({ category }) => {
+        "Get all elements visible in the current Revit view. Optionally filter by category. Supports pagination via offset/limit — response includes totalCount and hasMore to know if more batches are needed.",
+        {
+            category: z.string().optional().describe("Optional category filter, e.g. 'Walls', 'Doors', 'Windows'"),
+            offset: z.number().optional().describe("Skip this many elements (for pagination). Default: 0"),
+            limit: z.number().optional().describe("Max elements to return (0 = all). Default: 0 (return all)")
+        },
+        async (args) => {
             try {
                 const response = await withRevitConnection(async (client) =>
-                    client.sendCommand("get_current_view_elements", { category: category || "" })
+                    client.sendCommand("get_current_view_elements", { category: args.category || "", offset: args.offset || 0, limit: args.limit || 0 })
                 );
                 return { content: [{ type: "text", text: JSON.stringify(response, null, 2) }] };
             } catch (error) {
@@ -61,15 +65,22 @@ export function registerReadingTools(server: McpServer) {
     // 4. Get elements by category
     server.tool(
         "get_elements",
-        "Get all elements of a specific category from the Revit model. Use for querying walls, doors, windows, floors, etc.",
+        "Get all elements of a specific category from the Revit model. Response includes totalCount (total matching elements) and hasMore (if paginated). Use offset/limit for large datasets — default returns all elements.",
         {
-            category: z.string().describe("Revit category name, e.g. 'Walls', 'Doors', 'Windows', 'Floors', 'Ceilings', 'Roofs'"),
-            includeParameters: z.boolean().optional().describe("Include all parameters for each element (default: false)")
+            category: z.string().describe("Revit category name, e.g. 'Walls', 'Doors', 'Windows', 'Floors', 'Ceilings', 'Roofs', 'Structural Columns'"),
+            includeParameters: z.boolean().optional().describe("Include all parameters for each element (default: false)"),
+            offset: z.number().optional().describe("Skip this many elements (for pagination). Default: 0"),
+            limit: z.number().optional().describe("Max elements to return (0 = all). Default: 0 (return all)")
         },
-        async ({ category, includeParameters }) => {
+        async (args) => {
             try {
                 const response = await withRevitConnection(async (client) =>
-                    client.sendCommand("get_elements", { category, includeParameters: includeParameters || false })
+                    client.sendCommand("get_elements", {
+                        category: args.category,
+                        includeParameters: args.includeParameters || false,
+                        offset: args.offset || 0,
+                        limit: args.limit || 0
+                    })
                 );
                 return { content: [{ type: "text", text: JSON.stringify(response, null, 2) }] };
             } catch (error) {
@@ -115,7 +126,7 @@ export function registerReadingTools(server: McpServer) {
     // 7. Get views
     server.tool(
         "get_views",
-        "Get a list of all views in the Revit project. Optionally filter by view type.",
+        "Get a list of all views in the Revit project. Optionally filter by view type. Supports aliases: '3D' (ThreeD), 'Plan' (FloorPlan), 'RCP' (CeilingPlan), 'Ceiling', 'Drafting' (DraftingView), 'Area' (AreaPlan).",
         {
             viewType: z.string().optional().describe("Optional filter: 'FloorPlan', 'CeilingPlan', 'Section', 'Elevation', '3D', 'Schedule', 'Drafting', 'Legend'")
         },
@@ -244,6 +255,44 @@ export function registerReadingTools(server: McpServer) {
             try {
                 const response = await withRevitConnection(async (client) =>
                     client.sendCommand("get_linked_models", {})
+                );
+                return { content: [{ type: "text", text: JSON.stringify(response, null, 2) }] };
+            } catch (error) {
+                return { content: [{ type: "text", text: `Failed: ${error instanceof Error ? error.message : String(error)}` }] };
+            }
+        }
+    );
+
+    // 14b. Get detailed link info
+    server.tool(
+        "get_link_info",
+        "Get detailed information about linked Revit models: load status, file path, instance count, and linked file status.",
+        {
+            linkName: z.string().optional().describe("Optional filter by link name (partial match)")
+        },
+        async (args) => {
+            try {
+                const response = await withRevitConnection(async (client) =>
+                    client.sendCommand("get_link_info", args)
+                );
+                return { content: [{ type: "text", text: JSON.stringify(response, null, 2) }] };
+            } catch (error) {
+                return { content: [{ type: "text", text: `Failed: ${error instanceof Error ? error.message : String(error)}` }] };
+            }
+        }
+    );
+
+    // 14c. Unload links
+    server.tool(
+        "unload_links",
+        "Unload linked Revit models to reduce memory and improve performance. Optionally filter by name.",
+        {
+            linkName: z.string().optional().describe("Optional filter by link name (partial match). If not provided, unloads ALL links.")
+        },
+        async (args) => {
+            try {
+                const response = await withRevitConnection(async (client) =>
+                    client.sendCommand("unload_links", args)
                 );
                 return { content: [{ type: "text", text: JSON.stringify(response, null, 2) }] };
             } catch (error) {

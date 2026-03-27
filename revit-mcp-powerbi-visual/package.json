@@ -1,0 +1,23 @@
+{
+    "name": "revit-mcp-powerbi-visual",
+    "version": "1.0.0",
+    "description": "Revit MCP 3D Viewer — Power BI custom visual with Three.js",
+    "main": "src/visual.ts",
+    "scripts": {
+        "pbiviz": "pbiviz",
+        "start": "pbiviz start",
+        "package": "pbiviz package",
+        "lint": "tsc --noEmit"
+    },
+    "dependencies": {
+        "three": "^0.162.0"
+    },
+    "devDependencies": {
+        "powerbi-visuals-api": "~5.3.0",
+        "powerbi-visuals-tools": "^7.0.2",
+        "powerbi-visuals-utils-dataviewutils": "^6.0.2",
+        "typescript": "~5.3.0",
+        "@types/three": "^0.162.0",
+        "less": "^4.2.0"
+    }
+}

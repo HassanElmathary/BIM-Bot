@@ -127,6 +127,59 @@ namespace RevitMCPPlugin.Commands
         }
     }
 
+    // ===== POWER BI EXPORT =====
+    [Transaction(TransactionMode.Manual)]
+    public class Tool_ExportToPowerBI : IExternalCommand
+    {
+        public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
+        {
+            try
+            {
+                var uiApp = commandData.Application;
+                var uidoc = uiApp.ActiveUIDocument;
+                var doc = uidoc?.Document;
+
+                if (doc == null)
+                {
+                    TaskDialog.Show("Power BI Export", "No active document. Please open a Revit project first.");
+                    return Result.Failed;
+                }
+
+                // Check if active view is 3D
+                var is3D = uidoc.ActiveView is View3D;
+
+                // Build parameters
+                var parameters = new Newtonsoft.Json.Linq.JObject
+                {
+                    ["exportScope"] = is3D ? "currentView" : "allModel",
+                    ["mode"] = "new"
+                };
+
+                // Execute the export via CommandExecutor
+                var result = CommandExecutor.Execute(uiApp, "export_to_powerbi", parameters);
+                var msg = result?["message"]?.ToString() ?? "Export completed";
+                var dbPath = result?["dbPath"]?.ToString() ?? "";
+                var elemCount = result?["elementCount"]?.ToString() ?? "0";
+                var fileSize = result?["fileSize"]?.ToString() ?? "";
+
+                TaskDialog.Show("Power BI Export ✅",
+                    $"{msg}\n\n" +
+                    $"📁 Database: {dbPath}\n" +
+                    $"📊 Elements: {elemCount}\n" +
+                    $"📦 File size: {fileSize}\n\n" +
+                    "Next: Open Power BI Desktop → Get Data → ODBC → connect to this .db file");
+
+                return Result.Succeeded;
+            }
+            catch (System.Exception ex)
+            {
+                TaskDialog.Show("Power BI Export ❌", $"Export failed:\n{ex.Message}");
+                message = ex.Message;
+                return Result.Failed;
+            }
+        }
+    }
+
     // ===== FAMILY & PARAMETER TOOLS =====
     [Transaction(TransactionMode.Manual)]
     public class Tool_ManageFamilies : IExternalCommand
@@ -246,6 +299,17 @@ namespace RevitMCPPlugin.Commands
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
             try { new ApplyViewTemplateWindow().ShowDialog(); return Result.Succeeded; }
+            catch (System.Exception ex) { message = ex.Message; return Result.Failed; }
+        }
+    }
+
+    // ===== PROJECT FILES =====
+    [Transaction(TransactionMode.Manual)]
+    public class Tool_ProjectFiles : IExternalCommand
+    {
+        public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
+        {
+            try { new ProjectFilesWindow().ShowDialog(); return Result.Succeeded; }
             catch (System.Exception ex) { message = ex.Message; return Result.Failed; }
         }
     }

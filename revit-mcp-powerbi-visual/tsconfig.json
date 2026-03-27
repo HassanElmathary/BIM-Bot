@@ -1,0 +1,20 @@
+{
+    "compilerOptions": {
+        "allowJs": false,
+        "emitDecoratorMetadata": true,
+        "experimentalDecorators": true,
+        "target": "ES2015",
+        "sourceMap": true,
+        "outDir": "./.tmp/build/",
+        "moduleResolution": "node",
+        "declaration": true,
+        "lib": ["ES2015", "DOM"],
+        "types": ["powerbi-visuals-api"],
+        "typeRoots": ["./node_modules/@types", "./node_modules"]
+    },
+    "files": [
+        "src/visual.ts",
+        "src/meshParser.ts",
+        "src/settings.ts"
+    ]
+}

@@ -40,7 +40,8 @@ export class GoogleAuth {
             clientSecret: config?.clientSecret || process.env.GOOGLE_CLIENT_SECRET || "",
             redirectPort: config?.redirectPort || 3847,
             scopes: config?.scopes || [
-                "https://www.googleapis.com/auth/generative-language",
+                "https://www.googleapis.com/auth/spreadsheets",
+                "https://www.googleapis.com/auth/drive.readonly",
                 "https://www.googleapis.com/auth/userinfo.email",
                 "https://www.googleapis.com/auth/userinfo.profile",
             ],

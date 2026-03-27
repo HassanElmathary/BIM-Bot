@@ -1,0 +1,67 @@
+{
+    "dataRoles": [
+        {
+            "displayName": "Element ID",
+            "name": "elementId",
+            "kind": "Grouping"
+        },
+        {
+            "displayName": "Category",
+            "name": "category",
+            "kind": "Grouping"
+        },
+        {
+            "displayName": "Mesh JSON",
+            "name": "meshJson",
+            "kind": "Measure"
+        },
+        {
+            "displayName": "Color R",
+            "name": "colorR",
+            "kind": "Measure"
+        },
+        {
+            "displayName": "Color G",
+            "name": "colorG",
+            "kind": "Measure"
+        },
+        {
+            "displayName": "Color B",
+            "name": "colorB",
+            "kind": "Measure"
+        }
+    ],
+    "dataViewMappings": [
+        {
+            "table": {
+                "rows": {
+                    "select": [
+                        { "for": { "in": "elementId" } },
+                        { "for": { "in": "category" } },
+                        { "for": { "in": "meshJson" } },
+                        { "for": { "in": "colorR" } },
+                        { "for": { "in": "colorG" } },
+                        { "for": { "in": "colorB" } }
+                    ],
+                    "dataReductionAlgorithm": {
+                        "window": {
+                            "count": 30000
+                        }
+                    }
+                }
+            }
+        }
+    ],
+    "privileges": [
+        {
+            "name": "WebAccess",
+            "essential": false,
+            "parameters": []
+        }
+    ],
+    "supportsHighlight": true,
+    "supportsMultiVisualSelection": true,
+    "sorting": {
+        "default": {}
+    }
+}

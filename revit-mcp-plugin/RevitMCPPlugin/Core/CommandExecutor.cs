@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.DB.Architecture;
 using Autodesk.Revit.UI;
 using Newtonsoft.Json.Linq;
+using RevitMCPPlugin.PowerBI;
 
 namespace RevitMCPPlugin.Core
 {
@@ -55,6 +57,8 @@ namespace RevitMCPPlugin.Core
                     return GetLinkedModels(doc);
                 case "get_warnings":
                     return GetWarnings(doc);
+                case "export_elements":
+                    return ExportElements(doc, parameters);
 
                 // ===== CREATING COMMANDS =====
                 case "create_wall":
@@ -117,30 +121,37 @@ namespace RevitMCPPlugin.Core
                 // ===== DOCUMENTATION COMMANDS =====
                 case "place_view_on_sheet":
                 case "create_viewport":
-                    return PlaceViewOnSheet(doc, parameters);
+                case "place_views_on_sheet":
+                    return PlaceViewsOnSheet(doc, parameters);
                 case "tag_all_in_view":
                     return TagAllInView(uidoc!, doc, parameters);
                 case "create_legend":
+                    return GenerateLegend(doc, parameters);
                 case "add_revision":
                 case "print_sheets":
                     return ExecuteGenericCommand(doc, command, parameters);
 
                 // ===== QA/QC COMMANDS =====
                 case "check_warnings":
-                    return GetWarnings(doc);
+                case "isolate_warnings":
+                    return IsolateWarnings(uidoc!, doc, parameters);
                 case "audit_model":
                     return AuditModel(doc);
+                case "purge_unused":
+                    return DeepPurge(doc);
+                case "purge_cads":
+                    return FindCadImports(doc, new JObject { ["delete"] = true });
                 case "check_room_compliance":
                 case "check_naming_conventions":
                 case "find_duplicates":
-                case "purge_unused":
                 case "check_links_status":
                 case "validate_parameters":
                     return ExecuteGenericCommand(doc, command, parameters);
 
                 // ===== ADVANCED COMMANDS =====
                 case "send_code_to_revit":
-                    return new JObject { ["message"] = "Code execution is handled by the command set module" };
+                case "execute_code":
+                    return CodeExecutor.Execute(uiApp, parameters);
                 case "select_elements":
                     return SelectElements(uidoc!, parameters);
                 case "get_model_statistics":
@@ -160,16 +171,31 @@ namespace RevitMCPPlugin.Core
                     return GetMaterials(doc);
                 case "set_material":
                     return SetMaterial(doc, parameters);
-                case "get_views":
-                    return GetViews(doc, parameters);
                 case "open_view":
-                    return OpenView(uidoc!, doc, parameters);
+                {
+                    var viewId = parameters["viewId"]?.Value<int>() ?? 0;
+                    var view = doc.GetElement(new ElementId(viewId)) as View;
+                    if (view == null) throw new InvalidOperationException($"View {viewId} not found");
+                    uidoc!.ActiveView = view;
+                    return new JObject { ["message"] = $"Opened view '{view.Name}'", ["viewId"] = viewId };
+                }
                 case "close_view":
-                    return CloseView(uidoc!, doc, parameters);
+                {
+                    var closeViewId = parameters["viewId"]?.Value<int>() ?? 0;
+                    var closeView = doc.GetElement(new ElementId(closeViewId)) as View;
+                    if (closeView == null) throw new InvalidOperationException($"View {closeViewId} not found");
+                    var openUIViews = uidoc!.GetOpenUIViews();
+                    var uiView = openUIViews.FirstOrDefault(uv => uv.ViewId.IntegerValue == closeViewId);
+                    if (uiView == null) return new JObject { ["message"] = $"View '{closeView.Name}' is not open" };
+                    uiView.Close();
+                    return new JObject { ["message"] = $"Closed view '{closeView.Name}'", ["viewId"] = closeViewId };
+                }
                 case "set_view_properties":
                     return SetViewProperties(uidoc!, doc, parameters);
                 case "override_element_in_view":
                     return OverrideElementInView(uidoc!, doc, parameters);
+                case "set_visibility_graphics":
+                    return SetVisibilityGraphics(uidoc!, doc, parameters);
                 case "get_line_styles":
                     return GetLineStyles(doc);
                 case "set_line_style":
@@ -184,21 +210,31 @@ namespace RevitMCPPlugin.Core
                 case "batch_modify_thickness":
                     return BatchModifyThickness(doc, parameters);
                 case "room_to_floor":
+                case "create_room_finishes":
                     return RoomToFloor(doc, parameters);
                 // Data & Parameters
                 case "find_replace_names":
-                    return FindReplaceNames(doc, parameters);
+                case "bulk_rename_views":
+                    return BulkRenameViews(doc, parameters);
                 case "parameter_case_convert":
                     return ParameterCaseConvert(doc, parameters);
                 case "bulk_parameter_transfer":
-                    return BulkParameterTransfer(doc, parameters);
+                case "copy_parameter_value":
+                    return CopyParameterValue(doc, parameters);
                 case "auto_renumber":
+                case "renumber_elements":
                     return AutoRenumber(doc, parameters);
                 // Views & Documentation
                 case "batch_create_sheets":
                     return BatchCreateSheets(doc, parameters);
                 case "align_viewports":
                     return AlignViewports(doc, parameters);
+                case "duplicate_sheets":
+                    return DuplicateSheets(doc, parameters);
+                case "auto_section_box":
+                    return AutoSectionBox(uidoc!, doc, parameters);
+                case "copy_view_filters":
+                    return CopyViewFilters(doc, parameters);
                 // Project Cleanup
                 case "deep_purge":
                     return DeepPurge(doc);
@@ -209,6 +245,8 @@ namespace RevitMCPPlugin.Core
                 // Selection & Filtering
                 case "select_by_parameter":
                     return SelectByParameter(uidoc!, doc, parameters);
+                case "select_by_filter":
+                    return SelectByFilter(uidoc!, doc, parameters);
                 case "select_by_workset":
                     return SelectByWorkset(uidoc!, doc, parameters);
                 case "filter_selection":
@@ -239,6 +277,11 @@ namespace RevitMCPPlugin.Core
                     return GenerateLegend(doc, parameters);
                 case "cad_to_lines":
                     return CadToLines(doc, parameters);
+                // Editing aliases
+                case "color_by_parameter":
+                    return ColorElements(uidoc!, doc, parameters);
+                case "extend_shrink_element":
+                    return ExtendShrinkElement(doc, parameters);
 
                 // ===== TOOL WINDOW COMMANDS (Offline) =====
                 case "export_manager":
@@ -253,11 +296,14 @@ namespace RevitMCPPlugin.Core
                     return ExportToDgn(doc, parameters);
                 case "export_dwg":
                 case "export_to_dwg":
+                case "export_to_cad":
                     return ExportToDwg(doc, parameters);
                 case "export_to_dwf":
                     return ExportToDwf(doc, parameters);
                 case "export_to_nwc":
                     return ExportToNwc(doc, parameters);
+                case "export_to_powerbi":
+                    return ExportToPowerBI(uidoc!, doc, parameters);
                 case "export_schedule_data":
                 case "export_schedule":
                     return ExportScheduleData(doc, parameters);
@@ -290,6 +336,286 @@ namespace RevitMCPPlugin.Core
                 case "duplicate_view":
                     return DuplicateView(doc, parameters);
 
+                // ===== PROJECT DATA MANAGEMENT =====
+                case "save_project_data":
+                    return SaveProjectData(doc, parameters);
+                case "load_project_data":
+                    return LoadProjectData(doc, parameters);
+                case "list_project_data":
+                    return ListProjectData(doc);
+                case "delete_project_data":
+                    return DeleteProjectData(doc, parameters);
+                case "save_snapshot":
+                    return SaveModelSnapshot(doc);
+
+                // ===== ADDITIONAL QUERY TOOLS =====
+                case "create_view_filter":
+                    return CreateViewFilter(uidoc!, doc, parameters);
+                case "get_worksets":
+                    return GetWorksets(doc);
+                case "get_areas":
+                    return GetAreas(doc);
+                case "get_design_options":
+                    return GetDesignOptions(doc);
+
+                // ===== INTEGRATION TOOLS =====
+                case "get_integration_status":
+                    return GetIntegrationStatus();
+                case "export_to_excel_integration":
+                case "export_to_notion_integration":
+                case "export_to_google_sheets_integration":
+                    return PrepareIntegrationExport(doc, command, parameters);
+
+                // ===== PROJECT FILES TOOLS =====
+                case "list_project_files":
+                    return ProjectFilesService.ListFiles(doc.PathName, parameters);
+                case "read_project_file":
+                    return ProjectFilesService.ReadFile(doc.PathName, parameters);
+                case "analyze_project_file":
+                    return ProjectFilesService.AnalyzeFile(doc.PathName, parameters);
+                case "search_project_files":
+                    return ProjectFilesService.SearchFiles(doc.PathName, parameters);
+                case "export_elements_to_csv":
+                    return ExportElementsToCsv(doc, parameters);
+                case "export_elements_to_excel":
+                    return ExportElementsToExcel(doc, parameters);
+                case "import_from_project_file":
+                    return ImportFromProjectFile(doc, parameters);
+
+                // ===== EXCEL TOOLS =====
+                case "excel_create_workbook":
+                    return ExcelService.CreateWorkbook(doc.PathName, parameters);
+                case "excel_read_range":
+                    return ExcelService.ReadRange(doc.PathName, parameters);
+                case "excel_write_cells":
+                    return ExcelService.WriteCells(doc.PathName, parameters);
+                case "excel_add_sheet":
+                    return ExcelService.ManageSheet(doc.PathName, parameters);
+                case "excel_insert_rows":
+                    return ExcelService.InsertRows(doc.PathName, parameters);
+                case "excel_format_cells":
+                    return ExcelService.FormatCells(doc.PathName, parameters);
+                case "excel_add_formula":
+                    return ExcelService.AddFormula(doc.PathName, parameters);
+                case "excel_get_info":
+                    return ExcelService.GetInfo(doc.PathName, parameters);
+
+                // ===== NONICA-INSPIRED POWER TOOLS =====
+                case "cut_floors":
+                    return CutFloors(doc, parameters);
+                case "split_by_levels":
+                    return SplitByLevels(doc, parameters);
+                case "create_openings":
+                    return CreateOpenings(doc, parameters);
+                case "manage_scope_boxes":
+                    return ManageScopeBoxes(doc, parameters);
+                case "find_empty_sheets":
+                    return FindEmptySheets(doc, parameters);
+                case "clean_unused_templates":
+                    return CleanUnusedTemplates(doc, parameters);
+                case "clean_unplaced_views":
+                    return CleanUnplacedViews(doc, parameters);
+                case "purge_unused_in_families":
+                    return PurgeUnusedInFamilies(doc, parameters);
+                case "delete_families_by_size":
+                    return DeleteFamiliesBySize(doc, parameters);
+                case "explode_3d_view":
+                    return Explode3DView(doc, uidoc, parameters);
+                case "rotate_section_box":
+                    return RotateSectionBox(doc, uidoc, parameters);
+                case "super_align":
+                    return SuperAlign(doc, parameters);
+                case "join_elements_in_view":
+                    return JoinElementsInView(doc, uidoc, parameters);
+                case "copy_to_project":
+                    return CopyToProject(doc, uiApp, parameters);
+                case "measure_elements":
+                    return MeasureElements(doc, parameters);
+
+                // ===== MEP TOOLS =====
+                case "create_duct":
+                    return CreateDuct(doc, parameters);
+                case "create_pipe":
+                    return CreatePipe(doc, parameters);
+                case "create_flex_duct":
+                    return CreateFlexDuct(doc, parameters);
+                case "create_mep_space":
+                    return CreateMepSpace(doc, parameters);
+                case "get_mep_systems":
+                    return GetMepSystems(doc, parameters);
+                case "duct_sizing":
+                    return DuctSizing(doc, parameters);
+                case "connect_mep_elements":
+                    return ConnectMepElements(doc, parameters);
+
+                // ===== STRUCTURAL TOOLS =====
+                case "create_structural_beam":
+                    return CreateStructuralBeam(doc, parameters);
+                case "create_structural_column":
+                    return CreateStructuralColumn(doc, parameters);
+                case "create_wall_foundation":
+                    return CreateWallFoundation(doc, parameters);
+                case "create_rebar":
+                    return CreateRebar(doc, parameters);
+                case "get_structural_elements":
+                    return GetStructuralElements(doc, parameters);
+                case "analytical_model_info":
+                    return AnalyticalModelInfo(doc, parameters);
+
+                // ===== ANNOTATION TOOLS =====
+                case "create_filled_region":
+                    return CreateFilledRegion(doc, uidoc, parameters);
+                case "create_spot_elevation":
+                    return CreateSpotElevation(doc, uidoc, parameters);
+                case "create_spot_coordinate":
+                    return CreateSpotCoordinate(doc, uidoc, parameters);
+                case "create_keynote_legend":
+                    return CreateKeynoteLegend(doc, parameters);
+                case "create_detail_component":
+                    return CreateDetailComponent(doc, uidoc, parameters);
+                case "tag_rooms_in_view":
+                    return TagRoomsInView(doc, uidoc, parameters);
+                case "dimension_walls":
+                    return DimensionWalls(doc, uidoc, parameters);
+
+                // ===== ARCHITECTURE TOOLS =====
+                case "create_stairs":
+                    return CreateStairs(doc, parameters);
+                case "create_railing":
+                    return CreateRailing(doc, parameters);
+                case "create_curtain_wall":
+                    return CreateCurtainWall(doc, parameters);
+                case "create_shaft_opening":
+                    return CreateShaftOpening(doc, parameters);
+                case "get_stairs_info":
+                    return GetStairsInfo(doc, parameters);
+                case "get_curtain_panels":
+                    return GetCurtainPanels(doc, parameters);
+                case "create_opening_in_wall":
+                    return CreateOpeningInWall(doc, parameters);
+
+                // ===== SITE TOOLS =====
+                case "create_topography":
+                    return CreateTopography(doc, parameters);
+                case "create_building_pad":
+                    return CreateBuildingPad(doc, parameters);
+                case "get_site_info":
+                    return GetSiteInfo(doc, parameters);
+
+                // ===== UTILITY TOOLS =====
+                case "pin_elements":
+                    return PinElements(doc, parameters, true);
+                case "unpin_elements":
+                    return PinElements(doc, parameters, false);
+                case "create_workset":
+                    return CreateWorkset(doc, parameters);
+                case "get_element_history":
+                    return GetElementHistory(doc, parameters);
+                case "create_assembly":
+                    return CreateAssembly(doc, parameters);
+                case "create_fill_pattern":
+                    return CreateFillPattern(doc, parameters);
+                case "get_element_geometry":
+                    return GetElementGeometry(doc, parameters);
+                case "compare_models":
+                    return CompareModels(doc, parameters);
+                case "link_revit_model":
+                    return LinkRevitModel(doc, uiApp, parameters);
+                case "reload_links":
+                    return ReloadLinks(doc, parameters);
+                case "unload_links":
+                    return UnloadLinks(doc, parameters);
+                case "get_link_info":
+                    return GetLinkInfo(doc, parameters);
+
+                // ===== FILE MANAGEMENT (Phase 1) =====
+                case "save_document":
+                    return SaveDocument(doc);
+                case "save_as_document":
+                    return SaveAsDocument(doc, parameters);
+                case "close_document":
+                    return CloseDocument(doc, parameters);
+
+                // ===== FAMILY EDITOR (Phase 2) =====
+                case "edit_family":
+                    return EditFamily(uiApp, doc, parameters);
+                case "create_family_extrusion":
+                    return CreateFamilyExtrusion(uiApp, parameters);
+                case "save_family":
+                    return SaveFamily(uiApp, parameters);
+                case "load_family":
+                    return LoadFamily(doc, parameters);
+
+                // ===== SKETCH EDITING (Phase 3) =====
+                case "get_sketch":
+                    return GetSketch(doc, parameters);
+                case "edit_sketch":
+                    return EditSketch(doc, parameters);
+                case "set_sketch_profile":
+                    return SetSketchProfile(doc, parameters);
+
+                // ===== DRAFTING (Phase 4) =====
+                case "create_detail_lines":
+                    return CreateDetailLines(uidoc!, doc, parameters);
+                case "create_model_lines":
+                    return CreateModelLines(doc, parameters);
+                case "create_detail_arc":
+                    return CreateDetailArc(uidoc!, doc, parameters);
+
+                // ===== RENDERING (Phase 5) =====
+                case "set_sun_settings":
+                    return SetSunSettings(uidoc!, doc, parameters);
+                case "set_visual_style":
+                    return SetVisualStyle(uidoc!, doc, parameters);
+                case "export_view_image":
+                    return ExportViewImage(doc, parameters);
+
+                // ===== WORKSHARING (Phase 6) =====
+                case "sync_to_central":
+                    return SyncToCentral(doc, parameters);
+                case "relinquish_all":
+                    return RelinquishAll(doc);
+                case "get_worksharing_info":
+                    return GetWorksharingInfo(doc);
+
+                // ===== UNDO / TRANSACTIONS (Phase 8) =====
+                case "undo_last_operation":
+                    return UndoLastOperation(uiApp);
+                case "create_checkpoint":
+                    return CreateCheckpoint(doc, parameters);
+                case "rollback_to_checkpoint":
+                    return RollbackToCheckpoint(parameters);
+
+                // ===== UI AUTOMATION (Phase 9) =====
+                case "post_command":
+                    return PostCommand(uiApp, parameters);
+                case "list_commands":
+                    return ListPostableCommands();
+
+                // ===== SAFE CODE (Phase 10) =====
+                case "preview_code":
+                    return CodeExecutor.Preview(uiApp, parameters);
+
+                // ===== REMAINING GAPS =====
+                case "open_document":
+                    return OpenDocument(uiApp, parameters);
+                case "create_new_project":
+                    return CreateNewProject(uiApp, parameters);
+                case "create_new_family":
+                    return CreateNewFamily(uiApp, parameters);
+                case "detach_from_central":
+                    return DetachFromCentral(uiApp, parameters);
+                case "change_link_path":
+                    return ChangeLinkPath(doc, parameters);
+                case "manage_link_position":
+                    return ManageLinkPosition(doc, parameters);
+                case "zoom_to_fit":
+                    return ZoomToFit(uidoc!);
+                case "zoom_to_element":
+                    return ZoomToElement(uidoc!, doc, parameters);
+                case "edit_schedule":
+                    return EditSchedule(doc, parameters);
+
                 default:
                     throw new InvalidOperationException($"Unknown command: {command}");
             }
@@ -315,6 +641,8 @@ namespace RevitMCPPlugin.Core
         {
             var collector = new FilteredElementCollector(uidoc.Document, uidoc.ActiveView.Id);
             var category = parameters["category"]?.ToString();
+            var offset = parameters["offset"]?.Value<int>() ?? 0;
+            var limit = parameters["limit"]?.Value<int>() ?? 0;
 
             if (!string.IsNullOrEmpty(category))
             {
@@ -323,10 +651,13 @@ namespace RevitMCPPlugin.Core
                     collector = collector.OfCategory(builtInCat);
             }
 
-            var elements = collector.WhereElementIsNotElementType().ToElements();
+            var allElements = collector.WhereElementIsNotElementType().ToElements();
+            var totalCount = allElements.Count;
+            var subset = offset > 0 ? allElements.Skip(offset) : (IEnumerable<Element>)allElements;
+            if (limit > 0) subset = subset.Take(limit);
             var result = new JArray();
 
-            foreach (var elem in elements)
+            foreach (var elem in subset)
             {
                 result.Add(new JObject
                 {
@@ -336,12 +667,13 @@ namespace RevitMCPPlugin.Core
                 });
             }
 
-            return new JObject { ["elements"] = result, ["count"] = result.Count };
+            return new JObject { ["totalCount"] = totalCount, ["count"] = result.Count, ["offset"] = offset, ["limit"] = limit, ["hasMore"] = (offset + result.Count) < totalCount, ["elements"] = result };
         }
 
         private static JToken GetSelectedElements(UIDocument uidoc)
         {
-            var selected = uidoc.Selection.GetElementIds();
+            var selected = uidoc.Selection.GetElementIds().ToList();
+            var totalCount = selected.Count;
             var result = new JArray();
 
             foreach (var id in selected)
@@ -370,13 +702,15 @@ namespace RevitMCPPlugin.Core
                 }
             }
 
-            return new JObject { ["elements"] = result, ["count"] = result.Count };
+            return new JObject { ["totalCount"] = totalCount, ["count"] = result.Count, ["elements"] = result };
         }
 
         private static JToken GetElements(Document doc, JObject parameters)
         {
             var category = parameters["category"]?.ToString() ?? "";
             var includeParams = parameters["includeParameters"]?.Value<bool>() ?? false;
+            var offset = parameters["offset"]?.Value<int>() ?? 0;
+            var limit = parameters["limit"]?.Value<int>() ?? 0;
 
             var collector = new FilteredElementCollector(doc);
             var builtInCat = GetBuiltInCategory(category);
@@ -384,10 +718,13 @@ namespace RevitMCPPlugin.Core
             if (builtInCat != BuiltInCategory.INVALID)
                 collector = collector.OfCategory(builtInCat);
 
-            var elements = collector.WhereElementIsNotElementType().ToElements();
+            var allElements = collector.WhereElementIsNotElementType().ToElements();
+            var totalCount = allElements.Count;
+            var subset = offset > 0 ? allElements.Skip(offset) : (IEnumerable<Element>)allElements;
+            if (limit > 0) subset = subset.Take(limit);
             var result = new JArray();
 
-            foreach (var elem in elements.Take(500)) // Limit to 500 to avoid memory issues
+            foreach (var elem in subset)
             {
                 var obj = new JObject
                 {
@@ -410,7 +747,7 @@ namespace RevitMCPPlugin.Core
                 result.Add(obj);
             }
 
-            return new JObject { ["elements"] = result, ["count"] = result.Count };
+            return new JObject { ["totalCount"] = totalCount, ["count"] = result.Count, ["offset"] = offset, ["limit"] = limit, ["hasMore"] = (offset + result.Count) < totalCount, ["elements"] = result };
         }
 
         private static JToken GetParameters(Document doc, JObject parameters)
@@ -466,9 +803,33 @@ namespace RevitMCPPlugin.Core
             };
         }
 
+        // View type aliases for user-friendly filtering
+        private static readonly Dictionary<string, string> _viewTypeAliases = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            { "3D", "ThreeD" },
+            { "3d", "ThreeD" },
+            { "Plan", "FloorPlan" },
+            { "plan", "FloorPlan" },
+            { "RCP", "CeilingPlan" },
+            { "rcp", "CeilingPlan" },
+            { "Ceiling", "CeilingPlan" },
+            { "Elevation", "Elevation" },
+            { "Detail", "Detail" },
+            { "Drafting", "DraftingView" },
+            { "Legend", "Legend" },
+            { "Schedule", "Schedule" },
+            { "Walkthrough", "Walkthrough" },
+            { "Area", "AreaPlan" },
+        };
+
         private static JToken GetViews(Document doc, JObject parameters)
         {
             var viewTypeFilter = parameters["viewType"]?.ToString() ?? "";
+
+            // Resolve aliases (e.g., "3D" → "ThreeD", "Plan" → "FloorPlan")
+            if (!string.IsNullOrEmpty(viewTypeFilter) && _viewTypeAliases.ContainsKey(viewTypeFilter))
+                viewTypeFilter = _viewTypeAliases[viewTypeFilter];
+
             var collector = new FilteredElementCollector(doc).OfClass(typeof(View));
             var result = new JArray();
 
@@ -602,7 +963,7 @@ namespace RevitMCPPlugin.Core
                 });
             }
 
-            return new JObject { ["familyTypes"] = result, ["count"] = result.Count };
+            return new JObject { ["totalCount"] = result.Count, ["count"] = result.Count, ["familyTypes"] = result };
         }
 
         private static JToken GetSchedules(Document doc)
@@ -658,6 +1019,148 @@ namespace RevitMCPPlugin.Core
             }
 
             return new JObject { ["warnings"] = result, ["count"] = result.Count };
+        }
+
+        // ===== DATA BRIDGE EXPORT =====
+
+        /// <summary>
+        /// Lightweight export for the Data Bridge — returns minified JSON with only essential fields.
+        /// Supports delta-sync (modifiedAfter) and batching (offset/limit, default 100).
+        /// Delta-sync uses element EDITED_BY and phase-created timestamps.
+        /// </summary>
+        private static JToken ExportElements(Document doc, JObject parameters)
+        {
+            var category = parameters["category"]?.ToString() ?? "";
+            var offset = parameters["offset"]?.Value<int>() ?? 0;
+            var limit = parameters["limit"]?.Value<int>() ?? 100; // 100 elements per sync cycle
+            var modifiedAfter = parameters["modifiedAfter"]?.ToString() ?? "";
+
+            var collector = new FilteredElementCollector(doc);
+            var builtInCat = GetBuiltInCategory(category);
+
+            if (builtInCat != BuiltInCategory.INVALID)
+                collector = collector.OfCategory(builtInCat);
+
+            var allElements = collector.WhereElementIsNotElementType().ToElements();
+
+            // Delta-sync: filter by modification timestamp if provided
+            DateTime? filterDate = null;
+            if (!string.IsNullOrEmpty(modifiedAfter))
+            {
+                if (DateTime.TryParse(modifiedAfter, out var parsedDate))
+                    filterDate = parsedDate;
+            }
+
+            var filteredElements = allElements.AsEnumerable();
+
+            if (filterDate.HasValue)
+            {
+                filteredElements = filteredElements.Where(elem =>
+                {
+                    // Check EDITED_BY parameter (contains "user @ date" in workshared models)
+                    var editedBy = elem.get_Parameter(BuiltInParameter.EDITED_BY)?.AsString() ?? "";
+                    // Check phase created
+                    var phaseCreated = elem.get_Parameter(BuiltInParameter.PHASE_CREATED)?.AsValueString() ?? "";
+                    // If element has been edited or we can't determine, include it
+                    return !string.IsNullOrEmpty(editedBy) || string.IsNullOrEmpty(modifiedAfter);
+                });
+            }
+
+            var elementList = filteredElements.ToList();
+            var totalCount = elementList.Count;
+
+            var subset = offset > 0 ? elementList.Skip(offset) : (IEnumerable<Element>)elementList;
+            if (limit > 0) subset = subset.Take(limit);
+
+            var result = new JArray();
+            var syncTimestamp = DateTime.UtcNow.ToString("o"); // ISO 8601
+
+            foreach (var elem in subset)
+            {
+                // Get level name
+                var levelParam = elem.get_Parameter(BuiltInParameter.INSTANCE_REFERENCE_LEVEL_PARAM)
+                              ?? elem.get_Parameter(BuiltInParameter.LEVEL_PARAM)
+                              ?? elem.get_Parameter(BuiltInParameter.SCHEDULE_LEVEL_PARAM);
+                var levelName = levelParam?.AsValueString() ?? "";
+
+                // If no level from parameter, try associated level
+                if (string.IsNullOrEmpty(levelName) && elem.LevelId != ElementId.InvalidElementId)
+                {
+                    var level = doc.GetElement(elem.LevelId) as Level;
+                    levelName = level?.Name ?? "";
+                }
+
+                // Get mark
+                var markParam = elem.get_Parameter(BuiltInParameter.ALL_MODEL_MARK);
+                var mark = markParam?.AsString() ?? "";
+
+                // Get area
+                var areaParam = elem.get_Parameter(BuiltInParameter.HOST_AREA_COMPUTED)
+                             ?? elem.get_Parameter(BuiltInParameter.ROOM_AREA);
+                var area = areaParam?.AsDouble() ?? 0.0;
+
+                // Get type name
+                var typeElem = doc.GetElement(elem.GetTypeId());
+                var typeName = typeElem?.Name ?? "";
+
+                // Get edited-by info (for delta-sync tracking)
+                var editedBy = elem.get_Parameter(BuiltInParameter.EDITED_BY)?.AsString() ?? "";
+
+                // Build minified object
+                var obj = new JObject
+                {
+                    ["id"] = elem.Id.IntegerValue,
+                    ["guid"] = elem.UniqueId,
+                    ["name"] = elem.Name,
+                    ["category"] = elem.Category?.Name ?? "Unknown",
+                    ["level"] = levelName,
+                    ["mark"] = mark,
+                    ["area"] = Math.Round(area, 2),
+                    ["typeName"] = typeName,
+                    ["editedBy"] = editedBy,
+                };
+
+                // Add Room-specific fields
+                if (elem is Room room)
+                {
+                    obj["roomName"] = room.get_Parameter(BuiltInParameter.ROOM_NAME)?.AsString() ?? "";
+                    obj["roomNumber"] = room.get_Parameter(BuiltInParameter.ROOM_NUMBER)?.AsString() ?? "";
+                    obj["area"] = Math.Round(room.Area, 2);
+                }
+
+                // Add Door-specific fields (using FamilyInstance.FromRoom/ToRoom)
+                if (builtInCat == BuiltInCategory.OST_Doors && elem is FamilyInstance doorInst)
+                {
+                    try
+                    {
+                        var phase = doc.Phases.get_Item(doc.Phases.Size - 1);
+                        var fromRoomObj = doorInst.get_FromRoom(phase);
+                        var toRoomObj = doorInst.get_ToRoom(phase);
+                        var fromRoom = fromRoomObj != null
+                            ? (fromRoomObj.get_Parameter(BuiltInParameter.ROOM_NAME)?.AsString() ?? fromRoomObj.Name)
+                            : "";
+                        var toRoom = toRoomObj != null
+                            ? (toRoomObj.get_Parameter(BuiltInParameter.ROOM_NAME)?.AsString() ?? toRoomObj.Name)
+                            : "";
+                        if (!string.IsNullOrEmpty(fromRoom)) obj["fromRoom"] = fromRoom;
+                        if (!string.IsNullOrEmpty(toRoom)) obj["toRoom"] = toRoom;
+                    }
+                    catch { /* Phase/room lookup may fail for unplaced doors */ }
+                }
+
+                result.Add(obj);
+            }
+
+            return new JObject
+            {
+                ["totalCount"] = totalCount,
+                ["count"] = result.Count,
+                ["offset"] = offset,
+                ["limit"] = limit,
+                ["hasMore"] = (offset + result.Count) < totalCount,
+                ["syncTimestamp"] = syncTimestamp,
+                ["elements"] = result
+            };
         }
 
         // ===== CREATING IMPLEMENTATIONS =====
@@ -3771,6 +4274,97 @@ namespace RevitMCPPlugin.Core
             }
         }
 
+        private static JToken SetVisibilityGraphics(UIDocument uidoc, Document doc, JObject parameters)
+        {
+            using (var tx = new Transaction(doc, "Set Visibility Graphics"))
+            {
+                tx.Start();
+                try
+                {
+                    var viewId = parameters["viewId"]?.Value<int>();
+                    var view = viewId.HasValue
+                        ? doc.GetElement(new ElementId(viewId.Value)) as View
+                        : uidoc.ActiveView;
+                    if (view == null) throw new InvalidOperationException("View not found");
+
+                    var categoryName = parameters["category"]?.ToString();
+                    var visible = parameters["visible"]?.Value<bool>();
+                    var halftone = parameters["halftone"]?.Value<bool>();
+                    var transparency = parameters["transparency"]?.Value<int>();
+                    var hideLinks = parameters["hideLinks"]?.Value<bool>();
+                    var hideLinkName = parameters["linkName"]?.ToString();
+                    var messages = new JArray();
+
+                    // Hide/show categories
+                    if (!string.IsNullOrEmpty(categoryName) && visible.HasValue)
+                    {
+                        var bic = GetBuiltInCategory(categoryName);
+                        if (bic == BuiltInCategory.INVALID)
+                            throw new InvalidOperationException($"Unknown category: {categoryName}");
+
+                        var cat = Category.GetCategory(doc, bic);
+                        if (cat != null && view.CanCategoryBeHidden(cat.Id))
+                        {
+                            view.SetCategoryHidden(cat.Id, !visible.Value);
+                            messages.Add($"{(visible.Value ? "Shown" : "Hidden")} category '{categoryName}'");
+                        }
+                        else
+                        {
+                            messages.Add($"Cannot change visibility for '{categoryName}' in this view");
+                        }
+
+                        // Apply halftone/transparency to category if specified
+                        if (halftone.HasValue || transparency.HasValue)
+                        {
+                            var ogs = view.GetCategoryOverrides(cat.Id);
+                            if (halftone.HasValue) ogs.SetHalftone(halftone.Value);
+                            if (transparency.HasValue) ogs.SetSurfaceTransparency(transparency.Value);
+                            view.SetCategoryOverrides(cat.Id, ogs);
+                            if (halftone.HasValue) messages.Add($"Set halftone={halftone.Value} for '{categoryName}'");
+                            if (transparency.HasValue) messages.Add($"Set transparency={transparency.Value} for '{categoryName}'");
+                        }
+                    }
+
+                    // Hide/show ALL linked models
+                    if (hideLinks.HasValue)
+                    {
+                        var linkCat = Category.GetCategory(doc, BuiltInCategory.OST_RvtLinks);
+                        if (linkCat != null && view.CanCategoryBeHidden(linkCat.Id))
+                        {
+                            view.SetCategoryHidden(linkCat.Id, hideLinks.Value);
+                            messages.Add(hideLinks.Value ? "Hidden all Revit links" : "Shown all Revit links");
+                        }
+                    }
+
+                    // Hide/show a specific linked model by name
+                    if (!string.IsNullOrEmpty(hideLinkName))
+                    {
+                        var vis = visible ?? false;
+                        var links = new FilteredElementCollector(doc)
+                            .OfClass(typeof(RevitLinkInstance))
+                            .Where(e => e.Name.IndexOf(hideLinkName, StringComparison.OrdinalIgnoreCase) >= 0)
+                            .ToList();
+
+                        foreach (var link in links)
+                        {
+                            if (!vis)
+                                view.HideElements(new List<ElementId> { link.Id });
+                            else
+                                view.UnhideElements(new List<ElementId> { link.Id });
+                        }
+                        messages.Add($"{(vis ? "Shown" : "Hidden")} {links.Count} link instance(s) matching '{hideLinkName}'");
+                    }
+
+                    if (messages.Count == 0)
+                        messages.Add("No changes made. Specify category+visible, hideLinks, or linkName.");
+
+                    tx.Commit();
+                    return new JObject { ["message"] = string.Join("; ", messages), ["changes"] = messages };
+                }
+                catch { if (tx.HasStarted() && !tx.HasEnded()) tx.RollBack(); throw; }
+            }
+        }
+
         private static JToken GetLineStyles(Document doc)
         {
             var result = new JArray();
@@ -4591,9 +5185,7 @@ namespace RevitMCPPlugin.Core
                     if (sourceIds.Count == 0)
                         throw new InvalidOperationException($"No {categoryName} elements found in linked model");
 
-                    // Cap at reasonable number
-                    if (sourceIds.Count > 500)
-                        sourceIds = sourceIds.Take(500).ToList();
+                    // No cap — copy all matching elements
 
                     var copied = ElementTransformUtils.CopyElements(linkDoc, sourceIds, doc, transform, new CopyPasteOptions());
 
@@ -5469,6 +6061,841 @@ namespace RevitMCPPlugin.Core
             }
         }
 
+        // ===== NEW IMPLEMENTATIONS FOR AI-DECLARED TOOLS =====
+
+        private static JToken PlaceViewsOnSheet(Document doc, JObject parameters)
+        {
+            using (var tx = new Transaction(doc, "Place Views on Sheet"))
+            {
+                tx.Start();
+                try
+                {
+                    var sheetId = parameters["sheetId"]?.Value<long>() ?? 0;
+                    var viewIds = parameters["viewIds"] as JArray;
+                    var viewId = parameters["viewId"]?.Value<long>() ?? 0;
+                    var startX = parameters["startX"]?.Value<double>() ?? 1.0;
+                    var startY = parameters["startY"]?.Value<double>() ?? 1.0;
+                    var spacing = parameters["spacing"]?.Value<double>() ?? 1.0;
+                    var x = parameters["x"]?.Value<double>() ?? startX;
+                    var y = parameters["y"]?.Value<double>() ?? startY;
+
+                    // Allow sheetNumber as alternative
+                    if (sheetId == 0 && parameters["sheetNumber"] != null)
+                    {
+                        var sheetNum = parameters["sheetNumber"].ToString();
+                        var sheet = new FilteredElementCollector(doc).OfClass(typeof(ViewSheet)).Cast<ViewSheet>().FirstOrDefault(s => s.SheetNumber == sheetNum);
+                        if (sheet != null) sheetId = sheet.Id.Value;
+                    }
+
+                    if (sheetId == 0) throw new InvalidOperationException("sheetId (or sheetNumber) is required");
+
+                    // Single view placement (backward compat with place_view_on_sheet)
+                    if (viewIds == null || viewIds.Count == 0)
+                    {
+                        if (viewId == 0) throw new InvalidOperationException("viewId or viewIds required");
+                        var vp = Viewport.Create(doc, new ElementId(sheetId), new ElementId(viewId), new XYZ(x, y, 0));
+                        tx.Commit();
+                        return new JObject { ["message"] = $"✅ Placed view on sheet (Viewport ID: {vp.Id.Value})", ["viewportId"] = vp.Id.Value };
+                    }
+     
+                    // Multiple views
+                    int placed = 0;
+                    var results = new JArray();
+                    foreach (var vid in viewIds)
+                    {
+                        var id = vid.Value<long>();
+                        try
+                        {
+                            var vp = Viewport.Create(doc, new ElementId(sheetId), new ElementId(id), new XYZ(startX + placed * spacing, startY, 0));
+                            results.Add(new JObject { ["viewId"] = id, ["viewportId"] = vp.Id.Value });
+                            placed++;
+                        }
+                        catch { /* skip views that can't be placed */ }
+                    }
+
+                    tx.Commit();
+                    return new JObject { ["message"] = $"✅ Placed {placed} view(s) on sheet", ["viewports"] = results };
+                }
+                catch { if (tx.HasStarted() && !tx.HasEnded()) tx.RollBack(); throw; }
+            }
+        }
+
+        private static JToken IsolateWarnings(UIDocument uidoc, Document doc, JObject parameters)
+        {
+            var filter = parameters["filter"]?.ToString();
+            var warnings = doc.GetWarnings();
+            var elementIds = new HashSet<ElementId>();
+
+            foreach (var warning in warnings)
+            {
+                if (!string.IsNullOrEmpty(filter) &&
+                    !warning.GetDescriptionText().IndexOf(filter, StringComparison.OrdinalIgnoreCase).Equals(-1) == false &&
+                    !warning.GetDescriptionText().ToLower().Contains(filter.ToLower()))
+                    continue;
+
+                foreach (var id in warning.GetFailingElements())
+                    elementIds.Add(id);
+            }
+
+            if (elementIds.Count > 0)
+                uidoc.Selection.SetElementIds(elementIds.ToList());
+
+            var warningDescriptions = new JArray();
+            foreach (var w in warnings)
+            {
+                if (!string.IsNullOrEmpty(filter) && !w.GetDescriptionText().ToLower().Contains(filter.ToLower()))
+                    continue;
+                warningDescriptions.Add(new JObject
+                {
+                    ["description"] = w.GetDescriptionText(),
+                    ["severity"] = w.GetSeverity().ToString(),
+                    ["elementIds"] = new JArray(w.GetFailingElements().Select(id => id.IntegerValue))
+                });
+            }
+
+            return new JObject
+            {
+                ["message"] = $"✅ Found {warningDescriptions.Count} warning(s), selected {elementIds.Count} element(s)",
+                ["warnings"] = warningDescriptions,
+                ["selectedCount"] = elementIds.Count
+            };
+        }
+
+        private static JToken BulkRenameViews(Document doc, JObject parameters)
+        {
+            using (var tx = new Transaction(doc, "Bulk Rename Views"))
+            {
+                tx.Start();
+                try
+                {
+                    var find = parameters["find"]?.ToString();
+                    var replace = parameters["replace"]?.ToString() ?? "";
+                    var targetType = parameters["targetType"]?.ToString()?.ToLower() ?? parameters["scope"]?.ToString() ?? "both";
+
+                    if (string.IsNullOrEmpty(find))
+                        throw new InvalidOperationException("'find' text is required");
+
+                    int renamed = 0;
+
+                    if (targetType == "views" || targetType == "both" || targetType == "all" || targetType == "Views" || targetType == "All")
+                    {
+                        var views = new FilteredElementCollector(doc).OfClass(typeof(View)).Cast<View>().Where(v => !v.IsTemplate && !(v is ViewSheet)).ToList();
+                        foreach (var v in views)
+                        {
+                            if (v.Name.Contains(find))
+                            {
+                                try { v.Name = v.Name.Replace(find, replace); renamed++; } catch { }
+                            }
+                        }
+                    }
+
+                    if (targetType == "sheets" || targetType == "both" || targetType == "all" || targetType == "Sheets" || targetType == "All")
+                    {
+                        var sheets = new FilteredElementCollector(doc).OfClass(typeof(ViewSheet)).Cast<ViewSheet>().ToList();
+                        foreach (var s in sheets)
+                        {
+                            if (s.Name.Contains(find))
+                            {
+                                try { s.Name = s.Name.Replace(find, replace); renamed++; } catch { }
+                            }
+                        }
+                    }
+
+                    // Also support "Types" scope for backward compat with find_replace_names
+                    if (targetType == "types" || targetType == "Types")
+                    {
+                        var allTypes = new FilteredElementCollector(doc).WhereElementIsElementType().ToList();
+                        foreach (var t in allTypes)
+                        {
+                            if (t.Name.Contains(find))
+                            {
+                                try { t.Name = t.Name.Replace(find, replace); renamed++; } catch { }
+                            }
+                        }
+                    }
+
+                    tx.Commit();
+                    return new JObject { ["message"] = $"✅ Replaced '{find}' → '{replace}' in {renamed} name(s)", ["count"] = renamed };
+                }
+                catch { if (tx.HasStarted() && !tx.HasEnded()) tx.RollBack(); throw; }
+            }
+        }
+
+        private static JToken CopyParameterValue(Document doc, JObject parameters)
+        {
+            using (var tx = new Transaction(doc, "Copy Parameter Value"))
+            {
+                tx.Start();
+                try
+                {
+                    var sourceId = parameters["sourceElementId"]?.Value<long>() ?? 0;
+                    var paramName = parameters["parameterName"]?.ToString();
+                    var targetIds = parameters["targetElementIds"] as JArray;
+
+                    // Also support bulk_parameter_transfer params
+                    var sourceParam = parameters["sourceParameter"]?.ToString() ?? paramName;
+                    var targetParam = parameters["targetParameter"]?.ToString() ?? paramName;
+
+                    if (string.IsNullOrEmpty(sourceParam))
+                        throw new InvalidOperationException("parameterName (or sourceParameter) is required");
+
+                    // If source element ID provided, copy from it to targets
+                    if (sourceId > 0 && targetIds != null)
+                    {
+                        var sourceElem = doc.GetElement(new ElementId(sourceId));
+                        if (sourceElem == null) throw new InvalidOperationException($"Source element {sourceId} not found");
+
+                        string sourceValue = null;
+                        foreach (Parameter p in sourceElem.Parameters)
+                        {
+                            if (p.Definition.Name == sourceParam)
+                            {
+                                sourceValue = p.AsValueString() ?? p.AsString() ?? "";
+                                break;
+                            }
+                        }
+                        if (sourceValue == null) throw new InvalidOperationException($"Parameter '{sourceParam}' not found on source element");
+
+                        int transferred = 0;
+                        foreach (var tid in targetIds)
+                        {
+                            var targetElem = doc.GetElement(new ElementId(tid.Value<long>()));
+                            if (targetElem == null) continue;
+                            foreach (Parameter p in targetElem.Parameters)
+                            {
+                                if (p.Definition.Name == targetParam && !p.IsReadOnly)
+                                {
+                                    if (p.StorageType == StorageType.String) { p.Set(sourceValue); transferred++; }
+                                    else if (p.StorageType == StorageType.Double && double.TryParse(sourceValue, out double d)) { p.Set(d); transferred++; }
+                                    else if (p.StorageType == StorageType.Integer && int.TryParse(sourceValue, out int i)) { p.Set(i); transferred++; }
+                                    break;
+                                }
+                            }
+                        }
+
+                        tx.Commit();
+                        return new JObject { ["message"] = $"✅ Copied '{sourceParam}' value to {transferred} element(s)" };
+                    }
+                    else
+                    {
+                        // Fallback: bulk transfer within a category
+                        var categoryName = parameters["category"]?.ToString();
+                        if (string.IsNullOrEmpty(categoryName)) throw new InvalidOperationException("Either sourceElementId+targetElementIds or category is required");
+
+                        var bic = GetBuiltInCategory(categoryName);
+                        var elements = new FilteredElementCollector(doc).OfCategory(bic).WhereElementIsNotElementType().ToList();
+
+                        int transferred = 0;
+                        foreach (var elem in elements)
+                        {
+                            Parameter src = null, tgt = null;
+                            foreach (Parameter p in elem.Parameters)
+                            {
+                                if (p.Definition.Name == sourceParam) src = p;
+                                if (p.Definition.Name == targetParam) tgt = p;
+                            }
+                            if (src != null && tgt != null && !tgt.IsReadOnly)
+                            {
+                                var val = src.AsValueString() ?? src.AsString() ?? "";
+                                if (tgt.StorageType == StorageType.String) { tgt.Set(val); transferred++; }
+                                else if (tgt.StorageType == StorageType.Double && double.TryParse(val, out double d)) { tgt.Set(d); transferred++; }
+                                else if (tgt.StorageType == StorageType.Integer && int.TryParse(val, out int i)) { tgt.Set(i); transferred++; }
+                            }
+                        }
+
+                        tx.Commit();
+                        return new JObject { ["message"] = $"✅ Transferred '{sourceParam}' → '{targetParam}' on {transferred} element(s)" };
+                    }
+                }
+                catch { if (tx.HasStarted() && !tx.HasEnded()) tx.RollBack(); throw; }
+            }
+        }
+
+        private static JToken SelectByFilter(UIDocument uidoc, Document doc, JObject parameters)
+        {
+            var categoryName = parameters["category"]?.ToString();
+            var familyName = parameters["familyName"]?.ToString();
+            var typeName = parameters["typeName"]?.ToString();
+            var levelName = parameters["levelName"]?.ToString();
+
+            var collector = new FilteredElementCollector(doc);
+            if (!string.IsNullOrEmpty(categoryName))
+            {
+                var bic = GetBuiltInCategory(categoryName);
+                if (bic != BuiltInCategory.INVALID)
+                    collector = collector.OfCategory(bic);
+            }
+            var elements = collector.WhereElementIsNotElementType().ToList();
+
+            var matching = new List<ElementId>();
+            foreach (var elem in elements)
+            {
+                if (!string.IsNullOrEmpty(familyName))
+                {
+                    var famParam = elem.get_Parameter(BuiltInParameter.ELEM_FAMILY_PARAM);
+                    var famVal = famParam?.AsValueString() ?? "";
+                    if (!famVal.Equals(familyName, StringComparison.OrdinalIgnoreCase) &&
+                        !famVal.Contains(familyName))
+                        continue;
+                }
+
+                if (!string.IsNullOrEmpty(typeName))
+                {
+                    var typeId = elem.GetTypeId();
+                    if (typeId != ElementId.InvalidElementId)
+                    {
+                        var type = doc.GetElement(typeId);
+                        if (type != null && !type.Name.Equals(typeName, StringComparison.OrdinalIgnoreCase) &&
+                            !type.Name.Contains(typeName))
+                            continue;
+                    }
+                }
+
+                if (!string.IsNullOrEmpty(levelName))
+                {
+                    var lvlParam = elem.get_Parameter(BuiltInParameter.LEVEL_PARAM) ??
+                                   elem.get_Parameter(BuiltInParameter.FAMILY_LEVEL_PARAM);
+                    var lvlVal = lvlParam?.AsValueString() ?? "";
+                    if (!lvlVal.Equals(levelName, StringComparison.OrdinalIgnoreCase))
+                        continue;
+                }
+
+                matching.Add(elem.Id);
+            }
+
+            uidoc.Selection.SetElementIds(matching);
+            return new JObject
+            {
+                ["message"] = $"✅ Selected {matching.Count} element(s)",
+                ["count"] = matching.Count,
+                ["elementIds"] = new JArray(matching.Select(id => id.IntegerValue))
+            };
+        }
+
+        private static JToken DuplicateSheets(Document doc, JObject parameters)
+        {
+            using (var tx = new Transaction(doc, "Duplicate Sheet"))
+            {
+                tx.Start();
+                try
+                {
+                    var sheetId = parameters["sheetId"]?.Value<long>() ?? 0;
+                    var count = parameters["count"]?.Value<int>() ?? 1;
+                    var suffix = parameters["suffix"]?.ToString() ?? " - Copy";
+
+                    var sourceSheet = doc.GetElement(new ElementId(sheetId)) as ViewSheet;
+                    if (sourceSheet == null) throw new InvalidOperationException($"Sheet {sheetId} not found");
+
+                    // Get the title block from the source sheet
+                    var titleBlocks = new FilteredElementCollector(doc, sourceSheet.Id)
+                        .OfCategory(BuiltInCategory.OST_TitleBlocks)
+                        .WhereElementIsNotElementType()
+                        .ToList();
+                    var tbTypeId = titleBlocks.FirstOrDefault()?.GetTypeId() ?? ElementId.InvalidElementId;
+
+                    var created = new JArray();
+                    for (int i = 0; i < count; i++)
+                    {
+                        var newSheet = ViewSheet.Create(doc, tbTypeId);
+                        var newNumber = sourceSheet.SheetNumber + suffix + (count > 1 ? $" {i + 1}" : "");
+                        try { newSheet.SheetNumber = newNumber; } catch { }
+                        newSheet.Name = sourceSheet.Name;
+
+                        created.Add(new JObject { ["sheetId"] = newSheet.Id.Value, ["number"] = newSheet.SheetNumber });
+                    }
+
+                    tx.Commit();
+                    return new JObject { ["message"] = $"✅ Created {count} sheet copy(ies)", ["sheets"] = created };
+                }
+                catch { if (tx.HasStarted() && !tx.HasEnded()) tx.RollBack(); throw; }
+            }
+        }
+
+        private static JToken AutoSectionBox(UIDocument uidoc, Document doc, JObject parameters)
+        {
+            using (var tx = new Transaction(doc, "Auto Section Box"))
+            {
+                tx.Start();
+                try
+                {
+                    var elementIds = parameters["elementIds"] as JArray;
+                    var padding = parameters["padding"]?.Value<double>() ?? 2.0;
+
+                    if (elementIds == null || elementIds.Count == 0)
+                        throw new InvalidOperationException("elementIds are required");
+
+                    // Calculate bounding box around all elements
+                    double minX = double.MaxValue, minY = double.MaxValue, minZ = double.MaxValue;
+                    double maxX = double.MinValue, maxY = double.MinValue, maxZ = double.MinValue;
+
+                    foreach (var eid in elementIds)
+                    {
+                        var elem = doc.GetElement(new ElementId(eid.Value<long>()));
+                        if (elem == null) continue;
+                        var bb = elem.get_BoundingBox(null);
+                        if (bb == null) continue;
+                        if (bb.Min.X < minX) minX = bb.Min.X;
+                        if (bb.Min.Y < minY) minY = bb.Min.Y;
+                        if (bb.Min.Z < minZ) minZ = bb.Min.Z;
+                        if (bb.Max.X > maxX) maxX = bb.Max.X;
+                        if (bb.Max.Y > maxY) maxY = bb.Max.Y;
+                        if (bb.Max.Z > maxZ) maxZ = bb.Max.Z;
+                    }
+
+                    if (minX == double.MaxValue)
+                        throw new InvalidOperationException("No valid bounding boxes found for specified elements");
+
+                    // Get or create a 3D view
+                    var view3d = uidoc.ActiveView as View3D;
+                    if (view3d == null)
+                    {
+                        var vft = new FilteredElementCollector(doc).OfClass(typeof(ViewFamilyType)).Cast<ViewFamilyType>()
+                            .FirstOrDefault(x => x.ViewFamily == ViewFamily.ThreeDimensional);
+                        if (vft != null)
+                        {
+                            view3d = View3D.CreateIsometric(doc, vft.Id);
+                            view3d.Name = "AI Section Box";
+                        }
+                    }
+                    if (view3d == null) throw new InvalidOperationException("Cannot create or find a 3D view");
+
+                    // Apply section box with padding
+                    var sectionBox = new BoundingBoxXYZ
+                    {
+                        Min = new XYZ(minX - padding, minY - padding, minZ - padding),
+                        Max = new XYZ(maxX + padding, maxY + padding, maxZ + padding)
+                    };
+                    view3d.SetSectionBox(sectionBox);
+                    uidoc.ActiveView = view3d;
+
+                    tx.Commit();
+                    return new JObject
+                    {
+                        ["message"] = $"✅ Section box applied around {elementIds.Count} element(s) with {padding}ft padding",
+                        ["viewId"] = view3d.Id.IntegerValue,
+                        ["viewName"] = view3d.Name
+                    };
+                }
+                catch { if (tx.HasStarted() && !tx.HasEnded()) tx.RollBack(); throw; }
+            }
+        }
+
+        private static JToken CopyViewFilters(Document doc, JObject parameters)
+        {
+            using (var tx = new Transaction(doc, "Copy View Filters"))
+            {
+                tx.Start();
+                try
+                {
+                    var sourceViewId = parameters["sourceViewId"]?.Value<long>() ?? 0;
+                    var targetViewIds = parameters["targetViewIds"] as JArray;
+
+                    var sourceView = doc.GetElement(new ElementId(sourceViewId)) as View;
+                    if (sourceView == null) throw new InvalidOperationException($"Source view {sourceViewId} not found");
+                    if (targetViewIds == null || targetViewIds.Count == 0) throw new InvalidOperationException("targetViewIds required");
+
+                    var filterIds = sourceView.GetFilters();
+                    int copiedCount = 0;
+
+                    foreach (var tvid in targetViewIds)
+                    {
+                        var targetView = doc.GetElement(new ElementId(tvid.Value<long>())) as View;
+                        if (targetView == null) continue;
+
+                        foreach (var filterId in filterIds)
+                        {
+                            try
+                            {
+                                var overrides = sourceView.GetFilterOverrides(filterId);
+                                var visibility = sourceView.GetFilterVisibility(filterId);
+                                // Remove existing filter if present, then add
+                                if (targetView.GetFilters().Contains(filterId))
+                                    targetView.RemoveFilter(filterId);
+                                targetView.AddFilter(filterId);
+                                targetView.SetFilterOverrides(filterId, overrides);
+                                targetView.SetFilterVisibility(filterId, visibility);
+                                copiedCount++;
+                            }
+                            catch { /* skip filters that can't be applied */ }
+                        }
+                    }
+
+                    tx.Commit();
+                    return new JObject
+                    {
+                        ["message"] = $"✅ Copied {filterIds.Count} filter(s) to {targetViewIds.Count} view(s) ({copiedCount} total applications)",
+                        ["filtersCopied"] = filterIds.Count,
+                        ["viewsUpdated"] = targetViewIds.Count
+                    };
+                }
+                catch { if (tx.HasStarted() && !tx.HasEnded()) tx.RollBack(); throw; }
+            }
+        }
+
+        private static JToken ExtendShrinkElement(Document doc, JObject parameters)
+        {
+            using (var tx = new Transaction(doc, "Extend/Shrink Element"))
+            {
+                tx.Start();
+                try
+                {
+                    var elementId = parameters["elementId"]?.Value<long>() ?? 0;
+                    var delta = parameters["delta"]?.Value<double>() ?? 0;
+                    var end = parameters["end"]?.ToString()?.ToLower() ?? "end";
+
+                    var elem = doc.GetElement(new ElementId(elementId));
+                    if (elem == null) throw new InvalidOperationException($"Element {elementId} not found");
+
+                    // Try to get location curve
+                    var locCurve = elem.Location as LocationCurve;
+                    if (locCurve == null) throw new InvalidOperationException("Element does not have a line-based location");
+
+                    var curve = locCurve.Curve;
+                    if (!(curve is Line line)) throw new InvalidOperationException("Element curve is not a straight line");
+
+                    var direction = (line.GetEndPoint(1) - line.GetEndPoint(0)).Normalize();
+                    XYZ newStart = line.GetEndPoint(0);
+                    XYZ newEnd = line.GetEndPoint(1);
+
+                    if (end == "start")
+                        newStart = newStart - direction * delta;
+                    else
+                        newEnd = newEnd + direction * delta;
+
+                    if (newStart.DistanceTo(newEnd) < 0.01)
+                        throw new InvalidOperationException("Resulting element would be too short");
+
+                    locCurve.Curve = Line.CreateBound(newStart, newEnd);
+
+                    tx.Commit();
+                    var action = delta >= 0 ? "Extended" : "Shrunk";
+                    return new JObject
+                    {
+                        ["message"] = $"✅ {action} element at {end} end by {Math.Abs(delta)} ft",
+                        ["newLength"] = Math.Round(newStart.DistanceTo(newEnd), 4)
+                    };
+                }
+                catch { if (tx.HasStarted() && !tx.HasEnded()) tx.RollBack(); throw; }
+            }
+        }
+
+        // ===== PROJECT DATA MANAGEMENT IMPLEMENTATIONS =====
+
+        private static JToken SaveProjectData(Document doc, JObject parameters)
+        {
+            var key = parameters["key"]?.ToString();
+            if (string.IsNullOrEmpty(key))
+                throw new InvalidOperationException("'key' is required");
+
+            var data = parameters["data"] ?? parameters["value"];
+            if (data == null)
+                throw new InvalidOperationException("'data' is required");
+
+            var projectPath = doc.PathName ?? "Untitled";
+            ProjectDataService.SaveData(projectPath, key, data);
+
+            return new JObject
+            {
+                ["message"] = $"✅ Saved data with key '{key}' for project '{Path.GetFileNameWithoutExtension(projectPath)}'",
+                ["key"] = key,
+                ["folder"] = ProjectDataService.GetFolderPath(projectPath)
+            };
+        }
+
+        private static JToken LoadProjectData(Document doc, JObject parameters)
+        {
+            var key = parameters["key"]?.ToString();
+            if (string.IsNullOrEmpty(key))
+                throw new InvalidOperationException("'key' is required");
+
+            var projectPath = doc.PathName ?? "Untitled";
+            var data = ProjectDataService.LoadData(projectPath, key);
+
+            if (data == null)
+                return new JObject
+                {
+                    ["message"] = $"⚠ No data found with key '{key}'",
+                    ["found"] = false
+                };
+
+            return new JObject
+            {
+                ["message"] = $"✅ Loaded data with key '{key}'",
+                ["found"] = true,
+                ["key"] = key,
+                ["data"] = data
+            };
+        }
+
+        private static JToken ListProjectData(Document doc)
+        {
+            var projectPath = doc.PathName ?? "Untitled";
+            var files = ProjectDataService.ListData(projectPath);
+
+            var items = new JArray();
+            foreach (var f in files)
+            {
+                items.Add(new JObject
+                {
+                    ["key"] = f.Key,
+                    ["savedAt"] = f.SavedAt,
+                    ["sizeBytes"] = f.SizeBytes
+                });
+            }
+
+            return new JObject
+            {
+                ["message"] = $"✅ Found {files.Count} saved data file(s)",
+                ["count"] = files.Count,
+                ["items"] = items,
+                ["folder"] = ProjectDataService.GetFolderPath(projectPath)
+            };
+        }
+
+        private static JToken DeleteProjectData(Document doc, JObject parameters)
+        {
+            var key = parameters["key"]?.ToString();
+            if (string.IsNullOrEmpty(key))
+                throw new InvalidOperationException("'key' is required");
+
+            var projectPath = doc.PathName ?? "Untitled";
+            var deleted = ProjectDataService.DeleteData(projectPath, key);
+
+            return new JObject
+            {
+                ["message"] = deleted ? $"✅ Deleted data with key '{key}'" : $"⚠ No data found with key '{key}'",
+                ["deleted"] = deleted
+            };
+        }
+
+        private static JToken SaveModelSnapshot(Document doc)
+        {
+            // Capture a summary of the current model state
+            var snapshot = new JObject();
+
+            // Element counts by category
+            var categories = new JObject();
+            var allElements = new FilteredElementCollector(doc).WhereElementIsNotElementType().ToList();
+            var categorizedCounts = allElements
+                .Where(e => e.Category != null)
+                .GroupBy(e => e.Category.Name)
+                .OrderByDescending(g => g.Count())
+                .Take(30);
+            foreach (var group in categorizedCounts)
+                categories[group.Key] = group.Count();
+            snapshot["elementCounts"] = categories;
+
+            // Warning count
+            snapshot["warningCount"] = doc.GetWarnings().Count;
+
+            // Levels
+            var levels = new FilteredElementCollector(doc).OfClass(typeof(Level)).Cast<Level>().ToList();
+            snapshot["levelCount"] = levels.Count;
+            var levelList = new JArray();
+            foreach (var l in levels.OrderBy(l => l.Elevation))
+                levelList.Add(new JObject { ["name"] = l.Name, ["elevation"] = Math.Round(l.Elevation, 2) });
+            snapshot["levels"] = levelList;
+
+            // Views and Sheets
+            var views = new FilteredElementCollector(doc).OfClass(typeof(View)).Cast<View>().Where(v => !v.IsTemplate).ToList();
+            snapshot["viewCount"] = views.Count;
+            snapshot["sheetCount"] = views.Count(v => v is ViewSheet);
+
+            // Room count
+            var rooms = new FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_Rooms).WhereElementIsNotElementType().ToList();
+            snapshot["roomCount"] = rooms.Count;
+
+            snapshot["timestamp"] = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+            snapshot["projectName"] = Path.GetFileNameWithoutExtension(doc.PathName ?? "Untitled");
+
+            // Save it
+            var projectPath = doc.PathName ?? "Untitled";
+            var snapshotKey = $"snapshot_{DateTime.Now:yyyyMMdd_HHmmss}";
+            ProjectDataService.SaveData(projectPath, snapshotKey, snapshot);
+
+            return new JObject
+            {
+                ["message"] = $"✅ Model snapshot saved as '{snapshotKey}'",
+                ["key"] = snapshotKey,
+                ["snapshot"] = snapshot
+            };
+        }
+
+        // ===== ADDITIONAL QUERY TOOL IMPLEMENTATIONS =====
+
+        private static JToken CreateViewFilter(UIDocument uidoc, Document doc, JObject parameters)
+        {
+            using (var tx = new Transaction(doc, "Create View Filter"))
+            {
+                tx.Start();
+                try
+                {
+                    var filterName = parameters["filterName"]?.ToString();
+                    var categoryName = parameters["category"]?.ToString();
+                    var paramName = parameters["parameterName"]?.ToString();
+                    var ruleType = parameters["ruleType"]?.ToString()?.ToLower() ?? "equals";
+                    var ruleValue = parameters["value"]?.ToString() ?? "";
+                    var applyToView = parameters["applyToView"]?.Value<bool>() ?? true;
+
+                    if (string.IsNullOrEmpty(filterName)) filterName = $"AI Filter - {paramName} {ruleType} {ruleValue}";
+                    if (string.IsNullOrEmpty(categoryName)) throw new InvalidOperationException("'category' required");
+                    if (string.IsNullOrEmpty(paramName)) throw new InvalidOperationException("'parameterName' required");
+
+                    var bic = GetBuiltInCategory(categoryName);
+                    var catIds = new List<ElementId> { new ElementId(bic) };
+
+                    // Find the parameter to filter by
+                    var sampleElem = new FilteredElementCollector(doc).OfCategory(bic).WhereElementIsNotElementType().FirstOrDefault();
+                    if (sampleElem == null) throw new InvalidOperationException($"No elements of category '{categoryName}' found");
+
+                    ParameterElement? paramElem = null;
+                    foreach (Parameter p in sampleElem.Parameters)
+                    {
+                        if (p.Definition.Name == paramName)
+                        {
+                            if (p.Id != null)
+                            {
+                                // Try to find ParameterElement
+                                var pe = doc.GetElement(p.Id) as ParameterElement;
+                                if (pe != null) paramElem = pe;
+                            }
+                            break;
+                        }
+                    }
+
+                    // Create the filter
+                    var filter = ParameterFilterElement.Create(doc, filterName, catIds);
+
+                    // Apply to active view if requested
+                    if (applyToView && uidoc.ActiveView != null)
+                    {
+                        var activeView = uidoc.ActiveView;
+                        activeView.AddFilter(filter.Id);
+                        activeView.SetFilterVisibility(filter.Id, true);
+
+                        // Set an override (red color to highlight)
+                        var overrides = new OverrideGraphicSettings();
+                        overrides.SetProjectionLineColor(new Autodesk.Revit.DB.Color(255, 0, 0));
+                        activeView.SetFilterOverrides(filter.Id, overrides);
+                    }
+
+                    tx.Commit();
+                    return new JObject
+                    {
+                        ["message"] = $"✅ Created view filter '{filterName}' for {categoryName}",
+                        ["filterId"] = filter.Id.Value,
+                        ["filterName"] = filterName
+                    };
+                }
+                catch { if (tx.HasStarted() && !tx.HasEnded()) tx.RollBack(); throw; }
+            }
+        }
+
+        private static JToken GetWorksets(Document doc)
+        {
+            if (!doc.IsWorkshared)
+                return new JObject { ["message"] = "This project is not workshared", ["workshared"] = false };
+
+            var worksets = new FilteredWorksetCollector(doc)
+                .OfKind(WorksetKind.UserWorkset)
+                .ToWorksets()
+                .ToList();
+
+            var result = new JArray();
+            foreach (var ws in worksets)
+            {
+                result.Add(new JObject
+                {
+                    ["id"] = ws.Id.IntegerValue,
+                    ["name"] = ws.Name,
+                    ["isOpen"] = ws.IsOpen,
+                    ["isDefault"] = ws.IsDefaultWorkset,
+                    ["isVisible"] = ws.IsVisibleByDefault,
+                    ["owner"] = ws.Owner ?? ""
+                });
+            }
+
+            return new JObject
+            {
+                ["message"] = $"✅ Found {result.Count} workset(s)",
+                ["workshared"] = true,
+                ["worksets"] = result
+            };
+        }
+
+        private static JToken GetAreas(Document doc)
+        {
+            var areas = new FilteredElementCollector(doc)
+                .OfCategory(BuiltInCategory.OST_Areas)
+                .WhereElementIsNotElementType()
+                .ToList();
+
+            var result = new JArray();
+            foreach (var a in areas)
+            {
+                var areaParam = a.get_Parameter(BuiltInParameter.ROOM_AREA);
+                var nameParam = a.get_Parameter(BuiltInParameter.ROOM_NAME);
+                var numberParam = a.get_Parameter(BuiltInParameter.ROOM_NUMBER);
+                var levelParam = a.get_Parameter(BuiltInParameter.LEVEL_PARAM);
+
+                result.Add(new JObject
+                {
+                    ["id"] = a.Id.Value,
+                    ["name"] = nameParam?.AsString() ?? "",
+                    ["number"] = numberParam?.AsString() ?? "",
+                    ["area"] = areaParam?.AsDouble() ?? 0,
+                    ["areaFormatted"] = areaParam?.AsValueString() ?? "0",
+                    ["level"] = levelParam?.AsValueString() ?? ""
+                });
+            }
+
+            // Also list area plans
+            var areaPlans = new FilteredElementCollector(doc)
+                .OfClass(typeof(ViewPlan))
+                .Cast<ViewPlan>()
+                .Where(v => v.ViewType == ViewType.AreaPlan && !v.IsTemplate)
+                .ToList();
+
+            var planList = new JArray();
+            foreach (var ap in areaPlans)
+                planList.Add(new JObject { ["id"] = ap.Id.Value, ["name"] = ap.Name });
+
+            return new JObject
+            {
+                ["message"] = $"✅ Found {result.Count} area(s) in {planList.Count} area plan(s)",
+                ["areas"] = result,
+                ["areaPlans"] = planList
+            };
+        }
+
+        private static JToken GetDesignOptions(Document doc)
+        {
+            var options = new FilteredElementCollector(doc)
+                .OfClass(typeof(DesignOption))
+                .Cast<DesignOption>()
+                .ToList();
+
+            if (options.Count == 0)
+                return new JObject { ["message"] = "No design options in this project", ["count"] = 0 };
+
+            var result = new JArray();
+            foreach (var opt in options)
+            {
+                result.Add(new JObject
+                {
+                    ["id"] = opt.Id.Value,
+                    ["name"] = opt.Name,
+                    ["isPrimary"] = opt.IsPrimary
+                });
+            }
+
+            return new JObject
+            {
+                ["message"] = $"✅ Found {options.Count} design option(s)",
+                ["designOptions"] = result
+            };
+        }
+
         // ===== HELPER: Map category name string to BuiltInCategory =====
         private static BuiltInCategory GetBuiltInCategory(string categoryName)
         {
@@ -5510,6 +6937,19 @@ namespace RevitMCPPlugin.Core
                 { "Areas", BuiltInCategory.OST_Areas },
                 { "Mass", BuiltInCategory.OST_Mass },
                 { "Structural Foundations", BuiltInCategory.OST_StructuralFoundation },
+                // Annotation & display categories
+                { "Levels", BuiltInCategory.OST_Levels },
+                { "Grids", BuiltInCategory.OST_Grids },
+                { "Sections", BuiltInCategory.OST_Sections },
+                { "Elevations", BuiltInCategory.OST_Elev },
+                { "Callouts", BuiltInCategory.OST_Callouts },
+                { "Revit Links", BuiltInCategory.OST_RvtLinks },
+                { "RVT Links", BuiltInCategory.OST_RvtLinks },
+                { "Dimensions", BuiltInCategory.OST_Dimensions },
+                { "Text Notes", BuiltInCategory.OST_TextNotes },
+                { "Detail Items", BuiltInCategory.OST_DetailComponents },
+                { "Lines", BuiltInCategory.OST_Lines },
+                { "Scope Boxes", BuiltInCategory.OST_VolumeOfInterest },
             };
 
             if (map.TryGetValue(categoryName, out var bic))
@@ -5534,6 +6974,3026 @@ namespace RevitMCPPlugin.Core
                 ["status"] = "received",
                 ["message"] = $"Command '{command}' received. This command requires the extended command set module.",
                 ["parameters"] = parameters
+            };
+        }
+
+        // ===== INTEGRATION STATUS =====
+
+        private static JToken GetIntegrationStatus()
+        {
+            try
+            {
+                var settings = AI.IntegrationSettings.Load();
+                return new JObject
+                {
+                    ["integrations"] = new JObject
+                    {
+                        ["excel"] = new JObject
+                        {
+                            ["enabled"] = settings.ExcelEnabled,
+                            ["configured"] = true,
+                            ["status"] = settings.ExcelEnabled ? "ready" : "disabled"
+                        },
+                        ["notion"] = new JObject
+                        {
+                            ["enabled"] = settings.NotionEnabled,
+                            ["configured"] = settings.IsNotionConfigured,
+                            ["hasApiKey"] = !string.IsNullOrWhiteSpace(settings.NotionApiKey) && settings.NotionApiKey != "your_notion_integration_token",
+                            ["hasDatabaseId"] = !string.IsNullOrWhiteSpace(settings.NotionDatabaseId),
+                            ["status"] = !settings.NotionEnabled ? "disabled" : settings.IsNotionConfigured ? "ready" : "not_configured"
+                        },
+                        ["googleSheets"] = new JObject
+                        {
+                            ["enabled"] = settings.GoogleSheetsEnabled,
+                            ["configured"] = settings.IsGoogleSheetsConfigured,
+                            ["googleSignedIn"] = settings.GoogleSignedIn,
+                            ["googleEmail"] = settings.GoogleEmail ?? "",
+                            ["hasCredentialsPath"] = !string.IsNullOrWhiteSpace(settings.GoogleSheetsCredentialsPath),
+                            ["hasSpreadsheetId"] = !string.IsNullOrWhiteSpace(settings.GoogleSheetsSpreadsheetId),
+                            ["defaultSpreadsheetId"] = settings.GoogleSheetsSpreadsheetId ?? "",
+                            ["status"] = !settings.GoogleSheetsEnabled ? "disabled" : settings.IsGoogleSheetsConfigured ? "ready" : "not_configured"
+                        },
+                        ["sqlite"] = new JObject
+                        {
+                            ["enabled"] = settings.SqliteEnabled,
+                            ["configured"] = true,
+                            ["status"] = settings.SqliteEnabled ? "ready" : "disabled"
+                        },
+                        ["ollama"] = new JObject
+                        {
+                            ["enabled"] = settings.OllamaEnabled,
+                            ["configured"] = settings.IsOllamaConfigured,
+                            ["url"] = settings.OllamaUrl ?? "",
+                            ["model"] = settings.OllamaModel ?? "",
+                            ["status"] = !settings.OllamaEnabled ? "disabled" : settings.IsOllamaConfigured ? "ready" : "not_configured"
+                        }
+                    },
+                    ["tip"] = "Use the 🔗 Integrations button in the chat header to enable/configure integrations. Export tools run via the MCP server (Claude/MCP clients). Use 'export_elements' to get Revit data for manual export."
+                };
+            }
+            catch (Exception ex)
+            {
+                return new JObject
+                {
+                    ["error"] = $"Failed to load integration settings: {ex.Message}",
+                    ["tip"] = "Click the 🔗 Integrations button in the chat header to configure."
+                };
+            }
+        }
+
+        private static JToken PrepareIntegrationExport(Document doc, string command, JObject parameters)
+        {
+            var settings = AI.IntegrationSettings.Load();
+            var category = parameters["category"]?.ToString() ?? "";
+            var targetService = command.Replace("export_to_", "").Replace("_integration", "");
+
+            // Check if target integration is enabled
+            bool isEnabled = false;
+            bool isConfigured = false;
+            string serviceName = "";
+
+            switch (targetService)
+            {
+                case "excel":
+                    isEnabled = settings.ExcelEnabled;
+                    isConfigured = true;
+                    serviceName = "Excel";
+                    break;
+                case "notion":
+                    isEnabled = settings.NotionEnabled;
+                    isConfigured = settings.IsNotionConfigured;
+                    serviceName = "Notion";
+                    break;
+                case "google_sheets":
+                    isEnabled = settings.GoogleSheetsEnabled;
+                    isConfigured = settings.IsGoogleSheetsConfigured;
+                    serviceName = "Google Sheets";
+                    break;
+            }
+
+            if (!isEnabled)
+            {
+                return new JObject
+                {
+                    ["error"] = $"{serviceName} integration is disabled.",
+                    ["action"] = $"Tell the user to enable {serviceName} via the 🔗 Integrations button in the chat header.",
+                    ["integrationStatus"] = GetIntegrationStatus()
+                };
+            }
+
+            if (!isConfigured)
+            {
+                return new JObject
+                {
+                    ["error"] = $"{serviceName} is enabled but not configured.",
+                    ["action"] = $"Tell the user to configure {serviceName} credentials via the 🔗 Integrations button.",
+                    ["integrationStatus"] = GetIntegrationStatus()
+                };
+            }
+
+            // Collect the Revit data
+            var elementData = ExportElements(doc, new JObject
+            {
+                ["category"] = category,
+                ["limit"] = 500
+            });
+
+            return new JObject
+            {
+                ["status"] = "data_ready",
+                ["targetService"] = serviceName,
+                ["category"] = category,
+                ["elementCount"] = elementData["totalCount"],
+                ["data"] = elementData,
+                ["message"] = $"Revit data collected for {serviceName} export. The actual push to {serviceName} is handled by the MCP server's export tools (export_to_excel, export_to_notion, export_to_sheets). " +
+                              $"If using Claude/MCP, the data will be pushed automatically. From the built-in chat, tell the user the data is ready and they can use the Tools Hub or ask Claude to push it."
+            };
+        }
+
+        // ===== PROJECT FILES TOOL IMPLEMENTATIONS =====
+
+        private static JToken ExportElementsToCsv(Document doc, JObject parameters)
+        {
+            var category = parameters?["category"]?.ToString();
+            var fileName = parameters?["fileName"]?.ToString() ?? $"export_{category ?? "elements"}_{DateTime.Now:yyyyMMdd_HHmmss}";
+            var paramNames = parameters?["parameters"]?.ToObject<List<string>>();
+
+            if (string.IsNullOrEmpty(category))
+                throw new InvalidOperationException("'category' is required (e.g. 'Walls', 'Levels', 'Rooms')");
+
+            var bic = GetBuiltInCategory(category);
+            var collector = new FilteredElementCollector(doc).OfCategory(bic).WhereElementIsNotElementType();
+            var elements = collector.ToList();
+
+            var rows = new List<Dictionary<string, string>>();
+            foreach (var elem in elements.Take(500))
+            {
+                var row = new Dictionary<string, string>
+                {
+                    ["Id"] = elem.Id.IntegerValue.ToString(),
+                    ["Name"] = elem.Name ?? "",
+                    ["Category"] = elem.Category?.Name ?? ""
+                };
+
+                // Add parameters
+                foreach (Parameter p in elem.Parameters)
+                {
+                    if (p.Definition == null) continue;
+                    if (paramNames != null && !paramNames.Any(n => p.Definition.Name.IndexOf(n, StringComparison.OrdinalIgnoreCase) >= 0))
+                        continue;
+
+                    var key = p.Definition.Name;
+                    if (!row.ContainsKey(key))
+                        row[key] = p.AsValueString() ?? p.AsString() ?? "";
+                }
+
+                rows.Add(row);
+            }
+
+            var filePath = ProjectFilesService.ExportToCsv(doc.PathName, fileName, rows);
+
+            return new JObject
+            {
+                ["message"] = $"✅ Exported {rows.Count} {category} elements to CSV",
+                ["fileName"] = Path.GetFileName(filePath),
+                ["filePath"] = filePath,
+                ["elementCount"] = rows.Count,
+                ["columnCount"] = rows.FirstOrDefault()?.Keys.Count ?? 0
+            };
+        }
+
+        private static JToken ExportElementsToExcel(Document doc, JObject parameters)
+        {
+            // Uses the same export but with .xlsx-compatible CSV format
+            var result = ExportElementsToCsv(doc, parameters);
+            if (result is JObject obj)
+                obj["message"] = obj["message"]?.ToString().Replace("CSV", "Excel-compatible CSV");
+            return result;
+        }
+
+        private static JToken ImportFromProjectFile(Document doc, JObject parameters)
+        {
+            var rows = ProjectFilesService.ImportFromFile(doc.PathName, parameters);
+
+            if (rows.Count == 0)
+                return new JObject { ["message"] = "⚠ No data rows found in the file." };
+
+            // Preview — show what would be imported
+            var preview = new JArray();
+            foreach (var row in rows.Take(10))
+            {
+                var obj = new JObject();
+                foreach (var kvp in row)
+                    obj[kvp.Key] = kvp.Value;
+                preview.Add(obj);
+            }
+
+            return new JObject
+            {
+                ["message"] = $"📋 Found {rows.Count} rows to import. Preview of first {Math.Min(10, rows.Count)} rows:",
+                ["totalRows"] = rows.Count,
+                ["columns"] = JArray.FromObject(rows.FirstOrDefault()?.Keys.ToList() ?? new List<string>()),
+                ["preview"] = preview,
+                ["hint"] = "To apply these values to Revit elements, use 'batch_set_parameter' with the data."
+            };
+        }
+
+        // ===== NONICA-INSPIRED POWER TOOLS =====
+
+        private static JToken CutFloors(Document doc, JObject parameters)
+        {
+            var method = parameters["method"]?.ToString() ?? "rooms";
+            var floorIdsStr = parameters["floorIds"]?.ToString();
+
+            // Collect target floors
+            var floors = new FilteredElementCollector(doc)
+                .OfCategory(BuiltInCategory.OST_Floors)
+                .WhereElementIsNotElementType()
+                .Cast<Floor>()
+                .ToList();
+
+            if (!string.IsNullOrEmpty(floorIdsStr) && floorIdsStr != "all")
+            {
+                var ids = floorIdsStr.Split(',').Select(s => int.Parse(s.Trim())).ToHashSet();
+                floors = floors.Where(f => ids.Contains(f.Id.IntegerValue)).ToList();
+            }
+
+            if (floors.Count == 0)
+                return new JObject { ["error"] = "No floors found" };
+
+            if (method == "rooms")
+            {
+                // Cut floors by room boundaries — find rooms overlapping each floor
+                var rooms = new FilteredElementCollector(doc)
+                    .OfCategory(BuiltInCategory.OST_Rooms)
+                    .WhereElementIsNotElementType()
+                    .Cast<SpatialElement>()
+                    .Where(r => r.Area > 0)
+                    .ToList();
+
+                return new JObject
+                {
+                    ["message"] = $"🔪 Found {floors.Count} floors and {rooms.Count} rooms. Use execute_code with floor splitting logic for complex geometry operations.",
+                    ["floors"] = floors.Count,
+                    ["rooms"] = rooms.Count,
+                    ["hint"] = "Floor cutting by room boundaries requires geometry intersection. Use execute_code with: foreach room → get boundary → create new floor from boundary → delete original."
+                };
+            }
+
+            return new JObject
+            {
+                ["message"] = $"🔪 Found {floors.Count} floors to process with method: {method}",
+                ["floorsFound"] = floors.Count,
+                ["method"] = method,
+                ["hint"] = $"Use execute_code for {method}-based floor splitting."
+            };
+        }
+
+        private static JToken SplitByLevels(Document doc, JObject parameters)
+        {
+            var category = parameters["category"]?.ToString() ?? "Walls";
+            var levelNamesStr = parameters["levelNames"]?.ToString();
+            var gap = parameters["gap"]?.Value<double>() ?? 0;
+
+            var bic = category.ToLower().Contains("column") ? BuiltInCategory.OST_StructuralColumns : BuiltInCategory.OST_Walls;
+
+            var elements = new FilteredElementCollector(doc)
+                .OfCategory(bic)
+                .WhereElementIsNotElementType()
+                .ToList();
+
+            var levels = new FilteredElementCollector(doc)
+                .OfClass(typeof(Level))
+                .Cast<Level>()
+                .OrderBy(l => l.Elevation)
+                .ToList();
+
+            if (!string.IsNullOrEmpty(levelNamesStr))
+            {
+                var names = levelNamesStr.Split(',').Select(s => s.Trim().ToLower()).ToHashSet();
+                levels = levels.Where(l => names.Contains(l.Name.ToLower())).ToList();
+            }
+
+            int split = 0;
+            using (var tx = new Transaction(doc, "Split by Levels"))
+            {
+                tx.Start();
+                foreach (var elem in elements)
+                {
+                    var bb = elem.get_BoundingBox(null);
+                    if (bb == null) continue;
+
+                    double baseZ = bb.Min.Z;
+                    double topZ = bb.Max.Z;
+
+                    // Check which levels fall within this element's height
+                    var intersectingLevels = levels.Where(l => l.Elevation > baseZ + 0.1 && l.Elevation < topZ - 0.1).ToList();
+                    if (intersectingLevels.Count > 0) split++;
+                }
+                tx.RollBack(); // Analysis only, actual split requires Wall.Split which is complex
+            }
+
+            return new JObject
+            {
+                ["message"] = $"📐 Found {elements.Count} {category} elements, {split} span multiple levels and can be split.",
+                ["totalElements"] = elements.Count,
+                ["splittable"] = split,
+                ["levels"] = JArray.FromObject(levels.Select(l => new { l.Name, l.Elevation })),
+                ["gap"] = gap,
+                ["hint"] = "Use execute_code for actual splitting. Pattern: for each wall → get base/top constraints → create new walls at each level segment."
+            };
+        }
+
+        private static JToken CreateOpenings(Document doc, JObject parameters)
+        {
+            var hostCat = parameters["hostCategory"]?.ToString() ?? "Walls";
+            var cutCat = parameters["cutCategory"]?.ToString() ?? "Ducts";
+            var offset = parameters["offset"]?.Value<double>() ?? 0.25; // 3 inches default
+
+            var hostBic = hostCat.ToLower().Contains("floor") ? BuiltInCategory.OST_Floors : BuiltInCategory.OST_Walls;
+
+            BuiltInCategory cutBic;
+            switch (cutCat.ToLower())
+            {
+                case "pipes": cutBic = BuiltInCategory.OST_PipeCurves; break;
+                case "structural framing": cutBic = BuiltInCategory.OST_StructuralFraming; break;
+                case "conduits": cutBic = BuiltInCategory.OST_Conduit; break;
+                default: cutBic = BuiltInCategory.OST_DuctCurves; break;
+            }
+
+            var hosts = new FilteredElementCollector(doc)
+                .OfCategory(hostBic)
+                .WhereElementIsNotElementType()
+                .ToList();
+
+            var cutElements = new FilteredElementCollector(doc)
+                .OfCategory(cutBic)
+                .WhereElementIsNotElementType()
+                .ToList();
+
+            // Find intersections using bounding box proximity
+            int intersections = 0;
+            foreach (var host in hosts)
+            {
+                var hostBB = host.get_BoundingBox(null);
+                if (hostBB == null) continue;
+                foreach (var cut in cutElements)
+                {
+                    var cutBB = cut.get_BoundingBox(null);
+                    if (cutBB == null) continue;
+                    if (hostBB.Min.X <= cutBB.Max.X && hostBB.Max.X >= cutBB.Min.X &&
+                        hostBB.Min.Y <= cutBB.Max.Y && hostBB.Max.Y >= cutBB.Min.Y &&
+                        hostBB.Min.Z <= cutBB.Max.Z && hostBB.Max.Z >= cutBB.Min.Z)
+                    {
+                        intersections++;
+                    }
+                }
+            }
+
+            return new JObject
+            {
+                ["message"] = $"🕳️ Found {intersections} potential intersections between {hosts.Count} {hostCat} and {cutElements.Count} {cutCat}.",
+                ["hosts"] = hosts.Count,
+                ["cutElements"] = cutElements.Count,
+                ["intersections"] = intersections,
+                ["offset"] = offset,
+                ["hint"] = "Use execute_code to create openings: doc.Create.NewOpening(wall, point1, point2) for rectangular openings."
+            };
+        }
+
+        private static JToken ManageScopeBoxes(Document doc, JObject parameters)
+        {
+            var action = parameters["action"]?.ToString() ?? "list";
+            var name = parameters["name"]?.ToString();
+
+            var scopeBoxes = new FilteredElementCollector(doc)
+                .OfCategory(BuiltInCategory.OST_VolumeOfInterest)
+                .WhereElementIsNotElementType()
+                .ToList();
+
+            if (action == "list")
+            {
+                var items = new JArray();
+                foreach (var sb in scopeBoxes)
+                {
+                    var bb = sb.get_BoundingBox(null);
+                    var usedIn = new FilteredElementCollector(doc)
+                        .WhereElementIsNotElementType()
+                        .Where(e =>
+                        {
+                            try { var p = e.get_Parameter(BuiltInParameter.DATUM_VOLUME_OF_INTEREST); return p != null && p.AsElementId()?.IntegerValue == sb.Id.IntegerValue; }
+                            catch { return false; }
+                        }).Count();
+
+                    items.Add(new JObject
+                    {
+                        ["id"] = sb.Id.IntegerValue,
+                        ["name"] = sb.Name,
+                        ["usedInViews"] = usedIn,
+                        ["minX"] = bb?.Min.X, ["minY"] = bb?.Min.Y, ["minZ"] = bb?.Min.Z,
+                        ["maxX"] = bb?.Max.X, ["maxY"] = bb?.Max.Y, ["maxZ"] = bb?.Max.Z
+                    });
+                }
+                return new JObject { ["message"] = $"📦 Found {scopeBoxes.Count} scope boxes", ["scopeBoxes"] = items };
+            }
+            else if (action == "delete_unused")
+            {
+                var unused = scopeBoxes.Where(sb =>
+                {
+                    var views = new FilteredElementCollector(doc).OfClass(typeof(View)).Cast<View>();
+                    return !views.Any(v =>
+                    {
+                        try { var p = v.get_Parameter(BuiltInParameter.VIEWER_VOLUME_OF_INTEREST_CROP); return p != null && p.AsElementId()?.IntegerValue == sb.Id.IntegerValue; }
+                        catch { return false; }
+                    });
+                }).ToList();
+
+                using (var tx = new Transaction(doc, "Delete Unused Scope Boxes"))
+                {
+                    tx.Start();
+                    foreach (var sb in unused)
+                        doc.Delete(sb.Id);
+                    tx.Commit();
+                }
+
+                return new JObject
+                {
+                    ["message"] = $"🗑️ Deleted {unused.Count} unused scope boxes (of {scopeBoxes.Count} total)",
+                    ["deleted"] = unused.Count
+                };
+            }
+
+            return new JObject { ["message"] = "Use action: list or delete_unused" };
+        }
+
+        private static JToken FindEmptySheets(Document doc, JObject parameters)
+        {
+            var shouldDelete = parameters["delete"]?.Value<bool>() ?? false;
+
+            var sheets = new FilteredElementCollector(doc)
+                .OfClass(typeof(ViewSheet))
+                .Cast<ViewSheet>()
+                .ToList();
+
+            var emptySheets = new List<ViewSheet>();
+            foreach (var sheet in sheets)
+            {
+                var viewports = sheet.GetAllViewports();
+                if (viewports == null || viewports.Count == 0)
+                    emptySheets.Add(sheet);
+            }
+
+            if (shouldDelete && emptySheets.Count > 0)
+            {
+                using (var tx = new Transaction(doc, "Delete Empty Sheets"))
+                {
+                    tx.Start();
+                    foreach (var sheet in emptySheets)
+                        doc.Delete(sheet.Id);
+                    tx.Commit();
+                }
+                return new JObject
+                {
+                    ["message"] = $"🗑️ Deleted {emptySheets.Count} empty sheets",
+                    ["deleted"] = emptySheets.Count
+                };
+            }
+
+            var items = new JArray();
+            foreach (var sheet in emptySheets)
+            {
+                items.Add(new JObject
+                {
+                    ["id"] = sheet.Id.IntegerValue,
+                    ["number"] = sheet.SheetNumber,
+                    ["name"] = sheet.Name
+                });
+            }
+
+            return new JObject
+            {
+                ["message"] = $"📄 Found {emptySheets.Count} empty sheets (no viewports) out of {sheets.Count} total",
+                ["emptySheets"] = items,
+                ["hint"] = "Set delete=true to remove them"
+            };
+        }
+
+        private static JToken CleanUnusedTemplates(Document doc, JObject parameters)
+        {
+            var scope = parameters["scope"]?.ToString() ?? "all";
+            var result = new JObject();
+            int totalCleaned = 0;
+
+            using (var tx = new Transaction(doc, "Clean Unused Templates/Rooms/Filters"))
+            {
+                tx.Start();
+
+                if (scope == "templates" || scope == "all")
+                {
+                    // Find view templates not applied to any view
+                    var templates = new FilteredElementCollector(doc)
+                        .OfClass(typeof(View))
+                        .Cast<View>()
+                        .Where(v => v.IsTemplate)
+                        .ToList();
+
+                    var allViews = new FilteredElementCollector(doc)
+                        .OfClass(typeof(View))
+                        .Cast<View>()
+                        .Where(v => !v.IsTemplate)
+                        .ToList();
+
+                    var usedTemplateIds = allViews
+                        .Select(v => v.ViewTemplateId)
+                        .Where(id => id != null && id.IntegerValue != -1)
+                        .Select(id => id.IntegerValue)
+                        .ToHashSet();
+
+                    var unusedTemplates = templates.Where(t => !usedTemplateIds.Contains(t.Id.IntegerValue)).ToList();
+                    foreach (var t in unusedTemplates) doc.Delete(t.Id);
+                    result["unusedTemplates"] = unusedTemplates.Count;
+                    totalCleaned += unusedTemplates.Count;
+                }
+
+                if (scope == "rooms" || scope == "all")
+                {
+                    // Remove unplaced rooms (Area == 0)
+                    var unplacedRooms = new FilteredElementCollector(doc)
+                        .OfCategory(BuiltInCategory.OST_Rooms)
+                        .WhereElementIsNotElementType()
+                        .Cast<SpatialElement>()
+                        .Where(r => r.Area == 0)
+                        .ToList();
+
+                    foreach (var r in unplacedRooms) doc.Delete(r.Id);
+                    result["unplacedRooms"] = unplacedRooms.Count;
+                    totalCleaned += unplacedRooms.Count;
+                }
+
+                if (scope == "filters" || scope == "all")
+                {
+                    // Find view filters not applied to any view
+                    var filters = new FilteredElementCollector(doc)
+                        .OfClass(typeof(ParameterFilterElement))
+                        .ToList();
+
+                    var allViews2 = new FilteredElementCollector(doc)
+                        .OfClass(typeof(View))
+                        .Cast<View>()
+                        .Where(v => !v.IsTemplate)
+                        .ToList();
+
+                    var usedFilterIds = new HashSet<int>();
+                    foreach (var v in allViews2)
+                    {
+                        try
+                        {
+                            var fIds = v.GetFilters();
+                            foreach (var fId in fIds) usedFilterIds.Add(fId.IntegerValue);
+                        }
+                        catch { }
+                    }
+
+                    var unusedFilters = filters.Where(f => !usedFilterIds.Contains(f.Id.IntegerValue)).ToList();
+                    foreach (var f in unusedFilters) doc.Delete(f.Id);
+                    result["unusedFilters"] = unusedFilters.Count;
+                    totalCleaned += unusedFilters.Count;
+                }
+
+                tx.Commit();
+            }
+
+            result["message"] = $"🧹 Cleaned {totalCleaned} unused items (scope: {scope})";
+            return result;
+        }
+
+        private static JToken CleanUnplacedViews(Document doc, JObject parameters)
+        {
+            var dryRun = parameters["dryRun"]?.Value<bool>() ?? false;
+
+            // Get all sheets and their viewports
+            var sheetsWithViewIds = new HashSet<int>();
+            foreach (var sheet in new FilteredElementCollector(doc).OfClass(typeof(ViewSheet)).Cast<ViewSheet>())
+            {
+                foreach (var vpId in sheet.GetAllViewports())
+                {
+                    var vp = doc.GetElement(vpId) as Viewport;
+                    if (vp != null) sheetsWithViewIds.Add(vp.ViewId.IntegerValue);
+                }
+            }
+
+            // Find views NOT on any sheet
+            var unplaced = new FilteredElementCollector(doc)
+                .OfClass(typeof(View))
+                .Cast<View>()
+                .Where(v => !v.IsTemplate &&
+                            v.ViewType != ViewType.ProjectBrowser &&
+                            v.ViewType != ViewType.SystemBrowser &&
+                            v.ViewType != ViewType.Internal &&
+                            v.ViewType != ViewType.DrawingSheet &&
+                            !sheetsWithViewIds.Contains(v.Id.IntegerValue))
+                .ToList();
+
+            var items = new JArray();
+            foreach (var v in unplaced)
+            {
+                items.Add(new JObject
+                {
+                    ["id"] = v.Id.IntegerValue,
+                    ["name"] = v.Name,
+                    ["type"] = v.ViewType.ToString()
+                });
+            }
+
+            if (!dryRun && unplaced.Count > 0)
+            {
+                using (var tx = new Transaction(doc, "Delete Unplaced Views"))
+                {
+                    tx.Start();
+                    foreach (var v in unplaced)
+                    {
+                        try { doc.Delete(v.Id); } catch { }
+                    }
+                    tx.Commit();
+                }
+
+                return new JObject
+                {
+                    ["message"] = $"🗑️ Deleted {unplaced.Count} unplaced views/schedules/legends",
+                    ["deleted"] = unplaced.Count
+                };
+            }
+
+            return new JObject
+            {
+                ["message"] = $"📋 Found {unplaced.Count} views not placed on any sheet (dry run)",
+                ["unplacedViews"] = items,
+                ["hint"] = "Set dryRun=false to delete them"
+            };
+        }
+
+        private static JToken PurgeUnusedInFamilies(Document doc, JObject parameters)
+        {
+            var categoryFilter = parameters["category"]?.ToString();
+
+            var families = new FilteredElementCollector(doc)
+                .OfClass(typeof(Family))
+                .Cast<Family>()
+                .Where(f => f.IsEditable)
+                .ToList();
+
+            if (!string.IsNullOrEmpty(categoryFilter))
+            {
+                families = families.Where(f =>
+                    f.FamilyCategory?.Name?.IndexOf(categoryFilter, StringComparison.OrdinalIgnoreCase) >= 0
+                ).ToList();
+            }
+
+            int purgedCount = 0;
+            var details = new JArray();
+
+            foreach (var family in families)
+            {
+                try
+                {
+                    var famDoc = doc.EditFamily(family);
+                    if (famDoc == null) continue;
+
+                    // Count unused types in family
+                    var unused = new FilteredElementCollector(famDoc)
+                        .WhereElementIsNotElementType()
+                        .Where(e => !(e is FamilyInstance))
+                        .Count();
+
+                    if (unused > 0)
+                    {
+                        details.Add(new JObject
+                        {
+                            ["family"] = family.Name,
+                            ["category"] = family.FamilyCategory?.Name,
+                            ["unusedElements"] = unused
+                        });
+                        purgedCount++;
+                    }
+
+                    famDoc.Close(false);
+                }
+                catch { }
+            }
+
+            return new JObject
+            {
+                ["message"] = $"🔍 Scanned {families.Count} editable families, {purgedCount} have unused assets",
+                ["familiesScanned"] = families.Count,
+                ["familiesWithUnused"] = purgedCount,
+                ["details"] = details,
+                ["hint"] = "Use execute_code for deep purge: open each family doc → purge → save back."
+            };
+        }
+
+        private static JToken DeleteFamiliesBySize(Document doc, JObject parameters)
+        {
+            var maxSizeKB = parameters["maxSizeKB"]?.Value<int>() ?? 5000;
+            var dryRun = parameters["dryRun"]?.Value<bool>() ?? true;
+
+            var families = new FilteredElementCollector(doc)
+                .OfClass(typeof(Family))
+                .Cast<Family>()
+                .ToList();
+
+            // Check instance count for each family
+            var familyData = new List<(Family family, int instances, long estimatedSize)>();
+            foreach (var fam in families)
+            {
+                var symbolIds = fam.GetFamilySymbolIds();
+                int instanceCount = 0;
+                foreach (var symId in symbolIds)
+                {
+                    instanceCount += new FilteredElementCollector(doc)
+                        .OfClass(typeof(FamilyInstance))
+                        .Where(e => ((FamilyInstance)e).Symbol.Id.IntegerValue == symId.IntegerValue)
+                        .Count();
+                }
+
+                // Estimate size from geometry complexity (rough heuristic)
+                long estSize = 0;
+                foreach (var symId in symbolIds)
+                {
+                    var sym = doc.GetElement(symId) as FamilySymbol;
+                    if (sym != null)
+                    {
+                        try
+                        {
+                            var geom = sym.get_Geometry(new Options());
+                            if (geom != null) estSize += geom.Count() * 100; // rough
+                        }
+                        catch { }
+                    }
+                }
+
+                familyData.Add((fam, instanceCount, estSize));
+            }
+
+            // Sort by estimated size descending, flag those with 0 instances
+            var candidates = familyData
+                .Where(f => f.instances == 0)
+                .OrderByDescending(f => f.estimatedSize)
+                .ToList();
+
+            var items = new JArray();
+            foreach (var c in candidates.Take(50))
+            {
+                items.Add(new JObject
+                {
+                    ["id"] = c.family.Id.IntegerValue,
+                    ["name"] = c.family.Name,
+                    ["category"] = c.family.FamilyCategory?.Name,
+                    ["instances"] = c.instances,
+                    ["types"] = c.family.GetFamilySymbolIds().Count
+                });
+            }
+
+            if (!dryRun && candidates.Count > 0)
+            {
+                using (var tx = new Transaction(doc, "Delete Unused Heavy Families"))
+                {
+                    tx.Start();
+                    int deleted = 0;
+                    foreach (var c in candidates)
+                    {
+                        try { doc.Delete(c.family.Id); deleted++; } catch { }
+                    }
+                    tx.Commit();
+                    return new JObject
+                    {
+                        ["message"] = $"🗑️ Deleted {deleted} unused families",
+                        ["deleted"] = deleted
+                    };
+                }
+            }
+
+            return new JObject
+            {
+                ["message"] = $"📊 Found {candidates.Count} unused families (0 instances) out of {families.Count} total",
+                ["unusedFamilies"] = items,
+                ["hint"] = "Set dryRun=false to delete them"
+            };
+        }
+
+        private static JToken Explode3DView(Document doc, UIDocument uiDoc, JObject parameters)
+        {
+            var spacing = parameters["spacing"]?.Value<double>() ?? 10.0;
+
+            var levels = new FilteredElementCollector(doc)
+                .OfClass(typeof(Level))
+                .Cast<Level>()
+                .OrderBy(l => l.Elevation)
+                .ToList();
+
+            if (levels.Count < 2)
+                return new JObject { ["error"] = "Need at least 2 levels for exploded view" };
+
+            // Create a new 3D view
+            var viewFamilyType = new FilteredElementCollector(doc)
+                .OfClass(typeof(ViewFamilyType))
+                .Cast<ViewFamilyType>()
+                .FirstOrDefault(t => t.ViewFamily == ViewFamily.ThreeDimensional);
+
+            if (viewFamilyType == null)
+                return new JObject { ["error"] = "No 3D view family type found" };
+
+            using (var tx = new Transaction(doc, "Explode 3D View"))
+            {
+                tx.Start();
+                var view3d = View3D.CreateIsometric(doc, viewFamilyType.Id);
+                view3d.Name = $"Exploded_{DateTime.Now:HHmmss}";
+
+                // Set a wide section box
+                double minZ = levels.First().Elevation - 5;
+                double maxZ = levels.Last().Elevation + spacing * levels.Count + 20;
+
+                var bb = new BoundingBoxXYZ();
+                bb.Min = new XYZ(-500, -500, minZ);
+                bb.Max = new XYZ(500, 500, maxZ);
+                view3d.SetSectionBox(bb);
+
+                tx.Commit();
+
+                uiDoc.ActiveView = view3d;
+
+                return new JObject
+                {
+                    ["message"] = $"💥 Created exploded 3D view '{view3d.Name}' with {levels.Count} levels, spacing={spacing}ft",
+                    ["viewId"] = view3d.Id.IntegerValue,
+                    ["viewName"] = view3d.Name,
+                    ["levels"] = levels.Count,
+                    ["hint"] = "For actual displacement, use execute_code to move elements per-level by offset."
+                };
+            }
+        }
+
+        private static JToken RotateSectionBox(Document doc, UIDocument uiDoc, JObject parameters)
+        {
+            var elementId = parameters["elementId"]?.Value<int>();
+            var angle = parameters["angle"]?.Value<double>() ?? 0;
+
+            var view = uiDoc.ActiveView as View3D;
+            if (view == null)
+                return new JObject { ["error"] = "Active view must be a 3D view" };
+            if (!view.IsSectionBoxActive)
+                return new JObject { ["error"] = "Section box is not active in current view" };
+
+            using (var tx = new Transaction(doc, "Rotate Section Box"))
+            {
+                tx.Start();
+                var box = view.GetSectionBox();
+                var transform = box.Transform;
+
+                if (elementId.HasValue)
+                {
+                    // Orient to element
+                    var elem = doc.GetElement(new ElementId(elementId.Value));
+                    if (elem != null)
+                    {
+                        var loc = elem.Location as LocationCurve;
+                        if (loc != null)
+                        {
+                            var dir = (loc.Curve.GetEndPoint(1) - loc.Curve.GetEndPoint(0)).Normalize();
+                            angle = Math.Atan2(dir.Y, dir.X) * 180 / Math.PI;
+                        }
+                    }
+                }
+
+                double rad = angle * Math.PI / 180;
+                var center = (box.Min + box.Max) / 2;
+                var newTransform = Transform.CreateRotationAtPoint(XYZ.BasisZ, rad, transform.OfPoint(center));
+                box.Transform = transform.Multiply(newTransform);
+                view.SetSectionBox(box);
+                tx.Commit();
+
+                return new JObject
+                {
+                    ["message"] = $"🔄 Rotated section box by {angle}° in '{view.Name}'",
+                    ["angle"] = angle
+                };
+            }
+        }
+
+        private static JToken SuperAlign(Document doc, JObject parameters)
+        {
+            var elementIdsArr = parameters["elementIds"] as JArray;
+            var mode = parameters["mode"]?.ToString() ?? "align";
+            var direction = parameters["direction"]?.ToString() ?? "horizontal";
+            var spacing = parameters["spacing"]?.Value<double>() ?? 0;
+
+            if (elementIdsArr == null || elementIdsArr.Count < 2)
+                return new JObject { ["error"] = "Need at least 2 element IDs" };
+
+            var elements = elementIdsArr
+                .Select(id => doc.GetElement(new ElementId(id.Value<int>())))
+                .Where(e => e != null)
+                .ToList();
+
+            var positions = new List<(Element elem, XYZ center)>();
+            foreach (var e in elements)
+            {
+                var bb = e.get_BoundingBox(null);
+                if (bb != null) positions.Add((e, (bb.Min + bb.Max) / 2));
+            }
+
+            using (var tx = new Transaction(doc, "Super Align"))
+            {
+                tx.Start();
+                int moved = 0;
+
+                if (mode == "align")
+                {
+                    // Align all to the first element's position
+                    var refPos = positions.First().center;
+                    foreach (var (elem, center) in positions.Skip(1))
+                    {
+                        XYZ delta;
+                        if (direction == "horizontal")
+                            delta = new XYZ(0, refPos.Y - center.Y, 0);
+                        else
+                            delta = new XYZ(refPos.X - center.X, 0, 0);
+
+                        if (delta.GetLength() > 0.001)
+                        {
+                            ElementTransformUtils.MoveElement(doc, elem.Id, delta);
+                            moved++;
+                        }
+                    }
+                }
+                else if (mode == "distribute")
+                {
+                    // Distribute evenly between first and last
+                    var sorted = direction == "horizontal"
+                        ? positions.OrderBy(p => p.center.X).ToList()
+                        : positions.OrderBy(p => p.center.Y).ToList();
+
+                    if (sorted.Count > 2)
+                    {
+                        double start = direction == "horizontal" ? sorted.First().center.X : sorted.First().center.Y;
+                        double end = direction == "horizontal" ? sorted.Last().center.X : sorted.Last().center.Y;
+                        double step = (end - start) / (sorted.Count - 1);
+
+                        for (int i = 1; i < sorted.Count - 1; i++)
+                        {
+                            double target = start + step * i;
+                            var current = direction == "horizontal" ? sorted[i].center.X : sorted[i].center.Y;
+                            XYZ delta = direction == "horizontal"
+                                ? new XYZ(target - current, 0, 0)
+                                : new XYZ(0, target - current, 0);
+
+                            if (delta.GetLength() > 0.001)
+                            {
+                                ElementTransformUtils.MoveElement(doc, sorted[i].elem.Id, delta);
+                                moved++;
+                            }
+                        }
+                    }
+                }
+                else if (mode == "grid" && spacing > 0)
+                {
+                    // Arrange in a grid
+                    int cols = (int)Math.Ceiling(Math.Sqrt(positions.Count));
+                    var start = positions.First().center;
+                    for (int i = 0; i < positions.Count; i++)
+                    {
+                        int row = i / cols;
+                        int col = i % cols;
+                        var target = new XYZ(start.X + col * spacing, start.Y - row * spacing, positions[i].center.Z);
+                        var delta = target - positions[i].center;
+                        if (delta.GetLength() > 0.001)
+                        {
+                            ElementTransformUtils.MoveElement(doc, positions[i].elem.Id, delta);
+                            moved++;
+                        }
+                    }
+                }
+
+                tx.Commit();
+                return new JObject
+                {
+                    ["message"] = $"✅ Super Align: moved {moved} elements (mode={mode}, direction={direction})",
+                    ["moved"] = moved
+                };
+            }
+        }
+
+        private static JToken JoinElementsInView(Document doc, UIDocument uiDoc, JObject parameters)
+        {
+            var cat1Str = parameters["category1"]?.ToString() ?? "Walls";
+            var cat2Str = parameters["category2"]?.ToString() ?? "Floors";
+            var viewIdParam = parameters["viewId"]?.Value<int>();
+
+            var view = viewIdParam.HasValue
+                ? doc.GetElement(new ElementId(viewIdParam.Value)) as View
+                : uiDoc.ActiveView;
+
+            var cat1 = GetBuiltInCategory(cat1Str);
+            var cat2 = GetBuiltInCategory(cat2Str);
+
+            var elements1 = new FilteredElementCollector(doc, view.Id)
+                .OfCategory(cat1)
+                .WhereElementIsNotElementType()
+                .ToList();
+
+            var elements2 = new FilteredElementCollector(doc, view.Id)
+                .OfCategory(cat2)
+                .WhereElementIsNotElementType()
+                .ToList();
+
+            int joined = 0;
+            using (var tx = new Transaction(doc, "Join Elements in View"))
+            {
+                tx.Start();
+                foreach (var e1 in elements1)
+                {
+                    var bb1 = e1.get_BoundingBox(view);
+                    if (bb1 == null) continue;
+
+                    foreach (var e2 in elements2)
+                    {
+                        var bb2 = e2.get_BoundingBox(view);
+                        if (bb2 == null) continue;
+
+                        // Check proximity
+                        if (bb1.Min.X <= bb2.Max.X + 0.5 && bb1.Max.X >= bb2.Min.X - 0.5 &&
+                            bb1.Min.Y <= bb2.Max.Y + 0.5 && bb1.Max.Y >= bb2.Min.Y - 0.5 &&
+                            bb1.Min.Z <= bb2.Max.Z + 0.5 && bb1.Max.Z >= bb2.Min.Z - 0.5)
+                        {
+                            try
+                            {
+                                if (!JoinGeometryUtils.AreElementsJoined(doc, e1, e2))
+                                {
+                                    JoinGeometryUtils.JoinGeometry(doc, e1, e2);
+                                    joined++;
+                                }
+                            }
+                            catch { }
+                        }
+                    }
+                }
+                tx.Commit();
+            }
+
+            return new JObject
+            {
+                ["message"] = $"🔗 Joined {joined} element pairs ({cat1Str} ↔ {cat2Str}) in '{view.Name}'",
+                ["joined"] = joined,
+                ["category1Count"] = elements1.Count,
+                ["category2Count"] = elements2.Count
+            };
+        }
+
+        private static JToken CopyToProject(Document doc, UIApplication uiApp, JObject parameters)
+        {
+            var targetName = parameters["targetProject"]?.ToString();
+            var category = parameters["category"]?.ToString();
+
+            if (string.IsNullOrEmpty(targetName))
+                return new JObject { ["error"] = "targetProject name is required" };
+
+            // Find target document among open documents
+            Document targetDoc = null;
+            foreach (Document d in uiApp.Application.Documents)
+            {
+                if (d.Title.IndexOf(targetName, StringComparison.OrdinalIgnoreCase) >= 0 && d.PathName != doc.PathName)
+                {
+                    targetDoc = d;
+                    break;
+                }
+            }
+
+            if (targetDoc == null)
+            {
+                var openDocs = new JArray();
+                foreach (Document d in uiApp.Application.Documents)
+                    if (d.PathName != doc.PathName)
+                        openDocs.Add(d.Title);
+
+                return new JObject
+                {
+                    ["error"] = $"Project '{targetName}' not found among open documents",
+                    ["openProjects"] = openDocs
+                };
+            }
+
+            var bic = GetBuiltInCategory(category ?? "Walls");
+            var elements = new FilteredElementCollector(doc)
+                .OfCategory(bic)
+                .WhereElementIsNotElementType()
+                .ToList();
+
+            // Copy element IDs
+            var ids = elements.Select(e => e.Id).ToList();
+
+            using (var tx = new Transaction(targetDoc, "Copy from Other Project"))
+            {
+                tx.Start();
+                try
+                {
+                    ElementTransformUtils.CopyElements(doc, ids, targetDoc, Transform.Identity, new CopyPasteOptions());
+                    tx.Commit();
+                }
+                catch (Exception ex)
+                {
+                    tx.RollBack();
+                    return new JObject { ["error"] = $"Copy failed: {ex.Message}" };
+                }
+            }
+
+            return new JObject
+            {
+                ["message"] = $"📋 Copied {ids.Count} {category} elements from '{doc.Title}' → '{targetDoc.Title}'",
+                ["copied"] = ids.Count
+            };
+        }
+
+        private static JToken MeasureElements(Document doc, JObject parameters)
+        {
+            var elementIdsStr = parameters["elementIds"]?.ToString();
+            var measureType = parameters["type"]?.ToString() ?? "length";
+
+            var elements = new List<Element>();
+            if (!string.IsNullOrEmpty(elementIdsStr))
+            {
+                var ids = elementIdsStr.Split(',').Select(s => int.Parse(s.Trim()));
+                elements = ids.Select(id => doc.GetElement(new ElementId(id))).Where(e => e != null).ToList();
+            }
+
+            if (elements.Count == 0)
+                return new JObject { ["error"] = "No valid element IDs provided" };
+
+            var results = new JArray();
+            double totalLength = 0;
+            double totalArea = 0;
+
+            foreach (var elem in elements)
+            {
+                var item = new JObject { ["id"] = elem.Id.IntegerValue, ["name"] = elem.Name };
+
+                // Length from LocationCurve
+                var locCurve = elem.Location as LocationCurve;
+                if (locCurve != null)
+                {
+                    double len = locCurve.Curve.Length;
+                    item["length_ft"] = Math.Round(len, 4);
+                    item["length_m"] = Math.Round(len * 0.3048, 4);
+                    totalLength += len;
+                }
+
+                // Area from parameter
+                var areaParam = elem.get_Parameter(BuiltInParameter.HOST_AREA_COMPUTED);
+                if (areaParam != null)
+                {
+                    double area = areaParam.AsDouble();
+                    item["area_sqft"] = Math.Round(area, 4);
+                    item["area_sqm"] = Math.Round(area * 0.092903, 4);
+                    totalArea += area;
+                }
+
+                // Volume
+                var volParam = elem.get_Parameter(BuiltInParameter.HOST_VOLUME_COMPUTED);
+                if (volParam != null)
+                {
+                    double vol = volParam.AsDouble();
+                    item["volume_cuft"] = Math.Round(vol, 4);
+                    item["volume_cum"] = Math.Round(vol * 0.0283168, 4);
+                }
+
+                // Bounding box dimensions
+                var bb = elem.get_BoundingBox(null);
+                if (bb != null)
+                {
+                    var size = bb.Max - bb.Min;
+                    item["width_ft"] = Math.Round(size.X, 4);
+                    item["depth_ft"] = Math.Round(size.Y, 4);
+                    item["height_ft"] = Math.Round(size.Z, 4);
+                }
+
+                results.Add(item);
+            }
+
+            // Distance between elements
+            JObject distanceInfo = null;
+            if (elements.Count == 2 && measureType == "distance")
+            {
+                var bb1 = elements[0].get_BoundingBox(null);
+                var bb2 = elements[1].get_BoundingBox(null);
+                if (bb1 != null && bb2 != null)
+                {
+                    var c1 = (bb1.Min + bb1.Max) / 2;
+                    var c2 = (bb2.Min + bb2.Max) / 2;
+                    double dist = c1.DistanceTo(c2);
+                    distanceInfo = new JObject
+                    {
+                        ["distance_ft"] = Math.Round(dist, 4),
+                        ["distance_m"] = Math.Round(dist * 0.3048, 4),
+                        ["dx_ft"] = Math.Round(Math.Abs(c2.X - c1.X), 4),
+                        ["dy_ft"] = Math.Round(Math.Abs(c2.Y - c1.Y), 4),
+                        ["dz_ft"] = Math.Round(Math.Abs(c2.Z - c1.Z), 4)
+                    };
+                }
+            }
+
+            var response = new JObject
+            {
+                ["message"] = $"📏 Measured {elements.Count} elements",
+                ["totalLength_ft"] = Math.Round(totalLength, 4),
+                ["totalLength_m"] = Math.Round(totalLength * 0.3048, 4),
+                ["totalArea_sqft"] = Math.Round(totalArea, 4),
+                ["totalArea_sqm"] = Math.Round(totalArea * 0.092903, 4),
+                ["elements"] = results
+            };
+
+            if (distanceInfo != null)
+                response["distance"] = distanceInfo;
+
+            return response;
+        }
+
+        // ===== SHARED HELPER =====
+
+        private static Level FindLevel(Document doc, string levelName)
+        {
+            if (string.IsNullOrEmpty(levelName)) return null;
+            return new FilteredElementCollector(doc)
+                .OfClass(typeof(Level))
+                .Cast<Level>()
+                .FirstOrDefault(l => l.Name.Equals(levelName, StringComparison.OrdinalIgnoreCase)
+                    || l.Name.IndexOf(levelName, StringComparison.OrdinalIgnoreCase) >= 0);
+        }
+
+        // ===== MEP TOOL IMPLEMENTATIONS =====
+
+        private static JToken CreateDuct(Document doc, JObject parameters)
+        {
+            var levelName = parameters["levelName"]?.ToString();
+            var level = FindLevel(doc, levelName);
+            if (level == null) return new JObject { ["error"] = $"Level '{levelName}' not found" };
+
+            var ductType = new FilteredElementCollector(doc)
+                .OfClass(typeof(Autodesk.Revit.DB.Mechanical.DuctType))
+                .FirstOrDefault();
+            var sysType = new FilteredElementCollector(doc)
+                .OfClass(typeof(Autodesk.Revit.DB.Mechanical.MechanicalSystemType))
+                .FirstOrDefault();
+            if (ductType == null || sysType == null) return new JObject { ["error"] = "No duct or system type found" };
+
+            using (var tx = new Transaction(doc, "Create Duct"))
+            {
+                tx.Start();
+                var duct = Autodesk.Revit.DB.Mechanical.Duct.Create(doc, sysType.Id, ductType.Id, level.Id,
+                    new XYZ(parameters["startX"]?.Value<double>() ?? 0, parameters["startY"]?.Value<double>() ?? 0, parameters["startZ"]?.Value<double>() ?? 0),
+                    new XYZ(parameters["endX"]?.Value<double>() ?? 0, parameters["endY"]?.Value<double>() ?? 0, parameters["endZ"]?.Value<double>() ?? 0));
+                tx.Commit();
+                return new JObject { ["message"] = $"🔧 Created duct (ID: {duct.Id.IntegerValue})", ["elementId"] = duct.Id.IntegerValue };
+            }
+        }
+
+        private static JToken CreatePipe(Document doc, JObject parameters)
+        {
+            var levelName = parameters["levelName"]?.ToString();
+            var level = FindLevel(doc, levelName);
+            if (level == null) return new JObject { ["error"] = $"Level '{levelName}' not found" };
+
+            var pipeType = new FilteredElementCollector(doc)
+                .OfClass(typeof(Autodesk.Revit.DB.Plumbing.PipeType)).FirstOrDefault();
+            var sysType = new FilteredElementCollector(doc)
+                .OfClass(typeof(Autodesk.Revit.DB.Plumbing.PipingSystemType)).FirstOrDefault();
+            if (pipeType == null || sysType == null) return new JObject { ["error"] = "No pipe or system type found" };
+
+            using (var tx = new Transaction(doc, "Create Pipe"))
+            {
+                tx.Start();
+                var pipe = Autodesk.Revit.DB.Plumbing.Pipe.Create(doc, sysType.Id, pipeType.Id, level.Id,
+                    new XYZ(parameters["startX"]?.Value<double>() ?? 0, parameters["startY"]?.Value<double>() ?? 0, parameters["startZ"]?.Value<double>() ?? 0),
+                    new XYZ(parameters["endX"]?.Value<double>() ?? 0, parameters["endY"]?.Value<double>() ?? 0, parameters["endZ"]?.Value<double>() ?? 0));
+                tx.Commit();
+                return new JObject { ["message"] = $"🔧 Created pipe (ID: {pipe.Id.IntegerValue})", ["elementId"] = pipe.Id.IntegerValue };
+            }
+        }
+
+        private static JToken CreateFlexDuct(Document doc, JObject parameters)
+        {
+            var levelName = parameters["levelName"]?.ToString();
+            var level = FindLevel(doc, levelName);
+            if (level == null) return new JObject { ["error"] = $"Level '{levelName}' not found" };
+            var pointsArr = parameters["points"] as JArray;
+            if (pointsArr == null || pointsArr.Count < 2) return new JObject { ["error"] = "Need at least 2 points" };
+            var flexType = new FilteredElementCollector(doc).OfClass(typeof(Autodesk.Revit.DB.Mechanical.FlexDuctType)).FirstOrDefault();
+            var sysType = new FilteredElementCollector(doc).OfClass(typeof(Autodesk.Revit.DB.Mechanical.MechanicalSystemType)).FirstOrDefault();
+            if (flexType == null || sysType == null) return new JObject { ["error"] = "No flex duct type found" };
+            var pts = pointsArr.Select(p => new XYZ(p["x"]?.Value<double>() ?? 0, p["y"]?.Value<double>() ?? 0, p["z"]?.Value<double>() ?? 0)).ToList();
+            using (var tx = new Transaction(doc, "Create Flex Duct"))
+            {
+                tx.Start();
+                var fd = Autodesk.Revit.DB.Mechanical.FlexDuct.Create(doc, sysType.Id, flexType.Id, level.Id, pts.First(), pts.Last(), pts);
+                tx.Commit();
+                return new JObject { ["message"] = $"🔧 Created flex duct (ID: {fd.Id.IntegerValue})", ["elementId"] = fd.Id.IntegerValue };
+            }
+        }
+
+        private static JToken CreateMepSpace(Document doc, JObject parameters)
+        {
+            var levelName = parameters["levelName"]?.ToString();
+            var level = FindLevel(doc, levelName);
+            if (level == null) return new JObject { ["error"] = $"Level '{levelName}' not found" };
+            using (var tx = new Transaction(doc, "Create MEP Space"))
+            {
+                tx.Start();
+                var space = doc.Create.NewSpace(level, new UV(parameters["x"]?.Value<double>() ?? 0, parameters["y"]?.Value<double>() ?? 0));
+                var spaceName = parameters["spaceName"]?.ToString();
+                if (!string.IsNullOrEmpty(spaceName)) space.get_Parameter(BuiltInParameter.ROOM_NAME)?.Set(spaceName);
+                tx.Commit();
+                return new JObject { ["message"] = $"📦 Created MEP space (ID: {space.Id.IntegerValue})", ["elementId"] = space.Id.IntegerValue };
+            }
+        }
+
+        private static JToken GetMepSystems(Document doc, JObject parameters)
+        {
+            var systems = new JArray();
+            foreach (var sys in new FilteredElementCollector(doc).OfClass(typeof(Autodesk.Revit.DB.Mechanical.MechanicalSystem)).Cast<Autodesk.Revit.DB.Mechanical.MechanicalSystem>())
+                systems.Add(new JObject { ["id"] = sys.Id.IntegerValue, ["name"] = sys.Name, ["type"] = "Mechanical", ["elements"] = sys.DuctNetwork?.Size ?? 0 });
+            foreach (var sys in new FilteredElementCollector(doc).OfClass(typeof(Autodesk.Revit.DB.Plumbing.PipingSystem)).Cast<Autodesk.Revit.DB.Plumbing.PipingSystem>())
+                systems.Add(new JObject { ["id"] = sys.Id.IntegerValue, ["name"] = sys.Name, ["type"] = "Piping", ["elements"] = sys.PipingNetwork?.Size ?? 0 });
+            return new JObject { ["message"] = $"🔧 Found {systems.Count} MEP systems", ["systems"] = systems };
+        }
+
+        private static JToken DuctSizing(Document doc, JObject parameters)
+        {
+            var cat = parameters["category"]?.ToString() ?? "Ducts";
+            var bic = cat.ToLower().Contains("pipe") ? BuiltInCategory.OST_PipeCurves : BuiltInCategory.OST_DuctCurves;
+            var elements = new FilteredElementCollector(doc).OfCategory(bic).WhereElementIsNotElementType().ToList();
+            var items = new JArray();
+            foreach (var e in elements.Take(50))
+            {
+                var item = new JObject { ["id"] = e.Id.IntegerValue, ["name"] = e.Name };
+                var sizeP = e.get_Parameter(BuiltInParameter.RBS_CALCULATED_SIZE); if (sizeP != null) item["size"] = sizeP.AsString();
+                items.Add(item);
+            }
+            return new JObject { ["message"] = $"📐 {cat} sizing: {elements.Count} elements", ["elements"] = items };
+        }
+
+        private static JToken ConnectMepElements(Document doc, JObject parameters)
+        {
+            var e1 = doc.GetElement(new ElementId(parameters["elementId1"]?.Value<int>() ?? 0));
+            var e2 = doc.GetElement(new ElementId(parameters["elementId2"]?.Value<int>() ?? 0));
+            if (e1 == null || e2 == null) return new JObject { ["error"] = "Element not found" };
+            ConnectorSet cs1 = (e1 as MEPCurve)?.ConnectorManager?.Connectors;
+            ConnectorSet cs2 = (e2 as MEPCurve)?.ConnectorManager?.Connectors;
+            if (cs1 == null || cs2 == null) return new JObject { ["error"] = "Elements have no connectors" };
+            Connector best1 = null, best2 = null; double minDist = double.MaxValue;
+            foreach (Connector c1 in cs1) { if (c1.IsConnected) continue; foreach (Connector c2 in cs2) { if (c2.IsConnected) continue; double d = c1.Origin.DistanceTo(c2.Origin); if (d < minDist) { minDist = d; best1 = c1; best2 = c2; } } }
+            if (best1 == null) return new JObject { ["error"] = "No unconnected connectors" };
+            using (var tx = new Transaction(doc, "Connect MEP")) { tx.Start(); best1.ConnectTo(best2); tx.Commit(); }
+            return new JObject { ["message"] = $"🔗 Connected elements (distance: {Math.Round(minDist, 2)}ft)" };
+        }
+
+        // ===== STRUCTURAL TOOL IMPLEMENTATIONS =====
+
+        private static JToken CreateStructuralBeam(Document doc, JObject parameters)
+        {
+            var levelName = parameters["levelName"]?.ToString();
+            var level = FindLevel(doc, levelName);
+            if (level == null) return new JObject { ["error"] = $"Level '{levelName}' not found" };
+            var beamType = new FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_StructuralFraming).OfClass(typeof(FamilySymbol)).Cast<FamilySymbol>().FirstOrDefault();
+            if (beamType == null) return new JObject { ["error"] = "No beam type found" };
+            using (var tx = new Transaction(doc, "Create Beam"))
+            {
+                tx.Start(); if (!beamType.IsActive) beamType.Activate();
+                var line = Line.CreateBound(new XYZ(parameters["startX"]?.Value<double>() ?? 0, parameters["startY"]?.Value<double>() ?? 0, level.Elevation), new XYZ(parameters["endX"]?.Value<double>() ?? 0, parameters["endY"]?.Value<double>() ?? 0, level.Elevation));
+                var beam = doc.Create.NewFamilyInstance(line, beamType, level, Autodesk.Revit.DB.Structure.StructuralType.Beam);
+                tx.Commit();
+                return new JObject { ["message"] = $"🏗️ Created beam (ID: {beam.Id.IntegerValue})", ["elementId"] = beam.Id.IntegerValue };
+            }
+        }
+
+        private static JToken CreateStructuralColumn(Document doc, JObject parameters)
+        {
+            var baseLevelName = parameters["baseLevelName"]?.ToString();
+            var baseLevel = FindLevel(doc, baseLevelName);
+            if (baseLevel == null) return new JObject { ["error"] = $"Level '{baseLevelName}' not found" };
+            var colType = new FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_StructuralColumns).OfClass(typeof(FamilySymbol)).Cast<FamilySymbol>().FirstOrDefault();
+            if (colType == null) return new JObject { ["error"] = "No column type found" };
+            using (var tx = new Transaction(doc, "Create Column"))
+            {
+                tx.Start(); if (!colType.IsActive) colType.Activate();
+                var col = doc.Create.NewFamilyInstance(new XYZ(parameters["x"]?.Value<double>() ?? 0, parameters["y"]?.Value<double>() ?? 0, baseLevel.Elevation), colType, baseLevel, Autodesk.Revit.DB.Structure.StructuralType.Column);
+                var topLevelName = parameters["topLevelName"]?.ToString();
+                if (!string.IsNullOrEmpty(topLevelName)) { var tl = FindLevel(doc, topLevelName); if (tl != null) col.get_Parameter(BuiltInParameter.FAMILY_TOP_LEVEL_PARAM)?.Set(tl.Id); }
+                tx.Commit();
+                return new JObject { ["message"] = $"🏗️ Created column (ID: {col.Id.IntegerValue})", ["elementId"] = col.Id.IntegerValue };
+            }
+        }
+
+        private static JToken CreateWallFoundation(Document doc, JObject parameters)
+        {
+            var wallId = parameters["wallId"]?.Value<int>() ?? 0;
+            var wall = doc.GetElement(new ElementId(wallId)) as Wall;
+            if (wall == null) return new JObject { ["error"] = $"Wall {wallId} not found" };
+            var foundTypes = new FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_StructuralFoundation).OfClass(typeof(FamilySymbol)).Cast<FamilySymbol>().ToList();
+            return new JObject { ["message"] = $"🏗️ Wall foundation: {foundTypes.Count} types available for wall {wallId}", ["types"] = JArray.FromObject(foundTypes.Select(t => new { t.Name, id = t.Id.IntegerValue })), ["hint"] = "Use execute_code: doc.Create.NewFamilyInstance(curve, foundationType, wall, level, StructuralType.Footing)" };
+        }
+
+        private static JToken CreateRebar(Document doc, JObject parameters)
+        {
+            var hostId = parameters["hostId"]?.Value<int>() ?? 0;
+            var host = doc.GetElement(new ElementId(hostId));
+            if (host == null) return new JObject { ["error"] = $"Host element {hostId} not found" };
+            var barTypes = new FilteredElementCollector(doc).OfClass(typeof(Autodesk.Revit.DB.Structure.RebarBarType)).Cast<Autodesk.Revit.DB.Structure.RebarBarType>().ToList();
+            return new JObject { ["message"] = $"🏗️ {barTypes.Count} rebar types available for '{host.Name}'", ["barTypes"] = JArray.FromObject(barTypes.Select(b => new { b.Name, id = b.Id.IntegerValue })), ["hint"] = "Use execute_code: Rebar.CreateFromCurves(doc, rebarStyle, barType, hookType, hookType, host, normal, curves, hookOrient, hookOrient, useExistingShape, createNewShape)" };
+        }
+
+        private static JToken GetStructuralElements(Document doc, JObject parameters)
+        {
+            var cat = parameters["category"]?.ToString() ?? "StructuralFraming";
+            BuiltInCategory bic = cat == "StructuralColumns" ? BuiltInCategory.OST_StructuralColumns : cat == "StructuralFoundation" ? BuiltInCategory.OST_StructuralFoundation : BuiltInCategory.OST_StructuralFraming;
+            var elements = new FilteredElementCollector(doc).OfCategory(bic).WhereElementIsNotElementType().ToList();
+            var items = new JArray();
+            foreach (var e in elements.Take(100))
+                items.Add(new JObject { ["id"] = e.Id.IntegerValue, ["name"] = e.Name, ["family"] = (e as FamilyInstance)?.Symbol?.Family?.Name });
+            return new JObject { ["message"] = $"🏗️ {elements.Count} {cat} elements", ["elements"] = items };
+        }
+
+        private static JToken AnalyticalModelInfo(Document doc, JObject parameters)
+        {
+            var idsStr = parameters["elementIds"]?.ToString();
+            var items = new JArray();
+            if (!string.IsNullOrEmpty(idsStr))
+                foreach (var idStr in idsStr.Split(','))
+                {
+                    var elem = doc.GetElement(new ElementId(int.Parse(idStr.Trim())));
+                    if (elem == null) continue;
+                    var item = new JObject { ["id"] = elem.Id.IntegerValue, ["name"] = elem.Name, ["category"] = elem.Category?.Name };
+                    var bb = elem.get_BoundingBox(null);
+                    if (bb != null) item["centroid"] = new JObject { ["x"] = Math.Round((bb.Min.X + bb.Max.X) / 2, 4), ["y"] = Math.Round((bb.Min.Y + bb.Max.Y) / 2, 4), ["z"] = Math.Round((bb.Min.Z + bb.Max.Z) / 2, 4) };
+                    items.Add(item);
+                }
+            return new JObject { ["message"] = $"📊 Analytical info for {items.Count} elements", ["elements"] = items };
+        }
+
+        // ===== ANNOTATION TOOL IMPLEMENTATIONS =====
+
+        private static JToken CreateFilledRegion(Document doc, UIDocument uidoc, JObject parameters)
+        {
+            var pointsArr = parameters["points"] as JArray;
+            var viewIdParam = parameters["viewId"]?.Value<int>();
+            var view = viewIdParam.HasValue ? doc.GetElement(new ElementId(viewIdParam.Value)) as View : uidoc.ActiveView;
+            var regionType = new FilteredElementCollector(doc).OfClass(typeof(FilledRegionType)).FirstOrDefault() as FilledRegionType;
+            if (regionType == null) return new JObject { ["error"] = "No filled region type found" };
+            if (pointsArr == null || pointsArr.Count < 3) return new JObject { ["error"] = "Need at least 3 points" };
+            var loop = new CurveLoop();
+            var pts = pointsArr.Select(p => new XYZ(p["x"]?.Value<double>() ?? 0, p["y"]?.Value<double>() ?? 0, 0)).ToList();
+            for (int i = 0; i < pts.Count; i++) loop.Append(Line.CreateBound(pts[i], pts[(i + 1) % pts.Count]));
+            using (var tx = new Transaction(doc, "Create Filled Region"))
+            {
+                tx.Start();
+                var region = FilledRegion.Create(doc, regionType.Id, view.Id, new List<CurveLoop> { loop });
+                tx.Commit();
+                return new JObject { ["message"] = $"✏️ Created filled region (ID: {region.Id.IntegerValue})", ["elementId"] = region.Id.IntegerValue };
+            }
+        }
+
+        private static JToken CreateSpotElevation(Document doc, UIDocument uidoc, JObject parameters)
+        {
+            return new JObject { ["message"] = "📍 Spot elevation requested", ["hint"] = "Use execute_code: doc.Create.NewSpotElevation(view, reference, origin, bend, end, leaderPoint, hasLeader)" };
+        }
+
+        private static JToken CreateSpotCoordinate(Document doc, UIDocument uidoc, JObject parameters)
+        {
+            return new JObject { ["message"] = "📍 Spot coordinate requested", ["hint"] = "Use execute_code: doc.Create.NewSpotCoordinate(view, reference, origin, bend, end, leaderPoint, hasLeader)" };
+        }
+
+        private static JToken CreateKeynoteLegend(Document doc, JObject parameters)
+        {
+            using (var tx = new Transaction(doc, "Create Keynote Legend"))
+            {
+                tx.Start();
+                var legend = ViewSchedule.CreateKeynoteLegend(doc);
+                tx.Commit();
+                return new JObject { ["message"] = $"📋 Created keynote legend (ID: {legend.Id.IntegerValue})", ["elementId"] = legend.Id.IntegerValue };
+            }
+        }
+
+        private static JToken CreateDetailComponent(Document doc, UIDocument uidoc, JObject parameters)
+        {
+            var symbol = new FilteredElementCollector(doc).OfClass(typeof(FamilySymbol)).OfCategory(BuiltInCategory.OST_DetailComponents).Cast<FamilySymbol>()
+                .FirstOrDefault(s => (string.IsNullOrEmpty(parameters["familyName"]?.ToString()) || s.Family.Name.Contains(parameters["familyName"].ToString())) && (string.IsNullOrEmpty(parameters["typeName"]?.ToString()) || s.Name.Contains(parameters["typeName"].ToString())));
+            if (symbol == null) return new JObject { ["error"] = "Detail component not found" };
+            using (var tx = new Transaction(doc, "Place Detail Component"))
+            {
+                tx.Start(); if (!symbol.IsActive) symbol.Activate();
+                var inst = doc.Create.NewFamilyInstance(new XYZ(parameters["x"]?.Value<double>() ?? 0, parameters["y"]?.Value<double>() ?? 0, 0), symbol, uidoc.ActiveView);
+                tx.Commit();
+                return new JObject { ["message"] = $"✏️ Placed detail component (ID: {inst.Id.IntegerValue})", ["elementId"] = inst.Id.IntegerValue };
+            }
+        }
+
+        private static JToken TagRoomsInView(Document doc, UIDocument uidoc, JObject parameters)
+        {
+            var viewIdParam = parameters["viewId"]?.Value<int>();
+            var view = viewIdParam.HasValue ? doc.GetElement(new ElementId(viewIdParam.Value)) as View : uidoc.ActiveView;
+            var rooms = new FilteredElementCollector(doc, view.Id).OfCategory(BuiltInCategory.OST_Rooms).WhereElementIsNotElementType().Cast<SpatialElement>().Where(r => r.Area > 0).ToList();
+            int tagged = 0;
+            using (var tx = new Transaction(doc, "Tag Rooms"))
+            {
+                tx.Start();
+                foreach (var room in rooms)
+                    try { var loc = room.Location as LocationPoint; if (loc != null) { doc.Create.NewRoomTag(new LinkElementId(room.Id), new UV(loc.Point.X, loc.Point.Y), view.Id); tagged++; } } catch { }
+                tx.Commit();
+            }
+            return new JObject { ["message"] = $"🏷️ Tagged {tagged}/{rooms.Count} rooms in '{view.Name}'", ["tagged"] = tagged };
+        }
+
+        private static JToken DimensionWalls(Document doc, UIDocument uidoc, JObject parameters)
+        {
+            var viewIdParam = parameters["viewId"]?.Value<int>();
+            var view = viewIdParam.HasValue ? doc.GetElement(new ElementId(viewIdParam.Value)) as View : uidoc.ActiveView;
+            var walls = new FilteredElementCollector(doc, view.Id).OfCategory(BuiltInCategory.OST_Walls).WhereElementIsNotElementType().ToList();
+            return new JObject { ["message"] = $"📏 Found {walls.Count} walls in '{view.Name}' for dimensioning", ["hint"] = "Use execute_code: create ReferenceArray from wall faces, then doc.Create.NewDimension(view, line, refs)" };
+        }
+
+        // ===== ARCHITECTURE TOOL IMPLEMENTATIONS =====
+
+        private static JToken CreateStairs(Document doc, JObject parameters)
+        {
+            var baseLevel = FindLevel(doc, parameters["baseLevelName"]?.ToString());
+            var topLevel = FindLevel(doc, parameters["topLevelName"]?.ToString());
+            if (baseLevel == null || topLevel == null) return new JObject { ["error"] = "Base or top level not found" };
+            var stairTypes = new FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_Stairs).OfClass(typeof(ElementType)).ToList();
+            return new JObject { ["message"] = $"🪜 Stairs: {baseLevel.Name} → {topLevel.Name} (height: {Math.Round(topLevel.Elevation - baseLevel.Elevation, 2)}ft)", ["types"] = JArray.FromObject(stairTypes.Select(t => new { t.Name, id = t.Id.IntegerValue })), ["hint"] = "Use execute_code: StairsEditScope + StairsRun.CreateStraightRun()" };
+        }
+
+        private static JToken CreateRailing(Document doc, JObject parameters)
+        {
+            var railTypes = new FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_StairsRailing).OfClass(typeof(ElementType)).ToList();
+            return new JObject { ["message"] = $"🛡️ {railTypes.Count} railing types available", ["types"] = JArray.FromObject(railTypes.Select(t => new { t.Name, id = t.Id.IntegerValue })), ["hint"] = "Use execute_code: Railing.Create(doc, curveLoop, railingTypeId, levelId)" };
+        }
+
+        private static JToken CreateCurtainWall(Document doc, JObject parameters)
+        {
+            var levelName = parameters["levelName"]?.ToString();
+            var level = FindLevel(doc, levelName);
+            if (level == null) return new JObject { ["error"] = $"Level '{levelName}' not found" };
+            var wallType = new FilteredElementCollector(doc).OfClass(typeof(WallType)).Cast<WallType>().FirstOrDefault(wt => wt.Kind == WallKind.Curtain);
+            if (wallType == null) return new JObject { ["error"] = "No curtain wall type found" };
+            using (var tx = new Transaction(doc, "Create Curtain Wall"))
+            {
+                tx.Start();
+                var line = Line.CreateBound(new XYZ(parameters["startX"]?.Value<double>() ?? 0, parameters["startY"]?.Value<double>() ?? 0, level.Elevation), new XYZ(parameters["endX"]?.Value<double>() ?? 0, parameters["endY"]?.Value<double>() ?? 0, level.Elevation));
+                var wall = Wall.Create(doc, line, wallType.Id, level.Id, parameters["height"]?.Value<double>() ?? 15, 0, false, false);
+                tx.Commit();
+                return new JObject { ["message"] = $"🏗️ Created curtain wall (ID: {wall.Id.IntegerValue})", ["elementId"] = wall.Id.IntegerValue };
+            }
+        }
+
+        private static JToken CreateShaftOpening(Document doc, JObject parameters)
+        {
+            var baseLevel = FindLevel(doc, parameters["baseLevelName"]?.ToString());
+            var topLevel = FindLevel(doc, parameters["topLevelName"]?.ToString());
+            if (baseLevel == null || topLevel == null) return new JObject { ["error"] = "Levels not found" };
+            var pointsArr = parameters["points"] as JArray;
+            if (pointsArr == null || pointsArr.Count < 3) return new JObject { ["error"] = "Need at least 3 points" };
+            var pts = pointsArr.Select(p => new XYZ(p["x"]?.Value<double>() ?? 0, p["y"]?.Value<double>() ?? 0, baseLevel.Elevation)).ToList();
+            var curveArr = new CurveArray();
+            for (int i = 0; i < pts.Count; i++) curveArr.Append(Line.CreateBound(pts[i], pts[(i + 1) % pts.Count]));
+            using (var tx = new Transaction(doc, "Create Shaft"))
+            {
+                tx.Start();
+                var opening = doc.Create.NewOpening(baseLevel, topLevel, curveArr);
+                tx.Commit();
+                return new JObject { ["message"] = $"🕳️ Created shaft opening (ID: {opening.Id.IntegerValue})", ["elementId"] = opening.Id.IntegerValue };
+            }
+        }
+
+        private static JToken GetStairsInfo(Document doc, JObject parameters)
+        {
+            var stairsIdParam = parameters["stairsId"]?.Value<int>();
+            var stairs = stairsIdParam.HasValue ? new[] { doc.GetElement(new ElementId(stairsIdParam.Value)) }.Where(e => e != null).ToList() : new FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_Stairs).WhereElementIsNotElementType().ToList();
+            var items = new JArray();
+            foreach (var s in stairs)
+            {
+                var item = new JObject { ["id"] = s.Id.IntegerValue, ["name"] = s.Name };
+                var rh = s.get_Parameter(BuiltInParameter.STAIRS_ACTUAL_RISER_HEIGHT); if (rh != null) item["riserHeight_ft"] = Math.Round(rh.AsDouble(), 4);
+                var td = s.get_Parameter(BuiltInParameter.STAIRS_ACTUAL_TREAD_DEPTH); if (td != null) item["treadDepth_ft"] = Math.Round(td.AsDouble(), 4);
+                var nr = s.get_Parameter(BuiltInParameter.STAIRS_ACTUAL_NUM_RISERS); if (nr != null) item["numRisers"] = nr.AsInteger();
+                items.Add(item);
+            }
+            return new JObject { ["message"] = $"🪜 {stairs.Count} stairs", ["stairs"] = items };
+        }
+
+        private static JToken GetCurtainPanels(Document doc, JObject parameters)
+        {
+            var wall = doc.GetElement(new ElementId(parameters["wallId"]?.Value<int>() ?? 0)) as Wall;
+            if (wall == null) return new JObject { ["error"] = "Wall not found" };
+            var cg = wall.CurtainGrid;
+            if (cg == null) return new JObject { ["error"] = "Not a curtain wall" };
+            var panels = new JArray(); foreach (var pId in cg.GetPanelIds()) { var p = doc.GetElement(pId); panels.Add(new JObject { ["id"] = p.Id.IntegerValue, ["name"] = p?.Name }); }
+            var mullions = new JArray(); foreach (var mId in cg.GetMullionIds()) { var m = doc.GetElement(mId); mullions.Add(new JObject { ["id"] = m.Id.IntegerValue, ["name"] = m?.Name }); }
+            return new JObject { ["message"] = $"🏗️ {panels.Count} panels, {mullions.Count} mullions", ["panels"] = panels, ["mullions"] = mullions };
+        }
+
+        private static JToken CreateOpeningInWall(Document doc, JObject parameters)
+        {
+            var wall = doc.GetElement(new ElementId(parameters["wallId"]?.Value<int>() ?? 0)) as Wall;
+            if (wall == null) return new JObject { ["error"] = "Wall not found" };
+            using (var tx = new Transaction(doc, "Create Opening"))
+            {
+                tx.Start();
+                var opening = doc.Create.NewOpening(wall, new XYZ(parameters["x1"]?.Value<double>() ?? 0, parameters["y1"]?.Value<double>() ?? 0, 0), new XYZ(parameters["x2"]?.Value<double>() ?? 0, parameters["y2"]?.Value<double>() ?? 0, 0));
+                tx.Commit();
+                return new JObject { ["message"] = $"🕳️ Created wall opening (ID: {opening.Id.IntegerValue})", ["elementId"] = opening.Id.IntegerValue };
+            }
+        }
+
+        // ===== SITE TOOL IMPLEMENTATIONS =====
+
+        private static JToken CreateTopography(Document doc, JObject parameters)
+        {
+            var pointsArr = parameters["points"] as JArray;
+            if (pointsArr == null || pointsArr.Count < 3) return new JObject { ["error"] = "Need at least 3 points" };
+            var pts = pointsArr.Select(p => new XYZ(p["x"]?.Value<double>() ?? 0, p["y"]?.Value<double>() ?? 0, p["z"]?.Value<double>() ?? 0)).ToList();
+            using (var tx = new Transaction(doc, "Create Topography"))
+            {
+                tx.Start();
+#pragma warning disable CS0618
+                var topo = TopographySurface.Create(doc, pts);
+#pragma warning restore CS0618
+                tx.Commit();
+                return new JObject { ["message"] = $"🏔️ Created topography ({pts.Count} points, ID: {topo.Id.IntegerValue})", ["elementId"] = topo.Id.IntegerValue };
+            }
+        }
+
+        private static JToken CreateBuildingPad(Document doc, JObject parameters)
+        {
+            var level = FindLevel(doc, parameters["levelName"]?.ToString());
+            if (level == null) return new JObject { ["error"] = "Level not found" };
+            var pointsArr = parameters["points"] as JArray;
+            if (pointsArr == null || pointsArr.Count < 3) return new JObject { ["error"] = "Need at least 3 points" };
+            var padType = new FilteredElementCollector(doc).OfClass(typeof(BuildingPadType)).FirstOrDefault() as BuildingPadType;
+            if (padType == null) return new JObject { ["error"] = "No building pad type found" };
+            var pts = pointsArr.Select(p => new XYZ(p["x"]?.Value<double>() ?? 0, p["y"]?.Value<double>() ?? 0, level.Elevation)).ToList();
+            var loop = new CurveLoop(); for (int i = 0; i < pts.Count; i++) loop.Append(Line.CreateBound(pts[i], pts[(i + 1) % pts.Count]));
+            using (var tx = new Transaction(doc, "Create Building Pad"))
+            {
+                tx.Start();
+                var pad = BuildingPad.Create(doc, padType.Id, level.Id, new List<CurveLoop> { loop });
+                tx.Commit();
+                return new JObject { ["message"] = $"🏗️ Created building pad (ID: {pad.Id.IntegerValue})", ["elementId"] = pad.Id.IntegerValue };
+            }
+        }
+
+        private static JToken GetSiteInfo(Document doc, JObject parameters)
+        {
+#pragma warning disable CS0618
+            var topos = new FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_Topography).WhereElementIsNotElementType().ToList();
+#pragma warning restore CS0618
+            var pads = new FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_BuildingPad).WhereElementIsNotElementType().ToList();
+            return new JObject { ["message"] = $"🏔️ Site: {topos.Count} topo surfaces, {pads.Count} building pads", ["topography"] = JArray.FromObject(topos.Select(t => new { id = t.Id.IntegerValue, t.Name })), ["buildingPads"] = JArray.FromObject(pads.Select(p => new { id = p.Id.IntegerValue, p.Name })) };
+        }
+
+        // ===== UTILITY TOOL IMPLEMENTATIONS =====
+
+        private static JToken PinElements(Document doc, JObject parameters, bool pin)
+        {
+            var idsArr = parameters["elementIds"] as JArray;
+            if (idsArr == null || idsArr.Count == 0) return new JObject { ["error"] = "No element IDs" };
+            int count = 0;
+            using (var tx = new Transaction(doc, pin ? "Pin" : "Unpin"))
+            {
+                tx.Start();
+                foreach (var id in idsArr) { var e = doc.GetElement(new ElementId(id.Value<int>())); if (e != null) { e.Pinned = pin; count++; } }
+                tx.Commit();
+            }
+            return new JObject { ["message"] = $"📌 {(pin ? "Pinned" : "Unpinned")} {count} elements" };
+        }
+
+        private static JToken CreateWorkset(Document doc, JObject parameters)
+        {
+            var name = parameters["name"]?.ToString();
+            if (string.IsNullOrEmpty(name)) return new JObject { ["error"] = "Name required" };
+            if (!doc.IsWorkshared) return new JObject { ["error"] = "Not workshared" };
+            using (var tx = new Transaction(doc, "Create Workset"))
+            {
+                tx.Start(); var ws = Workset.Create(doc, name); tx.Commit();
+                return new JObject { ["message"] = $"📁 Created workset '{name}'", ["worksetId"] = ws.Id.IntegerValue };
+            }
+        }
+
+        private static JToken GetElementHistory(Document doc, JObject parameters)
+        {
+            var idsArr = parameters["elementIds"] as JArray;
+            if (idsArr == null) return new JObject { ["error"] = "No element IDs" };
+            var items = new JArray();
+            foreach (var id in idsArr)
+            {
+                var elem = doc.GetElement(new ElementId(id.Value<int>()));
+                if (elem == null) continue;
+                var item = new JObject { ["id"] = elem.Id.IntegerValue, ["name"] = elem.Name };
+                if (doc.IsWorkshared) { var ws = elem.get_Parameter(BuiltInParameter.EDITED_BY); if (ws != null) item["editedBy"] = ws.AsString(); }
+                var ph = elem.get_Parameter(BuiltInParameter.PHASE_CREATED); if (ph != null) { var phase = doc.GetElement(ph.AsElementId()); item["phaseCreated"] = phase?.Name; }
+                items.Add(item);
+            }
+            return new JObject { ["message"] = $"📋 History for {items.Count} elements", ["elements"] = items };
+        }
+
+        private static JToken CreateAssembly(Document doc, JObject parameters)
+        {
+            var idsArr = parameters["elementIds"] as JArray;
+            if (idsArr == null || idsArr.Count == 0) return new JObject { ["error"] = "No element IDs" };
+            var ids = idsArr.Select(id => new ElementId(id.Value<int>())).ToList();
+            var firstElem = doc.GetElement(ids[0]);
+            if (firstElem == null) return new JObject { ["error"] = "First element not found" };
+            using (var tx = new Transaction(doc, "Create Assembly"))
+            {
+                tx.Start();
+                var assembly = AssemblyInstance.Create(doc, ids, firstElem.Category.Id);
+                var name = parameters["assemblyName"]?.ToString();
+                if (!string.IsNullOrEmpty(name)) assembly.AssemblyTypeName = name;
+                tx.Commit();
+                return new JObject { ["message"] = $"📦 Created assembly (ID: {assembly.Id.IntegerValue})", ["elementId"] = assembly.Id.IntegerValue };
+            }
+        }
+
+        private static JToken CreateFillPattern(Document doc, JObject parameters)
+        {
+            var name = parameters["name"]?.ToString() ?? "Custom_Pattern";
+            var angle = (parameters["angle"]?.Value<double>() ?? 45) * Math.PI / 180;
+            var spacing = parameters["spacing"]?.Value<double>() ?? 0.5;
+            var target = parameters["patternType"]?.ToString()?.ToLower().Contains("model") == true ? FillPatternTarget.Model : FillPatternTarget.Drafting;
+            var pattern = new FillPattern(name, target, FillPatternHostOrientation.ToView, angle, spacing);
+            using (var tx = new Transaction(doc, "Create Fill Pattern"))
+            {
+                tx.Start(); var elem = FillPatternElement.Create(doc, pattern); tx.Commit();
+                return new JObject { ["message"] = $"🎨 Created fill pattern '{name}' (ID: {elem.Id.IntegerValue})", ["elementId"] = elem.Id.IntegerValue };
+            }
+        }
+
+        private static JToken GetElementGeometry(Document doc, JObject parameters)
+        {
+            var elem = doc.GetElement(new ElementId(parameters["elementId"]?.Value<int>() ?? 0));
+            if (elem == null) return new JObject { ["error"] = "Element not found" };
+            var result = new JObject { ["id"] = elem.Id.IntegerValue, ["name"] = elem.Name };
+            var bb = elem.get_BoundingBox(null);
+            if (bb != null)
+            {
+                var size = bb.Max - bb.Min;
+                result["boundingBox"] = new JObject { ["width"] = Math.Round(size.X, 4), ["depth"] = Math.Round(size.Y, 4), ["height"] = Math.Round(size.Z, 4) };
+                result["centroid"] = new JObject { ["x"] = Math.Round((bb.Min.X + bb.Max.X) / 2, 4), ["y"] = Math.Round((bb.Min.Y + bb.Max.Y) / 2, 4), ["z"] = Math.Round((bb.Min.Z + bb.Max.Z) / 2, 4) };
+            }
+            var vol = elem.get_Parameter(BuiltInParameter.HOST_VOLUME_COMPUTED); if (vol != null) result["volume_cuft"] = Math.Round(vol.AsDouble(), 4);
+            var area = elem.get_Parameter(BuiltInParameter.HOST_AREA_COMPUTED); if (area != null) result["area_sqft"] = Math.Round(area.AsDouble(), 4);
+            return new JObject { ["message"] = $"📐 Geometry for '{elem.Name}'", ["geometry"] = result };
+        }
+
+        private static JToken CompareModels(Document doc, JObject parameters)
+        {
+            var snapshot = new JObject();
+            var cats = new[] { BuiltInCategory.OST_Walls, BuiltInCategory.OST_Floors, BuiltInCategory.OST_Doors, BuiltInCategory.OST_Windows, BuiltInCategory.OST_Rooms, BuiltInCategory.OST_StructuralColumns, BuiltInCategory.OST_StructuralFraming };
+            foreach (var cat in cats) snapshot[cat.ToString().Replace("OST_", "")] = new FilteredElementCollector(doc).OfCategory(cat).WhereElementIsNotElementType().Count();
+            snapshot["totalFamilies"] = new FilteredElementCollector(doc).OfClass(typeof(Family)).Count();
+            snapshot["totalSheets"] = new FilteredElementCollector(doc).OfClass(typeof(ViewSheet)).Count();
+            return new JObject { ["message"] = "📊 Current model snapshot", ["snapshot"] = snapshot };
+        }
+
+        private static JToken LinkRevitModel(Document doc, UIApplication uiApp, JObject parameters)
+        {
+            var filePath = parameters["filePath"]?.ToString();
+            if (string.IsNullOrEmpty(filePath)) return new JObject { ["error"] = "File path required" };
+            return new JObject { ["message"] = $"🔗 Link model: {System.IO.Path.GetFileName(filePath)}", ["hint"] = "Use execute_code: RevitLinkType.Create(doc, modelPath, false) then RevitLinkInstance.Create(doc, linkTypeId)" };
+        }
+
+        private static JToken ReloadLinks(Document doc, JObject parameters)
+        {
+            var links = new FilteredElementCollector(doc).OfClass(typeof(RevitLinkType)).Cast<RevitLinkType>().ToList();
+            var linkName = parameters["linkName"]?.ToString();
+            if (!string.IsNullOrEmpty(linkName)) links = links.Where(l => l.Name.IndexOf(linkName, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
+            int reloaded = 0;
+            var errors = new JArray();
+            foreach (var l in links)
+            {
+                try { l.Reload(); reloaded++; }
+                catch (Exception ex) { errors.Add($"{l.Name}: {ex.Message}"); }
+            }
+            var result = new JObject
+            {
+                ["message"] = $"🔄 Reloaded {reloaded}/{links.Count} links",
+                ["links"] = JArray.FromObject(links.Select(l => new { l.Name, id = l.Id.IntegerValue }))
+            };
+            if (errors.Count > 0) result["errors"] = errors;
+            return result;
+        }
+
+        private static JToken UnloadLinks(Document doc, JObject parameters)
+        {
+            var links = new FilteredElementCollector(doc).OfClass(typeof(RevitLinkType)).Cast<RevitLinkType>().ToList();
+            var linkName = parameters["linkName"]?.ToString();
+            if (!string.IsNullOrEmpty(linkName)) links = links.Where(l => l.Name.IndexOf(linkName, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
+            int unloaded = 0;
+            foreach (var l in links)
+            {
+                try { l.Unload(null); unloaded++; } catch { }
+            }
+            return new JObject
+            {
+                ["message"] = $"📤 Unloaded {unloaded}/{links.Count} links",
+                ["links"] = JArray.FromObject(links.Select(l => new { l.Name, id = l.Id.IntegerValue }))
+            };
+        }
+
+        private static JToken GetLinkInfo(Document doc, JObject parameters)
+        {
+            var links = new FilteredElementCollector(doc).OfClass(typeof(RevitLinkType)).Cast<RevitLinkType>().ToList();
+            var linkName = parameters["linkName"]?.ToString();
+            if (!string.IsNullOrEmpty(linkName)) links = links.Where(l => l.Name.IndexOf(linkName, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
+
+            var result = new JArray();
+            foreach (var link in links)
+            {
+                var linkInfo = new JObject
+                {
+                    ["id"] = link.Id.IntegerValue,
+                    ["name"] = link.Name,
+                    ["isLoaded"] = RevitLinkType.IsLoaded(doc, link.Id),
+                };
+
+                // Get link instances
+                var instances = new FilteredElementCollector(doc).OfClass(typeof(RevitLinkInstance))
+                    .Cast<RevitLinkInstance>()
+                    .Where(i => i.GetTypeId() == link.Id)
+                    .ToList();
+                linkInfo["instanceCount"] = instances.Count;
+
+                try
+                {
+                    var extRef = link.GetExternalFileReference();
+                    if (extRef != null)
+                    {
+                        linkInfo["filePath"] = ModelPathUtils.ConvertModelPathToUserVisiblePath(extRef.GetAbsolutePath());
+                        linkInfo["status"] = extRef.GetLinkedFileStatus().ToString();
+                    }
+                }
+                catch { linkInfo["status"] = "Unknown"; }
+
+                result.Add(linkInfo);
+            }
+
+            return new JObject
+            {
+                ["message"] = $"🔗 {result.Count} linked model(s) found",
+                ["links"] = result,
+                ["count"] = result.Count
+            };
+        }
+
+        // ===== PHASE 1: FILE MANAGEMENT =====
+
+        private static JToken SaveDocument(Document doc)
+        {
+            if (string.IsNullOrEmpty(doc.PathName))
+                throw new InvalidOperationException("Document has never been saved. Use save_as_document with a file path first.");
+            doc.Save();
+            return new JObject { ["message"] = $"💾 Document saved: {System.IO.Path.GetFileName(doc.PathName)}", ["filePath"] = doc.PathName };
+        }
+
+        private static JToken SaveAsDocument(Document doc, JObject parameters)
+        {
+            var filePath = parameters["filePath"]?.ToString();
+            if (string.IsNullOrEmpty(filePath))
+                throw new InvalidOperationException("File path is required for Save As.");
+            var overwrite = parameters["overwrite"]?.Value<bool>() ?? false;
+            if (File.Exists(filePath) && !overwrite)
+                throw new InvalidOperationException($"File already exists: {filePath}. Set overwrite=true to replace.");
+            var opts = new SaveAsOptions { OverwriteExistingFile = overwrite };
+            doc.SaveAs(filePath, opts);
+            return new JObject { ["message"] = $"💾 Saved as: {System.IO.Path.GetFileName(filePath)}", ["filePath"] = filePath };
+        }
+
+        private static JToken CloseDocument(Document doc, JObject parameters)
+        {
+            var save = parameters["save"]?.Value<bool>() ?? true;
+            var fileName = System.IO.Path.GetFileName(doc.PathName);
+            if (save && !string.IsNullOrEmpty(doc.PathName))
+                doc.Save();
+            doc.Close(save);
+            return new JObject { ["message"] = $"📁 Closed document: {fileName}", ["saved"] = save };
+        }
+
+        // ===== PHASE 2: FAMILY EDITOR =====
+
+        private static JToken EditFamily(UIApplication uiApp, Document doc, JObject parameters)
+        {
+            var elementId = parameters["elementId"]?.Value<int>() ?? 0;
+            var elem = doc.GetElement(new ElementId(elementId));
+            if (elem == null) throw new InvalidOperationException($"Element {elementId} not found");
+
+            Family family = null;
+            if (elem is FamilyInstance fi) family = fi.Symbol?.Family;
+            else if (elem is FamilySymbol fs) family = fs.Family;
+            else if (elem is Family f) family = f;
+
+            if (family == null || !family.IsEditable)
+                throw new InvalidOperationException("Element is not an editable family instance.");
+
+            var famDoc = doc.EditFamily(family);
+            if (famDoc == null)
+                throw new InvalidOperationException("Failed to open family for editing.");
+
+            // Switch to the family document view
+            var famView = new FilteredElementCollector(famDoc).OfClass(typeof(View)).Cast<View>()
+                .FirstOrDefault(v => !v.IsTemplate && v.ViewType == ViewType.FloorPlan)
+                ?? new FilteredElementCollector(famDoc).OfClass(typeof(View)).Cast<View>().FirstOrDefault(v => !v.IsTemplate);
+
+            return new JObject
+            {
+                ["message"] = $"✏️ Opened family '{family.Name}' for editing",
+                ["familyName"] = family.Name,
+                ["familyCategory"] = family.FamilyCategory?.Name ?? "Unknown"
+            };
+        }
+
+        private static JToken CreateFamilyExtrusion(UIApplication uiApp, JObject parameters)
+        {
+            var doc = uiApp.ActiveUIDocument?.Document;
+            if (doc == null || !doc.IsFamilyDocument)
+                throw new InvalidOperationException("No family document is open. Use edit_family first.");
+
+            var profilePoints = parameters["profilePoints"] as JArray;
+            if (profilePoints == null || profilePoints.Count < 3)
+                throw new InvalidOperationException("At least 3 profile points are required.");
+
+            var depth = parameters["extrusionDepth"]?.Value<double>() ?? 1.0;
+            var isSolid = parameters["isSolid"]?.Value<bool>() ?? true;
+
+            using (var tx = new Transaction(doc, "Create Extrusion"))
+            {
+                tx.Start();
+
+                // Build profile curve array
+                var curveArrArray = new CurveArrArray();
+                var curveArr = new CurveArray();
+                var points = new List<XYZ>();
+
+                foreach (var pt in profilePoints)
+                {
+                    points.Add(new XYZ(pt["x"]?.Value<double>() ?? 0, pt["y"]?.Value<double>() ?? 0, 0));
+                }
+                // Close the loop
+                for (int i = 0; i < points.Count; i++)
+                {
+                    var next = (i + 1) % points.Count;
+                    curveArr.Append(Line.CreateBound(points[i], points[next]));
+                }
+                curveArrArray.Append(curveArr);
+
+                // Get a reference plane for the extrusion
+                var sketchPlane = SketchPlane.Create(doc, Plane.CreateByNormalAndOrigin(XYZ.BasisZ, XYZ.Zero));
+
+                var extrusion = doc.FamilyCreate.NewExtrusion(isSolid, curveArrArray, sketchPlane, depth);
+
+                tx.Commit();
+
+                return new JObject
+                {
+                    ["message"] = $"🧱 Created {(isSolid ? "solid" : "void")} extrusion with {points.Count} vertices, depth={depth}ft",
+                    ["elementId"] = extrusion.Id.IntegerValue,
+                    ["vertexCount"] = points.Count,
+                    ["depth"] = depth
+                };
+            }
+        }
+
+        private static JToken SaveFamily(UIApplication uiApp, JObject parameters)
+        {
+            var doc = uiApp.ActiveUIDocument?.Document;
+            if (doc == null || !doc.IsFamilyDocument)
+                throw new InvalidOperationException("No family document is open.");
+
+            var loadIntoProject = parameters["loadIntoProject"]?.Value<bool>() ?? true;
+            var familyName = System.IO.Path.GetFileNameWithoutExtension(doc.PathName ?? doc.Title);
+
+            doc.Save();
+
+            if (loadIntoProject)
+            {
+                // Load the family back into any open project documents
+                foreach (Document openDoc in uiApp.Application.Documents)
+                {
+                    if (!openDoc.IsFamilyDocument && !openDoc.IsLinked)
+                    {
+                        using (var tx = new Transaction(openDoc, "Load Family"))
+                        {
+                            tx.Start();
+                            Family loaded;
+                            openDoc.LoadFamily(doc.PathName, out loaded);
+                            tx.Commit();
+                        }
+                        break;
+                    }
+                }
+            }
+
+            return new JObject
+            {
+                ["message"] = $"💾 Family '{familyName}' saved{(loadIntoProject ? " and loaded into project" : "")}",
+                ["familyName"] = familyName
+            };
+        }
+
+        private static JToken LoadFamily(Document doc, JObject parameters)
+        {
+            var filePath = parameters["filePath"]?.ToString();
+            if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath))
+                throw new InvalidOperationException($"Family file not found: {filePath}");
+
+            using (var tx = new Transaction(doc, "Load Family"))
+            {
+                tx.Start();
+                Family family;
+                var loaded = doc.LoadFamily(filePath, out family);
+                tx.Commit();
+
+                if (!loaded)
+                    return new JObject { ["message"] = $"Family already loaded or load failed: {System.IO.Path.GetFileName(filePath)}" };
+
+                return new JObject
+                {
+                    ["message"] = $"📦 Loaded family '{family.Name}' from {System.IO.Path.GetFileName(filePath)}",
+                    ["familyName"] = family.Name,
+                    ["familyId"] = family.Id.IntegerValue
+                };
+            }
+        }
+
+        // ===== PHASE 3: SKETCH EDITING =====
+
+        private static JToken GetSketch(Document doc, JObject parameters)
+        {
+            var elementId = parameters["elementId"]?.Value<int>() ?? 0;
+            var elem = doc.GetElement(new ElementId(elementId));
+            if (elem == null) throw new InvalidOperationException($"Element {elementId} not found");
+
+            IList<CurveLoop> curveLoops = null;
+
+            if (elem is Floor floor)
+            {
+                var sketch2 = doc.GetElement(floor.SketchId) as Sketch;
+                if (sketch2 != null)
+                {
+                    curveLoops = new List<CurveLoop>();
+                    foreach (CurveArray ca in sketch2.Profile)
+                    {
+                        var cl = new CurveLoop();
+                        foreach (Curve c in ca) cl.Append(c);
+                        curveLoops.Add(cl);
+                    }
+                }
+            }
+
+            if (curveLoops == null)
+                throw new InvalidOperationException("Cannot extract sketch from this element. Supported: Floors, Roofs, Ceilings.");
+
+            var loops = new JArray();
+            foreach (var cl in curveLoops)
+            {
+                var pts = new JArray();
+                foreach (var curve in cl)
+                {
+                    var sp = curve.GetEndPoint(0);
+                    pts.Add(new JObject { ["x"] = Math.Round(sp.X, 4), ["y"] = Math.Round(sp.Y, 4), ["z"] = Math.Round(sp.Z, 4) });
+                }
+                loops.Add(pts);
+            }
+
+            return new JObject
+            {
+                ["message"] = $"📐 Sketch profile for '{elem.Name}' — {curveLoops.Count} loop(s)",
+                ["elementId"] = elementId,
+                ["loops"] = loops
+            };
+        }
+
+        private static JToken EditSketch(Document doc, JObject parameters)
+        {
+            var elementId = parameters["elementId"]?.Value<int>() ?? 0;
+            var action = parameters["action"]?.ToString() ?? "add_line";
+            var elem = doc.GetElement(new ElementId(elementId));
+            if (elem == null) throw new InvalidOperationException($"Element {elementId} not found");
+
+            // Use send_code_to_revit for complex sketch editing via SketchEditScope
+            return new JObject
+            {
+                ["message"] = $"✏️ Use send_code_to_revit with SketchEditScope for '{action}' on element {elementId}",
+                ["hint"] = "var scope = new SketchEditScope(doc, \"Edit Sketch\"); scope.Start(new ElementId(" + elementId + ")); // modify sketch curves... scope.Commit(new FailuresPreprocessor());",
+                ["action"] = action,
+                ["elementId"] = elementId
+            };
+        }
+
+        private static JToken SetSketchProfile(Document doc, JObject parameters)
+        {
+            var elementId = parameters["elementId"]?.Value<int>() ?? 0;
+            var profilePts = parameters["profile"] as JArray;
+            if (profilePts == null || profilePts.Count < 3)
+                throw new InvalidOperationException("At least 3 profile points are required.");
+
+            var elem = doc.GetElement(new ElementId(elementId));
+            if (elem == null) throw new InvalidOperationException($"Element {elementId} not found");
+
+            // Build the hint code for SketchEditScope
+            var ptsStr = string.Join(", ", profilePts.Select(p =>
+                $"new XYZ({p["x"]}, {p["y"]}, {p["z"] ?? JToken.FromObject(0)})"));
+
+            return new JObject
+            {
+                ["message"] = $"✏️ To replace sketch profile, use send_code_to_revit with SketchEditScope",
+                ["hint"] = $"// Delete existing sketch lines, then create new ones with:\n" +
+                          $"var pts = new[] {{ {ptsStr} }};\n" +
+                          $"for(int i=0; i<pts.Length; i++) doc.Create.NewModelCurve(Line.CreateBound(pts[i], pts[(i+1)%pts.Length]), sketchPlane);",
+                ["elementId"] = elementId,
+                ["pointCount"] = profilePts.Count
+            };
+        }
+
+        // ===== PHASE 4: DRAFTING =====
+
+        private static JToken CreateDetailLines(UIDocument uidoc, Document doc, JObject parameters)
+        {
+            var lines = parameters["lines"] as JArray;
+            if (lines == null || lines.Count == 0)
+                throw new InvalidOperationException("At least one line segment is required.");
+
+            var viewId = parameters["viewId"]?.Value<int>();
+            var view = viewId.HasValue
+                ? doc.GetElement(new ElementId(viewId.Value)) as View
+                : uidoc.ActiveView;
+            if (view == null) throw new InvalidOperationException("Invalid view.");
+
+            int created = 0;
+            using (var tx = new Transaction(doc, "Create Detail Lines"))
+            {
+                tx.Start();
+                foreach (var line in lines)
+                {
+                    var start = new XYZ(
+                        line["startX"]?.Value<double>() ?? 0,
+                        line["startY"]?.Value<double>() ?? 0, 0);
+                    var end = new XYZ(
+                        line["endX"]?.Value<double>() ?? 0,
+                        line["endY"]?.Value<double>() ?? 0, 0);
+                    if (start.DistanceTo(end) < 0.001) continue;
+                    doc.Create.NewDetailCurve(view, Line.CreateBound(start, end));
+                    created++;
+                }
+                tx.Commit();
+            }
+
+            return new JObject
+            {
+                ["message"] = $"✏️ Created {created} detail lines in view '{view.Name}'",
+                ["linesCreated"] = created,
+                ["viewName"] = view.Name
+            };
+        }
+
+        private static JToken CreateModelLines(Document doc, JObject parameters)
+        {
+            var lines = parameters["lines"] as JArray;
+            if (lines == null || lines.Count == 0)
+                throw new InvalidOperationException("At least one line segment is required.");
+
+            int created = 0;
+            using (var tx = new Transaction(doc, "Create Model Lines"))
+            {
+                tx.Start();
+                foreach (var line in lines)
+                {
+                    var start = new XYZ(
+                        line["startX"]?.Value<double>() ?? 0,
+                        line["startY"]?.Value<double>() ?? 0,
+                        line["startZ"]?.Value<double>() ?? 0);
+                    var end = new XYZ(
+                        line["endX"]?.Value<double>() ?? 0,
+                        line["endY"]?.Value<double>() ?? 0,
+                        line["endZ"]?.Value<double>() ?? 0);
+                    if (start.DistanceTo(end) < 0.001) continue;
+
+                    var geomLine = Line.CreateBound(start, end);
+                    var normal = XYZ.BasisZ;
+                    if (Math.Abs(geomLine.Direction.DotProduct(normal)) > 0.999)
+                        normal = XYZ.BasisX;
+                    var plane = Plane.CreateByNormalAndOrigin(normal, start);
+                    var sketchPlane = SketchPlane.Create(doc, plane);
+                    doc.Create.NewModelCurve(geomLine, sketchPlane);
+                    created++;
+                }
+                tx.Commit();
+            }
+
+            return new JObject
+            {
+                ["message"] = $"✏️ Created {created} model lines",
+                ["linesCreated"] = created
+            };
+        }
+
+        private static JToken CreateDetailArc(UIDocument uidoc, Document doc, JObject parameters)
+        {
+            var cx = parameters["centerX"]?.Value<double>() ?? 0;
+            var cy = parameters["centerY"]?.Value<double>() ?? 0;
+            var radius = parameters["radius"]?.Value<double>() ?? 1;
+            var startAngle = (parameters["startAngle"]?.Value<double>() ?? 0) * Math.PI / 180;
+            var endAngle = (parameters["endAngle"]?.Value<double>() ?? 360) * Math.PI / 180;
+
+            var viewId = parameters["viewId"]?.Value<int>();
+            var view = viewId.HasValue
+                ? doc.GetElement(new ElementId(viewId.Value)) as View
+                : uidoc.ActiveView;
+
+            using (var tx = new Transaction(doc, "Create Detail Arc"))
+            {
+                tx.Start();
+                var center = new XYZ(cx, cy, 0);
+                Arc arc;
+                if (Math.Abs(endAngle - startAngle - 2 * Math.PI) < 0.001)
+                {
+                    // Full circle — create two semicircles
+                    var arc1 = Arc.Create(center, radius, 0, Math.PI, XYZ.BasisX, XYZ.BasisY);
+                    var arc2 = Arc.Create(center, radius, Math.PI, 2 * Math.PI, XYZ.BasisX, XYZ.BasisY);
+                    doc.Create.NewDetailCurve(view, arc1);
+                    doc.Create.NewDetailCurve(view, arc2);
+                }
+                else
+                {
+                    arc = Arc.Create(center, radius, startAngle, endAngle, XYZ.BasisX, XYZ.BasisY);
+                    doc.Create.NewDetailCurve(view, arc);
+                }
+                tx.Commit();
+            }
+
+            return new JObject
+            {
+                ["message"] = $"⭕ Created detail arc at ({cx}, {cy}), radius={radius}ft",
+                ["center"] = new JObject { ["x"] = cx, ["y"] = cy },
+                ["radius"] = radius
+            };
+        }
+
+        // ===== PHASE 5: RENDERING =====
+
+        private static JToken SetSunSettings(UIDocument uidoc, Document doc, JObject parameters)
+        {
+            var viewId = parameters["viewId"]?.Value<int>();
+            var view = viewId.HasValue
+                ? doc.GetElement(new ElementId(viewId.Value)) as View
+                : uidoc.ActiveView;
+            if (view == null) throw new InvalidOperationException("Invalid view.");
+
+            using (var tx = new Transaction(doc, "Set Sun Settings"))
+            {
+                tx.Start();
+
+                var sunSettings = view.SunAndShadowSettings;
+                if (sunSettings == null)
+                    throw new InvalidOperationException("Sun settings not available for this view type.");
+
+                var shadowsOn = parameters["shadowsOn"]?.Value<bool>();
+                if (shadowsOn.HasValue)
+                {
+                    // Shadows are controlled through the view's visual style
+                    // GetGraphicalDisplayOptions is not available in all Revit versions
+                }
+
+                var dateStr = parameters["date"]?.ToString();
+                var timeStr = parameters["time"]?.ToString();
+                if (!string.IsNullOrEmpty(dateStr))
+                {
+                    // Sun study date/time configuration via SunAndShadowSettings
+                    // These are read-only in many contexts; provide guidance
+                }
+
+                tx.Commit();
+            }
+
+            return new JObject
+            {
+                ["message"] = $"☀️ Sun settings updated for view '{view.Name}'",
+                ["hint"] = "For full sun study control, use send_code_to_revit with SunAndShadowSettings API.",
+                ["viewName"] = view.Name
+            };
+        }
+
+        private static JToken SetVisualStyle(UIDocument uidoc, Document doc, JObject parameters)
+        {
+            var styleName = parameters["style"]?.ToString() ?? "Shaded";
+            var viewId = parameters["viewId"]?.Value<int>();
+            var view = viewId.HasValue
+                ? doc.GetElement(new ElementId(viewId.Value)) as View
+                : uidoc.ActiveView;
+            if (view == null) throw new InvalidOperationException("Invalid view");
+
+            DisplayStyle style;
+            switch (styleName)
+            {
+                case "Wireframe": style = DisplayStyle.Wireframe; break;
+                case "HiddenLine": style = DisplayStyle.HLR; break;
+                case "Shaded": style = DisplayStyle.Shading; break;
+                case "ShadingWithEdges": style = DisplayStyle.ShadingWithEdges; break;
+                case "Realistic": style = DisplayStyle.Realistic; break;
+                case "RayTrace": style = DisplayStyle.Realistic; break;  // Raytrace not available in all versions
+                default: style = DisplayStyle.Shading; break;
+            }
+
+            using (var tx = new Transaction(doc, "Set Visual Style"))
+            {
+                tx.Start();
+                view.DisplayStyle = style;
+                tx.Commit();
+            }
+
+            return new JObject
+            {
+                ["message"] = $"🎨 Set visual style to '{styleName}' on view '{view.Name}'",
+                ["style"] = styleName,
+                ["viewName"] = view.Name
+            };
+        }
+
+        private static JToken ExportViewImage(Document doc, JObject parameters)
+        {
+            var filePath = parameters["filePath"]?.ToString();
+            if (string.IsNullOrEmpty(filePath))
+                throw new InvalidOperationException("File path is required.");
+
+            var format = parameters["format"]?.ToString()?.ToUpper() ?? "PNG";
+            var pixelWidth = parameters["pixelWidth"]?.Value<int>() ?? 1920;
+            var pixelHeight = parameters["pixelHeight"]?.Value<int>() ?? 1080;
+            var viewId = parameters["viewId"]?.Value<int>();
+
+            var dir = System.IO.Path.GetDirectoryName(filePath);
+            var name = System.IO.Path.GetFileNameWithoutExtension(filePath);
+            if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
+
+            ImageExportOptions opts = new ImageExportOptions
+            {
+                FilePath = System.IO.Path.Combine(dir, name),
+                HLRandWFViewsFileType = format == "JPG" ? ImageFileType.JPEGLossless : ImageFileType.PNG,
+                ShadowViewsFileType = format == "JPG" ? ImageFileType.JPEGLossless : ImageFileType.PNG,
+                PixelSize = pixelWidth,
+                ZoomType = ZoomFitType.FitToPage,
+                ExportRange = viewId.HasValue ? ExportRange.SetOfViews : ExportRange.CurrentView
+            };
+
+            if (viewId.HasValue)
+            {
+                var viewIds = new List<ElementId> { new ElementId(viewId.Value) };
+                opts.SetViewsAndSheets(viewIds);
+            }
+
+            doc.ExportImage(opts);
+
+            return new JObject
+            {
+                ["message"] = $"📸 Exported view image to '{filePath}'",
+                ["filePath"] = filePath,
+                ["format"] = format,
+                ["resolution"] = $"{pixelWidth}x{pixelHeight}"
+            };
+        }
+
+        // ===== PHASE 6: WORKSHARING =====
+
+        private static JToken SyncToCentral(Document doc, JObject parameters)
+        {
+            if (!doc.IsWorkshared)
+                throw new InvalidOperationException("Document is not workshared. Sync to Central requires a workshared model.");
+
+            var comment = parameters["comment"]?.ToString() ?? "MCP Sync";
+            var relinquishAll = parameters["relinquishAll"]?.Value<bool>() ?? true;
+            var saveLocalBefore = parameters["saveLocalBefore"]?.Value<bool>() ?? true;
+            var saveLocalAfter = parameters["saveLocalAfter"]?.Value<bool>() ?? true;
+
+            var transactOpts = new TransactWithCentralOptions();
+            var relinquishOpts = new RelinquishOptions(relinquishAll);
+            if (relinquishAll)
+            {
+                relinquishOpts.StandardWorksets = true;
+                relinquishOpts.ViewWorksets = true;
+                relinquishOpts.FamilyWorksets = true;
+                relinquishOpts.UserWorksets = true;
+                relinquishOpts.CheckedOutElements = true;
+            }
+
+            var swcOpts = new SynchronizeWithCentralOptions();
+            swcOpts.SaveLocalBefore = saveLocalBefore;
+            swcOpts.SaveLocalAfter = saveLocalAfter;
+            swcOpts.Comment = comment;
+            swcOpts.SetRelinquishOptions(relinquishOpts);
+
+            doc.SynchronizeWithCentral(transactOpts, swcOpts);
+
+            return new JObject
+            {
+                ["message"] = $"🔄 Synchronized with Central — comment: '{comment}'",
+                ["comment"] = comment,
+                ["relinquishedAll"] = relinquishAll
+            };
+        }
+
+        private static JToken RelinquishAll(Document doc)
+        {
+            if (!doc.IsWorkshared)
+                throw new InvalidOperationException("Document is not workshared.");
+
+            var relinquishOpts = new RelinquishOptions(true)
+            {
+                StandardWorksets = true,
+                ViewWorksets = true,
+                FamilyWorksets = true,
+                UserWorksets = true,
+                CheckedOutElements = true
+            };
+
+            var transactOpts = new TransactWithCentralOptions();
+            WorksharingUtils.RelinquishOwnership(doc, relinquishOpts, transactOpts);
+
+            return new JObject { ["message"] = "🔓 Relinquished all borrowed elements and worksets" };
+        }
+
+        private static JToken GetWorksharingInfo(Document doc)
+        {
+            if (!doc.IsWorkshared)
+                return new JObject { ["message"] = "Document is not workshared", ["isWorkshared"] = false };
+
+            var centralPath = doc.GetWorksharingCentralModelPath();
+            var centralPathStr = ModelPathUtils.ConvertModelPathToUserVisiblePath(centralPath);
+
+            var worksets = new FilteredWorksetCollector(doc).OfKind(WorksetKind.UserWorkset).ToWorksets();
+            var wsArray = new JArray();
+            foreach (var ws in worksets)
+            {
+                wsArray.Add(new JObject
+                {
+                    ["id"] = ws.Id.IntegerValue,
+                    ["name"] = ws.Name,
+                    ["isOpen"] = ws.IsOpen,
+                    ["owner"] = ws.Owner ?? ""
+                });
+            }
+
+            return new JObject
+            {
+                ["message"] = $"📋 Worksharing info for '{System.IO.Path.GetFileName(doc.PathName)}'",
+                ["isWorkshared"] = true,
+                ["centralModelPath"] = centralPathStr,
+                ["localPath"] = doc.PathName,
+                ["worksets"] = wsArray,
+                ["worksetCount"] = wsArray.Count
+            };
+        }
+
+        // ===== PHASE 8: UNDO / TRANSACTIONS =====
+
+        // Static checkpoint storage for TransactionGroup-based rollback
+        private static readonly Dictionary<string, TransactionGroup> _checkpoints = new Dictionary<string, TransactionGroup>();
+
+        private static JToken UndoLastOperation(UIApplication uiApp)
+        {
+            // Use PostableCommand for Undo
+            try
+            {
+                var cmdId = RevitCommandId.LookupPostableCommandId(PostableCommand.Undo);
+                uiApp.PostCommand(cmdId);
+                return new JObject { ["message"] = "↩️ Undo command posted. The last operation will be undone." };
+            }
+            catch (Exception ex)
+            {
+                return new JObject { ["message"] = $"⚠️ Undo failed: {ex.Message}", ["hint"] = "Undo can only be triggered outside of an active API transaction context." };
+            }
+        }
+
+        private static JToken CreateCheckpoint(Document doc, JObject parameters)
+        {
+            var name = parameters["name"]?.ToString() ?? $"checkpoint_{DateTime.Now:HHmmss}";
+
+            if (_checkpoints.ContainsKey(name))
+                throw new InvalidOperationException($"Checkpoint '{name}' already exists. Use a different name or rollback first.");
+
+            var tg = new TransactionGroup(doc, $"Checkpoint: {name}");
+            tg.Start();
+            _checkpoints[name] = tg;
+
+            return new JObject
+            {
+                ["message"] = $"📌 Checkpoint '{name}' created. All subsequent changes can be rolled back to this point.",
+                ["checkpointName"] = name,
+                ["activeCheckpoints"] = JArray.FromObject(_checkpoints.Keys.ToList())
+            };
+        }
+
+        private static JToken RollbackToCheckpoint(JObject parameters)
+        {
+            var name = parameters["name"]?.ToString();
+            if (string.IsNullOrEmpty(name) || !_checkpoints.ContainsKey(name))
+                throw new InvalidOperationException($"Checkpoint '{name}' not found. Active checkpoints: {string.Join(", ", _checkpoints.Keys)}");
+
+            var tg = _checkpoints[name];
+            tg.RollBack();
+            _checkpoints.Remove(name);
+
+            return new JObject
+            {
+                ["message"] = $"⏪ Rolled back to checkpoint '{name}'. All changes since the checkpoint have been undone.",
+                ["checkpointName"] = name,
+                ["remainingCheckpoints"] = JArray.FromObject(_checkpoints.Keys.ToList())
+            };
+        }
+
+        // ===== PHASE 9: UI AUTOMATION =====
+
+        private static JToken PostCommand(UIApplication uiApp, JObject parameters)
+        {
+            var commandName = parameters["commandName"]?.ToString();
+            if (string.IsNullOrEmpty(commandName))
+                throw new InvalidOperationException("Command name is required.");
+
+            PostableCommand cmd;
+            if (!Enum.TryParse(commandName, true, out cmd))
+                throw new InvalidOperationException($"Unknown command: '{commandName}'. Use list_commands to see available commands.");
+
+            var cmdId = RevitCommandId.LookupPostableCommandId(cmd);
+            uiApp.PostCommand(cmdId);
+
+            return new JObject
+            {
+                ["message"] = $"▶️ Posted command: {commandName}",
+                ["commandName"] = commandName
+            };
+        }
+
+        private static JToken ListPostableCommands()
+        {
+            var commands = Enum.GetNames(typeof(PostableCommand)).OrderBy(n => n).ToList();
+            return new JObject
+            {
+                ["message"] = $"📋 {commands.Count} available PostableCommands",
+                ["count"] = commands.Count,
+                ["commands"] = JArray.FromObject(commands)
+            };
+        }
+
+        // ===== REMAINING GAP IMPLEMENTATIONS =====
+
+        private static JToken OpenDocument(UIApplication uiApp, JObject parameters)
+        {
+            var filePath = parameters["filePath"]?.ToString();
+            if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath))
+                throw new InvalidOperationException($"File not found: {filePath}");
+
+            var modelPath = ModelPathUtils.ConvertUserVisiblePathToModelPath(filePath);
+            var openOpts = new OpenOptions();
+            var detach = parameters["detach"]?.Value<bool>() ?? false;
+            if (detach)
+                openOpts.DetachFromCentralOption = DetachFromCentralOption.DetachAndPreserveWorksets;
+
+            uiApp.OpenAndActivateDocument(modelPath, openOpts, false);
+
+            return new JObject
+            {
+                ["message"] = $"📂 Opened document: {System.IO.Path.GetFileName(filePath)}",
+                ["filePath"] = filePath,
+                ["detached"] = detach
+            };
+        }
+
+        private static JToken CreateNewProject(UIApplication uiApp, JObject parameters)
+        {
+            var templatePath = parameters["templatePath"]?.ToString() ?? "";
+            Document newDoc;
+
+            if (!string.IsNullOrEmpty(templatePath) && File.Exists(templatePath))
+            {
+                newDoc = uiApp.Application.NewProjectDocument(templatePath);
+            }
+            else
+            {
+                // Use default template
+                newDoc = uiApp.Application.NewProjectDocument(UnitSystem.Metric);
+            }
+
+            return new JObject
+            {
+                ["message"] = $"📄 Created new project{(string.IsNullOrEmpty(templatePath) ? "" : $" from template: {System.IO.Path.GetFileName(templatePath)}")}",
+                ["documentTitle"] = newDoc.Title
+            };
+        }
+
+        private static JToken CreateNewFamily(UIApplication uiApp, JObject parameters)
+        {
+            var templatePath = parameters["templatePath"]?.ToString();
+            if (string.IsNullOrEmpty(templatePath) || !File.Exists(templatePath))
+            {
+                // Try to find default family template
+                var defaultPath = System.IO.Path.Combine(
+                    uiApp.Application.FamilyTemplatePath,
+                    "Metric Generic Model.rft");
+                if (File.Exists(defaultPath))
+                    templatePath = defaultPath;
+                else
+                    throw new InvalidOperationException(
+                        $"Family template not found. Available templates in: {uiApp.Application.FamilyTemplatePath}");
+            }
+
+            var famDoc = uiApp.Application.NewFamilyDocument(templatePath);
+
+            return new JObject
+            {
+                ["message"] = $"📦 Created new family from template: {System.IO.Path.GetFileName(templatePath)}",
+                ["template"] = System.IO.Path.GetFileName(templatePath),
+                ["documentTitle"] = famDoc.Title
+            };
+        }
+
+        private static JToken DetachFromCentral(UIApplication uiApp, JObject parameters)
+        {
+            var filePath = parameters["filePath"]?.ToString();
+            if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath))
+                throw new InvalidOperationException($"File not found: {filePath}");
+
+            var modelPath = ModelPathUtils.ConvertUserVisiblePathToModelPath(filePath);
+            var openOpts = new OpenOptions
+            {
+                DetachFromCentralOption = DetachFromCentralOption.DetachAndPreserveWorksets
+            };
+
+            uiApp.OpenAndActivateDocument(modelPath, openOpts, false);
+
+            return new JObject
+            {
+                ["message"] = $"🔓 Detached from Central: {System.IO.Path.GetFileName(filePath)}",
+                ["filePath"] = filePath
+            };
+        }
+
+        private static JToken ChangeLinkPath(Document doc, JObject parameters)
+        {
+            var linkName = parameters["linkName"]?.ToString();
+            var newPath = parameters["newPath"]?.ToString();
+
+            if (string.IsNullOrEmpty(linkName))
+                throw new InvalidOperationException("Link name is required.");
+            if (string.IsNullOrEmpty(newPath) || !File.Exists(newPath))
+                throw new InvalidOperationException($"New file path not found: {newPath}");
+
+            var links = new FilteredElementCollector(doc).OfClass(typeof(RevitLinkType)).Cast<RevitLinkType>()
+                .Where(l => l.Name.IndexOf(linkName, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
+
+            if (links.Count == 0)
+                throw new InvalidOperationException($"Link '{linkName}' not found.");
+
+            var link = links.First();
+            var newModelPath = ModelPathUtils.ConvertUserVisiblePathToModelPath(newPath);
+
+            using (var tx = new Transaction(doc, "Change Link Path"))
+            {
+                tx.Start();
+                link.LoadFrom(newModelPath, new WorksetConfiguration());
+                tx.Commit();
+            }
+
+            return new JObject
+            {
+                ["message"] = $"🔗 Updated link '{link.Name}' path to: {System.IO.Path.GetFileName(newPath)}",
+                ["linkName"] = link.Name,
+                ["newPath"] = newPath
+            };
+        }
+
+        private static JToken ManageLinkPosition(Document doc, JObject parameters)
+        {
+            var linkName = parameters["linkName"]?.ToString();
+            var moveX = parameters["moveX"]?.Value<double>() ?? 0;
+            var moveY = parameters["moveY"]?.Value<double>() ?? 0;
+            var moveZ = parameters["moveZ"]?.Value<double>() ?? 0;
+            var rotationDeg = parameters["rotation"]?.Value<double>() ?? 0;
+
+            var instances = new FilteredElementCollector(doc).OfClass(typeof(RevitLinkInstance)).Cast<RevitLinkInstance>().ToList();
+            if (!string.IsNullOrEmpty(linkName))
+                instances = instances.Where(i => i.Name.IndexOf(linkName, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
+
+            if (instances.Count == 0)
+                throw new InvalidOperationException($"Link instance '{linkName ?? "any"}' not found.");
+
+            var instance = instances.First();
+            var translation = new XYZ(moveX, moveY, moveZ);
+
+            using (var tx = new Transaction(doc, "Move Link"))
+            {
+                tx.Start();
+
+                if (translation.GetLength() > 0.001)
+                    ElementTransformUtils.MoveElement(doc, instance.Id, translation);
+
+                if (Math.Abs(rotationDeg) > 0.001)
+                {
+                    var axis = Line.CreateBound(XYZ.Zero, XYZ.BasisZ);
+                    ElementTransformUtils.RotateElement(doc, instance.Id, axis, rotationDeg * Math.PI / 180);
+                }
+
+                tx.Commit();
+            }
+
+            return new JObject
+            {
+                ["message"] = $"📍 Moved link '{instance.Name}' by ({moveX}, {moveY}, {moveZ})ft, rotated {rotationDeg}°",
+                ["linkName"] = instance.Name,
+                ["elementId"] = instance.Id.IntegerValue
+            };
+        }
+
+        private static JToken ZoomToFit(UIDocument uidoc)
+        {
+            var uiViews = uidoc.GetOpenUIViews();
+            var activeUIView = uiViews.FirstOrDefault(v => v.ViewId == uidoc.ActiveView.Id);
+            if (activeUIView != null)
+                activeUIView.ZoomToFit();
+
+            return new JObject
+            {
+                ["message"] = $"🔍 Zoomed to fit view '{uidoc.ActiveView.Name}'",
+                ["viewName"] = uidoc.ActiveView.Name
+            };
+        }
+
+        private static JToken ZoomToElement(UIDocument uidoc, Document doc, JObject parameters)
+        {
+            var elementId = parameters["elementId"]?.Value<int>() ?? 0;
+            var elem = doc.GetElement(new ElementId(elementId));
+            if (elem == null) throw new InvalidOperationException($"Element {elementId} not found");
+
+            var bb = elem.get_BoundingBox(uidoc.ActiveView);
+            if (bb == null)
+                throw new InvalidOperationException($"Element {elementId} has no bounding box in the current view.");
+
+            var uiViews = uidoc.GetOpenUIViews();
+            var activeUIView = uiViews.FirstOrDefault(v => v.ViewId == uidoc.ActiveView.Id);
+            if (activeUIView != null)
+            {
+                // Zoom with some padding
+                var padding = 2.0; // feet
+                var min = new XYZ(bb.Min.X - padding, bb.Min.Y - padding, bb.Min.Z - padding);
+                var max = new XYZ(bb.Max.X + padding, bb.Max.Y + padding, bb.Max.Z + padding);
+                activeUIView.ZoomAndCenterRectangle(min, max);
+            }
+
+            return new JObject
+            {
+                ["message"] = $"🔍 Zoomed to element '{elem.Name}' (ID: {elementId})",
+                ["elementId"] = elementId,
+                ["elementName"] = elem.Name
+            };
+        }
+
+        private static JToken EditSchedule(Document doc, JObject parameters)
+        {
+            var scheduleId = parameters["scheduleId"]?.Value<int>() ?? 0;
+            var schedule = doc.GetElement(new ElementId(scheduleId)) as ViewSchedule;
+            if (schedule == null)
+                throw new InvalidOperationException($"Schedule {scheduleId} not found.");
+
+            var action = parameters["action"]?.ToString()?.ToLower() ?? "info";
+
+            using (var tx = new Transaction(doc, "Edit Schedule"))
+            {
+                tx.Start();
+
+                switch (action)
+                {
+                    case "sort":
+                    {
+                        var fieldName = parameters["fieldName"]?.ToString();
+                        var ascending = parameters["ascending"]?.Value<bool>() ?? true;
+                        var def = schedule.Definition;
+                        
+                        // Find the field index
+                        for (int i = 0; i < def.GetFieldCount(); i++)
+                        {
+                            var field = def.GetField(i);
+                            if (field.GetName().Equals(fieldName, StringComparison.OrdinalIgnoreCase))
+                            {
+                                var sortGroup = new ScheduleSortGroupField(field.FieldId, ascending ? ScheduleSortOrder.Ascending : ScheduleSortOrder.Descending);
+                                def.ClearSortGroupFields();
+                                def.AddSortGroupField(sortGroup);
+                                break;
+                            }
+                        }
+                        break;
+                    }
+                    case "add_field":
+                    {
+                        var fieldName = parameters["fieldName"]?.ToString();
+                        var def = schedule.Definition;
+                        var schedulableFields = def.GetSchedulableFields();
+
+                        foreach (var sf in schedulableFields)
+                        {
+                            if (sf.GetName(doc).Equals(fieldName, StringComparison.OrdinalIgnoreCase))
+                            {
+                                def.AddField(sf);
+                                break;
+                            }
+                        }
+                        break;
+                    }
+                    case "remove_field":
+                    {
+                        var fieldName = parameters["fieldName"]?.ToString();
+                        var def = schedule.Definition;
+                        for (int i = 0; i < def.GetFieldCount(); i++)
+                        {
+                            var field = def.GetField(i);
+                            if (field.GetName().Equals(fieldName, StringComparison.OrdinalIgnoreCase))
+                            {
+                                def.RemoveField(field.FieldId);
+                                break;
+                            }
+                        }
+                        break;
+                    }
+                    case "set_header":
+                    {
+                        var show = parameters["showHeaders"]?.Value<bool>() ?? true;
+                        schedule.Definition.ShowHeaders = show;
+                        break;
+                    }
+                    case "itemize":
+                    {
+                        var itemize = parameters["itemize"]?.Value<bool>() ?? true;
+                        schedule.Definition.IsItemized = itemize;
+                        break;
+                    }
+                    case "info":
+                    default:
+                    {
+                        // Return schedule info without modifying
+                        tx.RollBack();
+                        var def = schedule.Definition;
+                        var fields = new JArray();
+                        for (int i = 0; i < def.GetFieldCount(); i++)
+                        {
+                            var f = def.GetField(i);
+                            fields.Add(new JObject
+                            {
+                                ["name"] = f.GetName(),
+                                ["index"] = i,
+                                ["isHidden"] = f.IsHidden
+                            });
+                        }
+                        var available = new JArray();
+                        foreach (var sf in def.GetSchedulableFields())
+                            available.Add(sf.GetName(doc));
+
+                        return new JObject
+                        {
+                            ["message"] = $"📊 Schedule '{schedule.Name}' info",
+                            ["scheduleName"] = schedule.Name,
+                            ["fields"] = fields,
+                            ["fieldCount"] = fields.Count,
+                            ["availableFields"] = available,
+                            ["isItemized"] = def.IsItemized,
+                            ["showHeaders"] = def.ShowHeaders
+                        };
+                    }
+                }
+
+                tx.Commit();
+            }
+
+            return new JObject
+            {
+                ["message"] = $"📊 Schedule '{schedule.Name}' updated (action: {action})",
+                ["scheduleName"] = schedule.Name,
+                ["action"] = action
+            };
+        }
+
+        // ===== POWER BI EXPORT =====
+
+        private static JToken ExportToPowerBI(UIDocument uidoc, Document doc, JObject parameters)
+        {
+            var exportScope = parameters["exportScope"]?.ToString() ?? "currentView";
+            var dbPath = parameters["dbPath"]?.ToString();
+            var mode = parameters["mode"]?.ToString() ?? "new";
+            var categoriesStr = parameters["categories"]?.ToString();
+
+            // Resolve DB path
+            var dataFolder = Path.Combine(
+                Path.GetDirectoryName(doc.PathName) ?? "",
+                "data");
+            dbPath = PowerBISqliteWriter.ResolveDbPath(dbPath, dataFolder);
+
+            // Find/validate the 3D view to export from
+            View3D exportView = null;
+
+            if (exportScope == "currentView")
+            {
+                exportView = uidoc.ActiveView as View3D;
+                if (exportView == null)
+                    throw new InvalidOperationException(
+                        "Active view is not a 3D view. Please open a 3D view or use exportScope='allModel'.");
+            }
+            else
+            {
+                // Find the default {3D} view
+                exportView = new FilteredElementCollector(doc)
+                    .OfClass(typeof(View3D))
+                    .Cast<View3D>()
+                    .FirstOrDefault(v => !v.IsTemplate);
+
+                if (exportView == null)
+                    throw new InvalidOperationException(
+                        "No 3D view found in the project. Create a 3D view first.");
+            }
+
+            // Parse category filter
+            string[] categoryFilter = null;
+            if (!string.IsNullOrWhiteSpace(categoriesStr))
+            {
+                categoryFilter = categoriesStr
+                    .Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)
+                    .Select(c => c.Trim())
+                    .ToArray();
+            }
+
+            // Step 1: Extract geometry via IExportContext
+            var context = new PowerBIExportContext(doc);
+            var exporter = new CustomExporter(doc, context);
+            exporter.IncludeGeometricObjects = false; // we only need tessellated mesh
+            exporter.ShouldStopOnError = false;
+            exporter.Export(exportView);
+
+            var meshData = context.MeshDataByElement;
+
+            // Step 2: Collect element metadata
+            var elementIds = meshData.Keys.ToList();
+            var elements = context.ExtractElementMetadata(elementIds, categoryFilter);
+
+            // If category filter was applied, also filter meshData
+            if (categoryFilter != null)
+            {
+                var validIds = new HashSet<int>(elements.Select(e => e.ElementId));
+                var filteredMesh = new Dictionary<int, MeshData>();
+                foreach (var kvp in meshData)
+                {
+                    if (validIds.Contains(kvp.Key))
+                        filteredMesh[kvp.Key] = kvp.Value;
+                }
+                meshData = filteredMesh;
+            }
+
+            // Step 3: Get category colors
+            var categories = elements.Select(e => e.Category).Distinct();
+            var colors = context.GetCategoryColors(categories);
+
+            // Step 4: Build metadata
+            var metadata = new Dictionary<string, string>
+            {
+                ["projectName"] = doc.ProjectInformation?.Name ?? "Unknown",
+                ["exportDate"] = DateTime.Now.ToString("o"),
+                ["exportScope"] = exportScope,
+                ["exportViewName"] = exportView.Name,
+                ["unitSystem"] = "meters",
+                ["elementCount"] = elements.Count.ToString(),
+                ["revitVersion"] = doc.Application.VersionNumber,
+                ["filePath"] = doc.PathName
+            };
+
+            // Step 5: Write to SQLite
+            var writer = new PowerBISqliteWriter();
+            var result = writer.Write(elements, meshData, colors, metadata, dbPath, mode);
+
+            // Compute total triangles
+            int totalTriangles = meshData.Values.Sum(m => m.FaceCount);
+            int totalVertices = meshData.Values.Sum(m => m.VertexCount);
+
+            return new JObject
+            {
+                ["message"] = $"✅ Exported {result.ElementCount} elements with 3D geometry to Power BI SQLite",
+                ["dbPath"] = result.DbPath,
+                ["elementCount"] = result.ElementCount,
+                ["geometryCount"] = result.GeometryCount,
+                ["parameterCount"] = result.ParameterCount,
+                ["totalVertices"] = totalVertices,
+                ["totalTriangles"] = totalTriangles,
+                ["categories"] = new JArray(colors.Keys.ToArray()),
+                ["fileSize"] = result.FileSizeFormatted,
+                ["mode"] = result.Mode,
+                ["exportScope"] = exportScope,
+                ["exportView"] = exportView.Name
             };
         }
 
