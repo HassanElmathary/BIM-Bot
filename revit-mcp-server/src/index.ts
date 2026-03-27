@@ -2,7 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { registerTools } from "./tools/register.js";
 
-const APP_VERSION = "1.0.0";
+const APP_VERSION = "2.0.0";
 
 const server = new McpServer({
     name: "revit-mcp",

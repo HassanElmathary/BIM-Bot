@@ -60,16 +60,6 @@ namespace RevitMCPPlugin.Core
                 };
                 corePanel.AddItem(chatData);
 
-                // --- Antigravity (removed from ribbon — now accessible via AI Chat) ---
-                // var antigravityData = new PushButtonData("MCPAntigravity", "Antigravity", asm,
-                //     "RevitMCPPlugin.Antigravity.AntigravityCommand")
-                // {
-                //     ToolTip = "Chat with the Antigravity IDE agent — send and receive messages via file bridge",
-                //     LargeImage = RevitMCPPlugin.Antigravity.AntigravityIcons.RibbonIcon(32),
-                //     Image = RevitMCPPlugin.Antigravity.AntigravityIcons.RibbonIcon(16)
-                // };
-                // corePanel.AddItem(antigravityData);
-
                 // --- Project Files ---
                 var projectFilesData = new PushButtonData("MCPProjectFiles", "Project\nFiles", asm,
                     "RevitMCPPlugin.Commands.Tool_ProjectFiles")

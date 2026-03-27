@@ -28,15 +28,9 @@ installer/nodejs/node.exe
 .agents/
 .gemini/
 
-# Unrelated files
-penpot_sync.py
-ui_schema.json
-google sheets json file/
-_deploy_status.txt
-SETUP_ANTIGRAVITY.md
-
 # Power BI visual build artifacts
 revit-mcp-powerbi-visual/.tmp/
 
-# Legacy server backup
+# Legacy upstream backups (if they reappear)
+revit-mcp-plugin-base/
 revit-mcp-server-base/

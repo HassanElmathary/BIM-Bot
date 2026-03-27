@@ -156,57 +156,35 @@ namespace RevitMCPPlugin.Core
         /// - Exactly one JSON message
         /// - Multiple JSON messages concatenated
         /// 
-        /// Strategy: Try to parse from the start. On success, process and remove from buffer.
-        /// On failure (JsonReaderException), it's incomplete — wait for more data.
+        /// Strategy: Use brace-counting to find message boundaries reliably,
+        /// then parse the extracted substring. This avoids the re-serialization
+        /// mismatch and ensures no data is lost between messages.
         /// </summary>
         private async Task ProcessMessageBuffer(StringBuilder messageBuffer, NetworkStream stream, CancellationToken ct)
         {
             while (messageBuffer.Length > 0)
             {
                 var data = messageBuffer.ToString().TrimStart();
-                if (string.IsNullOrEmpty(data)) 
+                if (string.IsNullOrEmpty(data))
                 {
                     messageBuffer.Clear();
                     break;
                 }
 
+                // Use brace-counting to find the end of the first complete JSON object
+                var endIdx = FindJsonObjectEnd(data);
+                if (endIdx <= 0) break; // Incomplete JSON — wait for more data
+
+                // Extract the complete JSON message and update the buffer
+                var jsonStr = data.Substring(0, endIdx);
+                var remaining = data.Substring(endIdx);
+                messageBuffer.Clear();
+                if (remaining.Length > 0)
+                    messageBuffer.Append(remaining);
+
                 try
                 {
-                    // Try to parse one JSON object from the beginning of the string
-                    JObject request;
-                    int charsConsumed;
-
-                    using (var reader = new JsonTextReader(new System.IO.StringReader(data)))
-                    {
-                        request = JObject.Load(reader);
-                        // The reader's LinePosition after Load tells us char count consumed.
-                        // But more reliably, re-serialize and check length.
-                        // Simpler: find the end of this JSON object by parsing position.
-                        charsConsumed = (int)reader.LinePosition;
-                    }
-
-                    // Fallback: find the consumed portion by re-serializing the object size
-                    // This handles the edge case reliably:
-                    var serialized = request.ToString(Formatting.None);
-                    var idx = data.IndexOf(serialized, StringComparison.Ordinal);
-                    if (idx >= 0)
-                    {
-                        charsConsumed = idx + serialized.Length;
-                    }
-                    else
-                    {
-                        // If we can't find the exact match, use a brace-counting approach
-                        charsConsumed = FindJsonObjectEnd(data);
-                        if (charsConsumed <= 0) break; // Can't determine end, wait for more
-                    }
-
-                    // Remove processed data from buffer
-                    messageBuffer.Remove(0, data.Length - messageBuffer.Length + charsConsumed);
-                    messageBuffer.Clear();
-                    if (charsConsumed < data.Length)
-                    {
-                        messageBuffer.Append(data.Substring(charsConsumed));
-                    }
+                    var request = JObject.Parse(jsonStr);
 
                     // Process the request
                     var response = await ProcessRequest(request);
@@ -216,8 +194,8 @@ namespace RevitMCPPlugin.Core
                 }
                 catch (JsonReaderException)
                 {
-                    // Incomplete JSON — wait for more data
-                    break;
+                    // Malformed JSON — skip this message and continue
+                    Logger.LogError($"Malformed JSON message skipped: {jsonStr.Substring(0, Math.Min(100, jsonStr.Length))}...");
                 }
                 catch (Exception ex)
                 {

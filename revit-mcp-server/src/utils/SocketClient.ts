@@ -168,7 +168,7 @@ export class RevitSocketClient {
     }
 
     private generateId(): string {
-        return Date.now().toString() + Math.random().toString().substring(2, 8);
+        return crypto.randomUUID();
     }
 
     sendCommand(method: string, params: Record<string, unknown> = {}): Promise<unknown> {
@@ -191,9 +191,9 @@ export class RevitSocketClient {
                 const timeoutId = setTimeout(() => {
                     if (this.responseCallbacks.has(id)) {
                         this.responseCallbacks.delete(id);
-                        reject(new Error(`Command timed out (120s): ${method}`));
+                        reject(new Error(`Command timed out (300s): ${method}`));
                     }
-                }, 120000);
+                }, 300000);
 
                 this.responseCallbacks.set(id, {
                     resolve: (data) => {
