@@ -25,7 +25,7 @@ namespace RevitMCPPlugin.Core
         public static SocketService? SocketServiceInstance => _socketService;
         public static ExternalEventManager? EventManagerInstance => _eventManager;
 
-        public static string Version => "1.0.0";
+        public static string Version => "2.0.0";
 
         public Result OnStartup(UIControlledApplication application)
         {
@@ -104,7 +104,7 @@ namespace RevitMCPPlugin.Core
                 var hubData = new PushButtonData("MCPToolsHub", "Tools\nHub", asm,
                     "RevitMCPPlugin.Commands.ToolsHubCommand")
                 {
-                    ToolTip = "Browse and launch all 60+ MCP tools from a visual dashboard",
+                    ToolTip = "Browse and launch all 160+ MCP tools from a visual dashboard",
                     LargeImage = RibbonIcons.ToolsHub(32),
                     Image = RibbonIcons.ToolsHub(16)
                 };

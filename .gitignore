@@ -34,3 +34,9 @@ ui_schema.json
 google sheets json file/
 _deploy_status.txt
 SETUP_ANTIGRAVITY.md
+
+# Power BI visual build artifacts
+revit-mcp-powerbi-visual/.tmp/
+
+# Legacy server backup
+revit-mcp-server-base/

@@ -1,7 +1,7 @@
 {
   "name": "revit-mcp-server",
-  "version": "1.0.0",
-  "description": "MCP Server for Revit with Google Gemini integration and 50+ tools",
+  "version": "2.0.0",
+  "description": "MCP Server for Revit with Google Gemini integration and 179 tools",
   "main": "build/index.js",
   "type": "module",
   "bin": {

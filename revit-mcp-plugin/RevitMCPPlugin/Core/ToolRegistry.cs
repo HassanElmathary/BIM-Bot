@@ -111,6 +111,11 @@ namespace RevitMCPPlugin.Core
                 { ToolCategory.Integrations, ("🔗", "Integrations") },
                 { ToolCategory.ProjectFiles, ("📁", "Project Files") },
                 { ToolCategory.CodeExecution, ("🧠", "Code Execution") },
+                { ToolCategory.MEP, ("🔥", "MEP") },
+                { ToolCategory.Structural, ("🏗️", "Structural") },
+                { ToolCategory.Annotation, ("📝", "Annotation") },
+                { ToolCategory.Architecture, ("🏛️", "Architecture") },
+                { ToolCategory.Site, ("🌍", "Site") },
             };
 
             var lines = new List<string> { "\n\nAVAILABLE TOOLS:" };

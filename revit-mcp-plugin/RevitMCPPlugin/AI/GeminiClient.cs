@@ -621,7 +621,7 @@ namespace RevitMCPPlugin.AI
 
         /// <summary>
         /// Direct analysis call — NO tools, NO history. Just a focused prompt → response.
-        /// Much faster for Ollama since it skips all 60+ tool declarations.
+        /// Much faster for Ollama since it skips all 160+ tool declarations.
         /// </summary>
         public async Task<string> AnalyzeDirectAsync(string prompt)
         {

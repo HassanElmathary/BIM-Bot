@@ -2,9 +2,9 @@
 ; Creates a distributable .exe that bundles Node.js, MCP server, and Revit plugin
 
 #define MyAppName "Revit MCP"
-#define MyAppVersion "1.0.0"
+#define MyAppVersion "2.0.0"
 #define MyAppPublisher "RevitMCP"
-#define MyAppURL "https://github.com/YOUR_GITHUB_USERNAME/revit-mcp"
+#define MyAppURL "https://github.com/HassanElmathary/Revit-MCP"
 
 [Setup]
 AppId={{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}
