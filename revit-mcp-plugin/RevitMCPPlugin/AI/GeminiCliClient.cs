@@ -105,6 +105,10 @@ namespace RevitMCPPlugin.AI
                 WorkingDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)
             };
 
+            // Security note: The API key is set on the child process's environment only
+            // (not the user/system environment). It is NOT visible via `set` or `echo %GEMINI_API_KEY%`
+            // in parent shells. Inspecting another process's environment requires admin privileges
+            // on Windows (via PEB access). This is the standard approach for CLI tools.
             psi.EnvironmentVariables["GEMINI_API_KEY"] = _settings.GeminiApiKey;
 
             if (!string.IsNullOrWhiteSpace(_settings.NodePath))

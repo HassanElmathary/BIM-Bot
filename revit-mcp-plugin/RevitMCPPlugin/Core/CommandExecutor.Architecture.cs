@@ -18,13 +18,13 @@ namespace RevitMCPPlugin.Core
             var topLevel = FindLevel(doc, parameters["topLevelName"]?.ToString());
             if (baseLevel == null || topLevel == null) return new JObject { ["error"] = "Base or top level not found" };
             var stairTypes = new FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_Stairs).OfClass(typeof(ElementType)).ToList();
-            return new JObject { ["message"] = $"🪜 Stairs: {baseLevel.Name} → {topLevel.Name} (height: {Math.Round(topLevel.Elevation - baseLevel.Elevation, 2)}ft)", ["types"] = JArray.FromObject(stairTypes.Select(t => new { t.Name, id = t.Id.IntegerValue })), ["hint"] = "Use execute_code: StairsEditScope + StairsRun.CreateStraightRun()" };
+            return new JObject { ["message"] = $"🪜 Stairs: {baseLevel.Name} → {topLevel.Name} (height: {Math.Round(topLevel.Elevation - baseLevel.Elevation, 2)}ft)", ["types"] = JArray.FromObject(stairTypes.Select(t => new { t.Name, id = t.Id.Value })), ["hint"] = "Use execute_code: StairsEditScope + StairsRun.CreateStraightRun()" };
         }
 
         private static JToken CreateRailing(Document doc, JObject parameters)
         {
             var railTypes = new FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_StairsRailing).OfClass(typeof(ElementType)).ToList();
-            return new JObject { ["message"] = $"🛡️ {railTypes.Count} railing types available", ["types"] = JArray.FromObject(railTypes.Select(t => new { t.Name, id = t.Id.IntegerValue })), ["hint"] = "Use execute_code: Railing.Create(doc, curveLoop, railingTypeId, levelId)" };
+            return new JObject { ["message"] = $"🛡️ {railTypes.Count} railing types available", ["types"] = JArray.FromObject(railTypes.Select(t => new { t.Name, id = t.Id.Value })), ["hint"] = "Use execute_code: Railing.Create(doc, curveLoop, railingTypeId, levelId)" };
         }
 
         private static JToken CreateCurtainWall(Document doc, JObject parameters)
@@ -40,7 +40,7 @@ namespace RevitMCPPlugin.Core
                 var line = Line.CreateBound(new XYZ(parameters["startX"]?.Value<double>() ?? 0, parameters["startY"]?.Value<double>() ?? 0, level.Elevation), new XYZ(parameters["endX"]?.Value<double>() ?? 0, parameters["endY"]?.Value<double>() ?? 0, level.Elevation));
                 var wall = Wall.Create(doc, line, wallType.Id, level.Id, parameters["height"]?.Value<double>() ?? 15, 0, false, false);
                 tx.Commit();
-                return new JObject { ["message"] = $"🏗️ Created curtain wall (ID: {wall.Id.IntegerValue})", ["elementId"] = wall.Id.IntegerValue };
+                return new JObject { ["message"] = $"🏗️ Created curtain wall (ID: {wall.Id.Value})", ["elementId"] = wall.Id.Value };
             }
         }
 
@@ -59,7 +59,7 @@ namespace RevitMCPPlugin.Core
                 tx.Start();
                 var opening = doc.Create.NewOpening(baseLevel, topLevel, curveArr);
                 tx.Commit();
-                return new JObject { ["message"] = $"🕳️ Created shaft opening (ID: {opening.Id.IntegerValue})", ["elementId"] = opening.Id.IntegerValue };
+                return new JObject { ["message"] = $"🕳️ Created shaft opening (ID: {opening.Id.Value})", ["elementId"] = opening.Id.Value };
             }
         }
 
@@ -70,7 +70,7 @@ namespace RevitMCPPlugin.Core
             var items = new JArray();
             foreach (var s in stairs)
             {
-                var item = new JObject { ["id"] = s.Id.IntegerValue, ["name"] = s.Name };
+                var item = new JObject { ["id"] = s.Id.Value, ["name"] = s.Name };
                 var rh = s.get_Parameter(BuiltInParameter.STAIRS_ACTUAL_RISER_HEIGHT); if (rh != null) item["riserHeight_ft"] = Math.Round(rh.AsDouble(), 4);
                 var td = s.get_Parameter(BuiltInParameter.STAIRS_ACTUAL_TREAD_DEPTH); if (td != null) item["treadDepth_ft"] = Math.Round(td.AsDouble(), 4);
                 var nr = s.get_Parameter(BuiltInParameter.STAIRS_ACTUAL_NUM_RISERS); if (nr != null) item["numRisers"] = nr.AsInteger();
@@ -85,8 +85,8 @@ namespace RevitMCPPlugin.Core
             if (wall == null) return new JObject { ["error"] = "Wall not found" };
             var cg = wall.CurtainGrid;
             if (cg == null) return new JObject { ["error"] = "Not a curtain wall" };
-            var panels = new JArray(); foreach (var pId in cg.GetPanelIds()) { var p = doc.GetElement(pId); panels.Add(new JObject { ["id"] = p.Id.IntegerValue, ["name"] = p?.Name }); }
-            var mullions = new JArray(); foreach (var mId in cg.GetMullionIds()) { var m = doc.GetElement(mId); mullions.Add(new JObject { ["id"] = m.Id.IntegerValue, ["name"] = m?.Name }); }
+            var panels = new JArray(); foreach (var pId in cg.GetPanelIds()) { var p = doc.GetElement(pId); panels.Add(new JObject { ["id"] = p.Id.Value, ["name"] = p?.Name }); }
+            var mullions = new JArray(); foreach (var mId in cg.GetMullionIds()) { var m = doc.GetElement(mId); mullions.Add(new JObject { ["id"] = m.Id.Value, ["name"] = m?.Name }); }
             return new JObject { ["message"] = $"🏗️ {panels.Count} panels, {mullions.Count} mullions", ["panels"] = panels, ["mullions"] = mullions };
         }
 
@@ -99,7 +99,7 @@ namespace RevitMCPPlugin.Core
                 tx.Start();
                 var opening = doc.Create.NewOpening(wall, new XYZ(parameters["x1"]?.Value<double>() ?? 0, parameters["y1"]?.Value<double>() ?? 0, 0), new XYZ(parameters["x2"]?.Value<double>() ?? 0, parameters["y2"]?.Value<double>() ?? 0, 0));
                 tx.Commit();
-                return new JObject { ["message"] = $"🕳️ Created wall opening (ID: {opening.Id.IntegerValue})", ["elementId"] = opening.Id.IntegerValue };
+                return new JObject { ["message"] = $"🕳️ Created wall opening (ID: {opening.Id.Value})", ["elementId"] = opening.Id.Value };
             }
         }
     }

@@ -29,6 +29,15 @@ import { saveSnapshot, getSnapshots, getSnapshotData } from "../integrations/sql
 import { getOllamaService } from "../ai/ollama-service.js";
 import { GoogleAuth } from "../auth/google-oauth.js";
 
+/** Shape of responses from Revit get_elements / export_elements commands */
+interface RevitElementsResponse {
+    elements?: Record<string, unknown>[];
+    hasMore?: boolean;
+    totalCount?: number;
+    count?: number;
+    [key: string]: unknown;
+}
+
 /**
  * Fetch elements from Revit by category via the existing socket connection.
  * Returns an array of element objects.
@@ -44,7 +53,7 @@ async function fetchRevitElements(
             offset: 0,
             limit: 0, // All elements
         })
-    )) as any;
+    )) as RevitElementsResponse;
 
     // The response may have an "elements" array or be an array directly
     if (Array.isArray(response)) return response;
@@ -78,7 +87,7 @@ async function fetchRevitElementsBatched(
 
         const response = (await withRevitConnection(async (client) =>
             client.sendCommand("export_elements", params)
-        )) as any;
+        )) as RevitElementsResponse;
 
         const elements = response?.elements;
         if (Array.isArray(elements) && elements.length > 0) {

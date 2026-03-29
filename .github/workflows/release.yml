@@ -1,0 +1,132 @@
+name: Release & Publish
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., 2.0.0)'
+        required: true
+        default: '2.0.0'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── Build MCP Server ──
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install & Build MCP Server
+        working-directory: revit-mcp-server
+        run: |
+          npm ci
+          npm run build
+
+      # ── Download portable Node.js for the installer bundle ──
+      - name: Download Portable Node.js
+        shell: pwsh
+        run: |
+          $nodeVersion = "v20.18.0"
+          $nodeUrl = "https://nodejs.org/dist/$nodeVersion/node-$nodeVersion-win-x64.zip"
+          $nodeZip = "$env:TEMP\node.zip"
+          Invoke-WebRequest -Uri $nodeUrl -OutFile $nodeZip -UseBasicParsing
+          Expand-Archive -Path $nodeZip -DestinationPath "$env:TEMP\node-extract" -Force
+          $extractedDir = Get-ChildItem "$env:TEMP\node-extract" -Directory | Select-Object -First 1
+          New-Item -ItemType Directory -Path "installer\nodejs" -Force | Out-Null
+          Copy-Item "$($extractedDir.FullName)\*" "installer\nodejs\" -Recurse -Force
+
+      # ── Package Distribution ZIP ──
+      - name: Package Distribution
+        shell: pwsh
+        run: |
+          $version = "${{ github.event.inputs.version || github.ref_name }}"
+          $version = $version -replace '^v', ''
+          $distDir = "dist-package"
+
+          New-Item -ItemType Directory -Path $distDir -Force | Out-Null
+
+          # Copy server (build + node_modules + package.json)
+          New-Item -ItemType Directory -Path "$distDir\server" -Force | Out-Null
+          Copy-Item "revit-mcp-server\build" "$distDir\server\build" -Recurse
+          Copy-Item "revit-mcp-server\node_modules" "$distDir\server\node_modules" -Recurse
+          Copy-Item "revit-mcp-server\package.json" "$distDir\server\"
+
+          # Copy Node.js portable
+          Copy-Item "installer\nodejs" "$distDir\nodejs" -Recurse
+
+          # Copy plugin placeholder directory
+          # NOTE: Plugin DLLs must be built locally with Visual Studio and added to releases manually
+          # or built via a separate CI step with the Revit SDK
+          New-Item -ItemType Directory -Path "$distDir\plugin\net48" -Force | Out-Null
+          New-Item -ItemType Directory -Path "$distDir\plugin\net8" -Force | Out-Null
+
+          # Copy install scripts
+          Copy-Item "install.ps1" "$distDir\"
+          Copy-Item "uninstall.ps1" "$distDir\"
+
+          # Create Install.bat wrapper
+          @"
+          @echo off
+          echo Starting Revit MCP Installer...
+          powershell -ExecutionPolicy Bypass -File "%~dp0install.ps1" -InstallPath "%~dp0"
+          pause
+          "@ | Set-Content "$distDir\Install.bat"
+
+          # Create Uninstall.bat wrapper
+          @"
+          @echo off
+          echo Starting Revit MCP Uninstaller...
+          powershell -ExecutionPolicy Bypass -File "%~dp0uninstall.ps1"
+          pause
+          "@ | Set-Content "$distDir\Uninstall.bat"
+
+          # Create README
+          @"
+          Revit MCP v$version - AI-Powered BIM Automation
+          ================================================
+
+          Quick Start:
+          1. Run Install.bat (right-click -> Run as Administrator)
+          2. Open Revit - look for "Chat with me" in Add-ins tab
+          3. Open Claude Desktop - Revit MCP is auto-configured
+
+          Or install via PowerShell (one-liner):
+            irm https://raw.githubusercontent.com/HassanElmathary/Revit-MCP/main/install.ps1 | iex
+
+          Documentation: https://github.com/HassanElmathary/Revit-MCP
+          "@ | Set-Content "$distDir\README.txt"
+
+          # Create ZIP
+          Compress-Archive -Path "$distDir\*" -DestinationPath "RevitMCP-v$version.zip" -CompressionLevel Optimal
+
+          echo "version=$version" >> $env:GITHUB_OUTPUT
+
+      # ── Create GitHub Release ──
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: RevitMCP-v*.zip
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # ── Publish to npm ──
+      - name: Publish to npm
+        working-directory: revit-mcp-server
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

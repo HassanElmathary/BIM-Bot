@@ -66,7 +66,7 @@ Write-Host "  [OK] Distribution packaged"
 
 # 4. Create ZIP
 Write-Host "[4/4] Creating ZIP archive..."
-$zipPath = "$root\installer\output\RevitMCP-Setup-v1.1.0.zip"
+$zipPath = "$root\installer\output\RevitMCP-v2.0.0.zip"
 if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
 Compress-Archive -Path "$distDir\*" -DestinationPath $zipPath -CompressionLevel Optimal
 $zipSizeBytes = (Get-Item $zipPath).Length

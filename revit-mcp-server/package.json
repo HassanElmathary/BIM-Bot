@@ -1,10 +1,11 @@
 {
   "name": "revit-mcp-server",
   "version": "2.0.0",
-  "description": "MCP Server for Revit with Google Gemini integration and 179 tools",
+  "description": "MCP Server for Autodesk Revit — 179 AI-powered tools for BIM automation. Works with Claude Desktop, Cursor, Windsurf, and any MCP client. Supports Revit 2020–2026.",
   "main": "build/index.js",
   "type": "module",
   "bin": {
+    "revit-mcp-server": "./build/index.js",
     "revit-mcp": "./build/index.js"
   },
   "scripts": {
@@ -12,19 +13,39 @@
     "prebuild": "npm run clean",
     "build": "tsc",
     "dev": "tsc --watch",
-    "start": "node build/index.js"
+    "start": "node build/index.js",
+    "prepublishOnly": "npm run build"
   },
   "files": [
     "build"
   ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/HassanElmathary/Revit-MCP.git"
+  },
+  "homepage": "https://github.com/HassanElmathary/Revit-MCP#readme",
+  "bugs": {
+    "url": "https://github.com/HassanElmathary/Revit-MCP/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=18"
+  },
   "keywords": [
     "revit",
     "mcp",
+    "model-context-protocol",
     "gemini",
     "bim",
-    "automation"
+    "automation",
+    "autodesk",
+    "architecture",
+    "claude",
+    "ai"
   ],
-  "author": "RevitMCP",
+  "author": "Hassan Ahmed Elmathary <hassan.elmathary@gmail.com>",
   "license": "MIT",
   "dependencies": {
     "@google/genai": "^1.0.0",

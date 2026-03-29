@@ -279,6 +279,17 @@ namespace RevitMCPPlugin.Core
             {
                 ActiveUIApp = uiApp;
                 uiApp.Idling -= OnRevitIdling;
+
+                // Auto-start MCP service so users don't need to click "Start MCP" manually
+                try
+                {
+                    StartService(uiApp);
+                    Logger.Log("MCP Service auto-started on Revit idle");
+                }
+                catch (Exception startEx)
+                {
+                    Logger.LogError("MCP Service auto-start failed (can start manually from ribbon)", startEx);
+                }
             }
 
             try

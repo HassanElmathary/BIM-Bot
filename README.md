@@ -1,6 +1,103 @@
 # Revit MCP — AI-Powered Revit Automation
 
+[![npm version](https://img.shields.io/npm/v/revit-mcp-server.svg)](https://www.npmjs.com/package/revit-mcp-server)
+[![GitHub release](https://img.shields.io/github/v/release/HassanElmathary/Revit-MCP)](https://github.com/HassanElmathary/Revit-MCP/releases)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Revit](https://img.shields.io/badge/Revit-2020--2026-blue.svg)](#)
+
 > Model Context Protocol (MCP) server + Revit plugin for AI-driven BIM automation with **179 tools**, built-in Gemini AI chat, and Power BI 3D export.
+
+---
+
+## ⚡ Quick Install
+
+### One-Line Install (Recommended)
+
+Open PowerShell and paste:
+
+```powershell
+irm https://raw.githubusercontent.com/HassanElmathary/Revit-MCP/main/install.ps1 | iex
+```
+
+**That's it!** The installer will:
+- ✅ Download & install Revit MCP
+- ✅ Auto-detect your Revit versions (2020–2026)
+- ✅ Deploy the correct plugin for each version
+- ✅ Auto-configure Claude Desktop
+- ✅ Ready to use in 60 seconds
+
+### Alternative Install Methods
+
+<details>
+<summary>📦 <strong>NPX — Run MCP Server Directly</strong> (if you have Node.js 18+)</summary>
+
+```powershell
+npx -y revit-mcp-server
+```
+
+Or install globally:
+```powershell
+npm install -g revit-mcp-server
+```
+
+Then add to your Claude Desktop config (`%APPDATA%\Claude\claude_desktop_config.json`):
+```json
+{
+  "mcpServers": {
+    "revit-mcp": {
+      "command": "npx",
+      "args": ["-y", "revit-mcp-server"]
+    }
+  }
+}
+```
+
+> **Note:** This only installs the MCP server. You still need the Revit plugin — download from [GitHub Releases](https://github.com/HassanElmathary/Revit-MCP/releases).
+
+</details>
+
+<details>
+<summary>📥 <strong>Manual Download</strong> (offline install)</summary>
+
+1. Download the latest ZIP from [GitHub Releases](https://github.com/HassanElmathary/Revit-MCP/releases)
+2. Extract the ZIP
+3. Run `Install.bat` as Administrator
+4. Open Revit — look for **"Chat with me"** in the Add-ins tab
+
+</details>
+
+<details>
+<summary>🗑️ <strong>Uninstall</strong></summary>
+
+```powershell
+irm https://raw.githubusercontent.com/HassanElmathary/Revit-MCP/main/uninstall.ps1 | iex
+```
+
+This removes the plugin from all Revit versions, cleans up Claude Desktop config, and deletes install files.
+
+</details>
+
+---
+
+## Claude Desktop Configuration
+
+The installer auto-configures Claude Desktop. If you need to do it manually, add this to `%APPDATA%\Claude\claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "revit-mcp": {
+      "command": "C:\\Program Files\\RevitMCP\\nodejs\\node.exe",
+      "args": ["C:\\Program Files\\RevitMCP\\server\\build\\index.js"],
+      "env": {}
+    }
+  }
+}
+```
+
+> **Restart Claude Desktop** after editing the config to load the new MCP server.
+
+---
 
 ## Features
 
@@ -33,6 +130,18 @@
 - **Auto-updater** via GitHub Releases
 - **One-click installer** (.exe) with portable Node.js
 
+## Supported Revit Versions
+
+| Revit Version | Framework | Status |
+|---------------|-----------|--------|
+| Revit 2020 | .NET Framework 4.8 | ✅ Supported |
+| Revit 2021 | .NET Framework 4.8 | ✅ Supported |
+| Revit 2022 | .NET Framework 4.8 | ✅ Supported |
+| Revit 2023 | .NET Framework 4.8 | ✅ Supported |
+| Revit 2024 | .NET Framework 4.8 | ✅ Supported |
+| Revit 2025 | .NET 8.0 | ✅ Supported |
+| Revit 2026 | .NET 8.0 | ✅ Supported |
+
 ## Architecture
 
 ```
@@ -49,7 +158,7 @@
                                         └───────────┘                           └──────────────┘
 ```
 
-## Quick Start
+## Developer Setup
 
 ### 1. Install Dependencies
 ```bash
@@ -58,7 +167,7 @@ npm install
 npm run build
 ```
 
-### 2. Configure API Key
+### 2. Configure API Key (Optional — for AI features)
 ```bash
 cp .env.example .env
 # Edit .env with your Gemini API key
@@ -73,9 +182,7 @@ Add to your MCP client config (e.g. Claude Desktop, Cursor, Windsurf, etc.):
     "revit-mcp": {
       "command": "node",
       "args": ["<path-to>/revit-mcp-server/build/index.js"],
-      "env": {
-        "GOOGLE_API_KEY": "your_key_here"
-      }
+      "env": {}
     }
   }
 }

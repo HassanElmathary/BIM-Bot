@@ -16,6 +16,15 @@ interface TokenData {
     scope: string;
 }
 
+/** Shape of Google's OAuth 2.0 token endpoint response */
+interface GoogleTokenResponse {
+    access_token: string;
+    refresh_token?: string;
+    expires_in: number;
+    token_type: string;
+    scope: string;
+}
+
 interface GoogleOAuthConfig {
     clientId: string;
     clientSecret: string;
@@ -186,7 +195,7 @@ export class GoogleAuth {
             throw new Error(`Token exchange failed: ${error}`);
         }
 
-        const data = await response.json() as any;
+        const data = await response.json() as GoogleTokenResponse;
         this.tokens = {
             access_token: data.access_token,
             refresh_token: data.refresh_token,
@@ -223,7 +232,7 @@ export class GoogleAuth {
             throw new Error("Token refresh failed. Please sign in again.");
         }
 
-        const data = await response.json() as any;
+        const data = await response.json() as GoogleTokenResponse;
         this.tokens = {
             ...this.tokens,
             access_token: data.access_token,

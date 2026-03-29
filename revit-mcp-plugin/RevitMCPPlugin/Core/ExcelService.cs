@@ -634,7 +634,7 @@ namespace RevitMCPPlugin.Core
                             int b = Convert.ToInt32(c.Substring(5, 2), 16);
                             return XLColor.FromArgb(r, g, b);
                         }
-                        catch { }
+                        catch (Exception ex) { Logger.Log($"Invalid hex color '{color}': {ex.Message}"); }
                     }
                     return XLColor.Black;
             }

@@ -102,7 +102,7 @@ export async function syncToNotion(
 
                 await notion.pages.create({
                     parent: { database_id: options.databaseId },
-                    properties: properties as any,
+                    properties: properties as Record<string, unknown> as import("@notionhq/client/build/src/api-endpoints.js").CreatePageParameters["properties"],
                 });
 
                 result.created++;

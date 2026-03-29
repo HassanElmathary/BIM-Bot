@@ -40,7 +40,19 @@ export function registerPowerBITools(server: McpServer) {
                         mode: args.mode || "new",
                         categories: args.categories,
                     })
-                ) as any;
+                ) as {
+                    message?: string;
+                    dbPath?: string;
+                    elementCount?: number;
+                    geometryCount?: number;
+                    totalVertices?: number;
+                    totalTriangles?: number;
+                    fileSize?: string;
+                    categories?: string[];
+                    mode?: string;
+                    exportScope?: string;
+                    exportView?: string;
+                };
 
                 // Response comes from C# CommandExecutor with summary fields
                 const text = [

@@ -121,7 +121,7 @@ export function saveSnapshot(
         tableName: safeName,
         rowsInserted: data.length,
         snapshotId,
-        dbPath: (database as any).name,
+        dbPath: (db as Database.Database & { name?: string })?.name || "revit-data.db",
     };
 }
 
@@ -137,7 +137,7 @@ export function getSnapshots(
         .prepare(
             `SELECT id, category, element_count, created_at FROM sync_snapshots WHERE table_name = ? ORDER BY created_at DESC`
         )
-        .all(safeName) as any[];
+        .all(safeName) as { id: number; category: string; element_count: number; created_at: string }[];
 }
 
 /**

@@ -14,11 +14,10 @@ namespace RevitMCPPlugin.Core
     /// TCP Socket server that listens for MCP commands from the MCP server.
     /// Uses JSON-RPC 2.0 protocol for communication.
     /// 
-    /// BUG FIXES:
-    /// - Message framing: uses newline delimiter to separate JSON-RPC messages
-    /// - AcceptTcpClientAsync: .NET 4.8 doesn't support CancellationToken overload, 
-    ///   so we use polling with pending check
-    /// - Proper client cleanup on errors
+    /// Message framing: Length-prefixed protocol.
+    ///   Send:    "Content-Length: {byteCount}\n{json}"
+    ///   Receive: "Content-Length: {byteCount}\n{json}" (preferred)
+    ///            OR raw JSON with brace-counting (backward compat)
     /// </summary>
     public class SocketService
     {
@@ -27,6 +26,8 @@ namespace RevitMCPPlugin.Core
         private readonly ExternalEventManager _eventManager;
         private CancellationTokenSource? _cts;
         private readonly List<TcpClient> _clients = new List<TcpClient>();
+
+        private const string ContentLengthHeader = "Content-Length: ";
 
         public bool IsRunning { get; private set; }
 
@@ -132,8 +133,7 @@ namespace RevitMCPPlugin.Core
 
                     messageBuffer.Append(Encoding.UTF8.GetString(buffer, 0, bytesRead));
 
-                    // Process all complete JSON messages in the buffer.
-                    // Messages are separated by newlines OR we try to parse the full buffered string.
+                    // Process all complete messages in the buffer
                     await ProcessMessageBuffer(messageBuffer, stream, ct);
                 }
             }
@@ -151,14 +151,11 @@ namespace RevitMCPPlugin.Core
         }
 
         /// <summary>
-        /// Handle message framing. The buffer may contain:
-        /// - Incomplete JSON (wait for more data)
-        /// - Exactly one JSON message
-        /// - Multiple JSON messages concatenated
+        /// Process messages using length-prefixed framing (preferred) or
+        /// brace-counting fallback (backward compatibility).
         /// 
-        /// Strategy: Use brace-counting to find message boundaries reliably,
-        /// then parse the extracted substring. This avoids the re-serialization
-        /// mismatch and ensures no data is lost between messages.
+        /// Length-prefixed format: "Content-Length: {N}\n{json_payload}"
+        /// Fallback: raw JSON objects delimited by brace-counting.
         /// </summary>
         private async Task ProcessMessageBuffer(StringBuilder messageBuffer, NetworkStream stream, CancellationToken ct)
         {
@@ -171,16 +168,68 @@ namespace RevitMCPPlugin.Core
                     break;
                 }
 
-                // Use brace-counting to find the end of the first complete JSON object
-                var endIdx = FindJsonObjectEnd(data);
-                if (endIdx <= 0) break; // Incomplete JSON — wait for more data
+                string jsonStr;
 
-                // Extract the complete JSON message and update the buffer
-                var jsonStr = data.Substring(0, endIdx);
-                var remaining = data.Substring(endIdx);
-                messageBuffer.Clear();
-                if (remaining.Length > 0)
-                    messageBuffer.Append(remaining);
+                // ── Length-prefixed framing (preferred) ──
+                if (data.StartsWith(ContentLengthHeader, StringComparison.Ordinal))
+                {
+                    var newlineIdx = data.IndexOf('\n');
+                    if (newlineIdx < 0) break; // Incomplete header — wait for more data
+
+                    var lengthStr = data.Substring(ContentLengthHeader.Length, newlineIdx - ContentLengthHeader.Length).Trim();
+                    if (!int.TryParse(lengthStr, out var contentLength) || contentLength <= 0)
+                    {
+                        Logger.LogError($"Invalid Content-Length: '{lengthStr}'");
+                        messageBuffer.Clear();
+                        break;
+                    }
+
+                    var payloadStart = newlineIdx + 1;
+                    var totalNeeded = payloadStart + contentLength;
+
+                    // Check if we have the full payload in bytes
+                    var dataBytes = Encoding.UTF8.GetBytes(data);
+                    if (dataBytes.Length < totalNeeded) break; // Incomplete payload — wait for more data
+
+                    // Extract exactly contentLength bytes of payload
+                    jsonStr = Encoding.UTF8.GetString(dataBytes, payloadStart, contentLength);
+                    var remaining = Encoding.UTF8.GetString(dataBytes, totalNeeded, dataBytes.Length - totalNeeded);
+                    messageBuffer.Clear();
+                    if (remaining.Length > 0)
+                        messageBuffer.Append(remaining);
+                }
+                // ── Brace-counting fallback (backward compatibility) ──
+                else if (data[0] == '{')
+                {
+                    var endIdx = FindJsonObjectEnd(data);
+                    if (endIdx <= 0) break; // Incomplete JSON — wait for more data
+
+                    jsonStr = data.Substring(0, endIdx);
+                    var remaining = data.Substring(endIdx);
+                    messageBuffer.Clear();
+                    if (remaining.Length > 0)
+                        messageBuffer.Append(remaining);
+                }
+                else
+                {
+                    // Unknown data — skip until we find '{' or 'Content-Length'
+                    var nextBrace = data.IndexOf('{');
+                    var nextHeader = data.IndexOf(ContentLengthHeader, StringComparison.Ordinal);
+                    var nextValid = -1;
+                    if (nextBrace >= 0 && nextHeader >= 0) nextValid = Math.Min(nextBrace, nextHeader);
+                    else if (nextBrace >= 0) nextValid = nextBrace;
+                    else if (nextHeader >= 0) nextValid = nextHeader;
+
+                    if (nextValid > 0)
+                    {
+                        messageBuffer.Clear();
+                        messageBuffer.Append(data.Substring(nextValid));
+                        continue;
+                    }
+
+                    messageBuffer.Clear();
+                    break;
+                }
 
                 try
                 {
@@ -188,8 +237,13 @@ namespace RevitMCPPlugin.Core
 
                     // Process the request
                     var response = await ProcessRequest(request);
-                    var responseStr = JsonConvert.SerializeObject(response) + "\n";
-                    var responseBytes = Encoding.UTF8.GetBytes(responseStr);
+
+                    // Send response using length-prefixed framing
+                    var responseJson = JsonConvert.SerializeObject(response);
+                    var responseBytes = Encoding.UTF8.GetBytes(responseJson);
+                    var header = Encoding.UTF8.GetBytes($"Content-Length: {responseBytes.Length}\n");
+
+                    await stream.WriteAsync(header, 0, header.Length, ct);
                     await stream.WriteAsync(responseBytes, 0, responseBytes.Length, ct);
                 }
                 catch (JsonReaderException)
@@ -208,6 +262,7 @@ namespace RevitMCPPlugin.Core
         /// <summary>
         /// Find the end index of a complete JSON object by counting braces.
         /// Returns the index AFTER the closing brace, or -1 if incomplete.
+        /// Kept for backward compatibility with clients that don't use length-prefixed framing.
         /// </summary>
         private static int FindJsonObjectEnd(string data)
         {

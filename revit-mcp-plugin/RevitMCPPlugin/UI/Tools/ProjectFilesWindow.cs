@@ -181,7 +181,7 @@ namespace RevitMCPPlugin.UI.Tools
                     return Path.Combine(projectDir!, FolderName);
                 }
             }
-            catch { }
+            catch (Exception ex) { Logger.LogError("Error determining project files folder", ex); }
 
             // Fallback for unsaved projects
             return Path.Combine(

@@ -887,7 +887,7 @@ When no built-in tool fits, write C# code. You have access to:
 
 IMPORTANT API NOTES (Revit 2024+):
 - Use new ElementId((long)value) — NOT new ElementId((int)value) 
-- Use element.Id.Value — NOT element.Id.IntegerValue (deprecated)
+- Use element.Id.Value — NOT element.Id.Value (deprecated)
 - Cast to long when creating ElementId from numbers
 
 DATA STORAGE:

@@ -17,15 +17,10 @@ namespace RevitMCPPlugin.Commands
         {
             try
             {
-                // 1. Check if we have an API key configured in Revit MCP
+                // 1. Check if we have an API key configured in Revit MCP (optional — only needed for server-side AI features)
                 var settings = GeminiSettings.Load();
                 var apiKey = settings.ApiKey;
-                
-                if (string.IsNullOrWhiteSpace(apiKey))
-                {
-                    TaskDialog.Show("Connect to Claude", "No API Key found.\n\nPlease go to Revit MCP -> Settings first and configure your Google Gemini API Key. Claude needs this key to power the tools.");
-                    return Result.Cancelled;
-                }
+                bool hasApiKey = !string.IsNullOrWhiteSpace(apiKey);
 
                 // 2. Find Claude config path
                 var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
@@ -94,14 +89,17 @@ namespace RevitMCPPlugin.Commands
                 }
 
                 // Create the revit-mcp entry
+                var envObj = new JObject();
+                if (hasApiKey)
+                {
+                    envObj["GOOGLE_API_KEY"] = apiKey;
+                }
+
                 var revitMcp = new JObject
                 {
                     ["command"] = nodePath,
                     ["args"] = new JArray { indexPath },
-                    ["env"] = new JObject
-                    {
-                        ["GOOGLE_API_KEY"] = apiKey
-                    }
+                    ["env"] = envObj
                 };
 
                 mcpServers["revit-mcp"] = revitMcp;
@@ -109,12 +107,19 @@ namespace RevitMCPPlugin.Commands
                 // Save config
                 File.WriteAllText(claudeConfigPath, config.ToString(Newtonsoft.Json.Formatting.Indented));
 
-                TaskDialog.Show("Connect to Claude", 
-                    "✅ Claude Desktop has been successfully configured to use Revit MCP!\n\n" +
-                    "To apply the changes:\n" +
+                var successMsg = "✅ Claude Desktop has been successfully configured to use Revit MCP!\n\n";
+                if (!hasApiKey)
+                {
+                    successMsg += "⚠️ Note: No Google Gemini API Key is configured.\n" +
+                        "Claude will work fine, but the server's built-in AI features (analysis, code gen) will be disabled.\n" +
+                        "You can add one later in Revit MCP -> Settings.\n\n";
+                }
+                successMsg += "To apply the changes:\n" +
                     "1. Completely restart the Claude Desktop App (File -> Exit, then open again)\n" +
                     "2. Start the MCP Service in Revit\n" +
-                    "3. Ask Claude to 'Use the Revit MCP to list the walls in the model'.");
+                    "3. Ask Claude to 'Use the Revit MCP to list the walls in the model'.";
+
+                TaskDialog.Show("Connect to Claude", successMsg);
 
                 return Result.Succeeded;
             }

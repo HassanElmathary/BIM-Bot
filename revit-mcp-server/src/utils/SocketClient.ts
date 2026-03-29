@@ -7,14 +7,15 @@ export interface RevitCommand {
     id: string;
 }
 
+const CONTENT_LENGTH_HEADER = "Content-Length: ";
+
 /**
  * JSON-RPC 2.0 TCP client for communicating with the Revit plugin's SocketService.
  *
- * BUG FIXES:
- * - Buffer can contain multiple concatenated JSON messages (e.g. fast sequential commands).
- *   Now uses brace-counting to find message boundaries.
- * - Timeout now properly cleans up by resolving/rejecting once, preventing double-fire.
- * - Reconnect after socket close now creates a new socket instance (old one is destroyed).
+ * Message framing: Length-prefixed protocol.
+ *   Send:    "Content-Length: {byteCount}\n{json}"
+ *   Receive: "Content-Length: {byteCount}\n{json}" (preferred)
+ *            OR raw JSON with brace-counting (backward compat)
  */
 export class RevitSocketClient {
     private host: string;
@@ -22,7 +23,7 @@ export class RevitSocketClient {
     private socket: net.Socket;
     private connected: boolean = false;
     private responseCallbacks: Map<string, { resolve: (data: unknown) => void; reject: (err: Error) => void }> = new Map();
-    private buffer: string = "";
+    private buffer: Buffer = Buffer.alloc(0);
 
     constructor(host: string = "localhost", port: number = 8080) {
         this.host = host;
@@ -45,7 +46,8 @@ export class RevitSocketClient {
         });
 
         this.socket.on("data", (data) => {
-            this.buffer += data.toString();
+            // Append raw bytes to buffer (not string — preserves multi-byte chars)
+            this.buffer = Buffer.concat([this.buffer, data]);
             this.processBuffer();
         });
 
@@ -65,37 +67,88 @@ export class RevitSocketClient {
     }
 
     /**
-     * Process all complete JSON messages in the buffer using brace-counting.
-     * This correctly handles cases where:
-     * 1. Multiple JSON messages arrive in a single TCP packet
-     * 2. A single JSON message is split across multiple TCP packets
+     * Process all complete messages in the buffer.
+     * Supports:
+     *   1. Length-prefixed: "Content-Length: N\n{json}" (preferred, robust)
+     *   2. Brace-counting: raw JSON objects (backward compat fallback)
      */
     private processBuffer(): void {
         while (this.buffer.length > 0) {
-            // Skip whitespace/newlines between messages
-            const trimmed = this.buffer.trimStart();
-            if (trimmed.length === 0) {
-                this.buffer = "";
-                break;
+            // Skip leading whitespace bytes
+            let startOffset = 0;
+            while (startOffset < this.buffer.length && (this.buffer[startOffset] === 0x20 || this.buffer[startOffset] === 0x0A || this.buffer[startOffset] === 0x0D || this.buffer[startOffset] === 0x09)) {
+                startOffset++;
             }
-            if (trimmed[0] !== "{") {
-                // Strip leading non-JSON characters (shouldn't happen, but defensive)
-                this.buffer = trimmed;
+            if (startOffset > 0) {
+                this.buffer = this.buffer.subarray(startOffset);
+            }
+            if (this.buffer.length === 0) break;
+
+            const bufferStr = this.buffer.toString("utf8");
+
+            // ── Length-prefixed framing (preferred) ──
+            if (bufferStr.startsWith(CONTENT_LENGTH_HEADER)) {
+                const newlineIdx = bufferStr.indexOf("\n");
+                if (newlineIdx < 0) break; // Incomplete header — wait for more data
+
+                const lengthStr = bufferStr.substring(CONTENT_LENGTH_HEADER.length, newlineIdx).trim();
+                const contentLength = parseInt(lengthStr, 10);
+                if (isNaN(contentLength) || contentLength <= 0) {
+                    console.error(`Invalid Content-Length: '${lengthStr}'`);
+                    this.buffer = Buffer.alloc(0);
+                    break;
+                }
+
+                // Calculate byte offset of payload start
+                const headerBytes = Buffer.byteLength(bufferStr.substring(0, newlineIdx + 1), "utf8");
+                const totalNeeded = headerBytes + contentLength;
+
+                if (this.buffer.length < totalNeeded) break; // Incomplete payload — wait for more data
+
+                // Extract exactly contentLength bytes of payload
+                const jsonStr = this.buffer.subarray(headerBytes, headerBytes + contentLength).toString("utf8");
+                this.buffer = this.buffer.subarray(totalNeeded);
+
+                this.handleResponse(jsonStr);
+                continue;
             }
 
-            const endIdx = this.findJsonEnd(this.buffer);
-            if (endIdx === -1) break; // Incomplete JSON, wait for more data
+            // ── Brace-counting fallback (backward compatibility) ──
+            if (bufferStr[0] === "{") {
+                const endIdx = this.findJsonEnd(bufferStr);
+                if (endIdx === -1) break; // Incomplete JSON, wait for more data
 
-            const jsonStr = this.buffer.substring(0, endIdx);
-            this.buffer = this.buffer.substring(endIdx).trimStart();
+                const jsonStr = bufferStr.substring(0, endIdx);
+                const consumedBytes = Buffer.byteLength(jsonStr, "utf8");
+                this.buffer = this.buffer.subarray(consumedBytes);
 
-            this.handleResponse(jsonStr);
+                this.handleResponse(jsonStr);
+                continue;
+            }
+
+            // Unknown data — skip until we find '{' or 'Content-Length'
+            const nextBrace = bufferStr.indexOf("{");
+            const nextHeader = bufferStr.indexOf(CONTENT_LENGTH_HEADER);
+            let nextValid = -1;
+            if (nextBrace >= 0 && nextHeader >= 0) nextValid = Math.min(nextBrace, nextHeader);
+            else if (nextBrace >= 0) nextValid = nextBrace;
+            else if (nextHeader >= 0) nextValid = nextHeader;
+
+            if (nextValid > 0) {
+                const skipBytes = Buffer.byteLength(bufferStr.substring(0, nextValid), "utf8");
+                this.buffer = this.buffer.subarray(skipBytes);
+                continue;
+            }
+
+            this.buffer = Buffer.alloc(0);
+            break;
         }
     }
 
     /**
      * Find the end of a complete JSON object by counting braces.
      * Returns the index after the closing brace, or -1 if incomplete.
+     * Kept for backward compatibility with servers that don't use length-prefixed framing.
      */
     private findJsonEnd(data: string): number {
         let depth = 0;
@@ -206,7 +259,13 @@ export class RevitSocketClient {
                     },
                 });
 
-                this.socket.write(JSON.stringify(command));
+                // Send using length-prefixed framing
+                const jsonPayload = JSON.stringify(command);
+                const payloadBytes = Buffer.from(jsonPayload, "utf8");
+                const header = `Content-Length: ${payloadBytes.length}\n`;
+
+                this.socket.write(header);
+                this.socket.write(payloadBytes);
             } catch (error) {
                 reject(error);
             }

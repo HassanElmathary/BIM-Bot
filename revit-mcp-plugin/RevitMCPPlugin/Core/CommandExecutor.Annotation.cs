@@ -30,7 +30,7 @@ namespace RevitMCPPlugin.Core
                 tx.Start();
                 var region = FilledRegion.Create(doc, regionType.Id, view.Id, new List<CurveLoop> { loop });
                 tx.Commit();
-                return new JObject { ["message"] = $"✏️ Created filled region (ID: {region.Id.IntegerValue})", ["elementId"] = region.Id.IntegerValue };
+                return new JObject { ["message"] = $"✏️ Created filled region (ID: {region.Id.Value})", ["elementId"] = region.Id.Value };
             }
         }
 
@@ -51,7 +51,7 @@ namespace RevitMCPPlugin.Core
                 tx.Start();
                 var legend = ViewSchedule.CreateKeynoteLegend(doc);
                 tx.Commit();
-                return new JObject { ["message"] = $"📋 Created keynote legend (ID: {legend.Id.IntegerValue})", ["elementId"] = legend.Id.IntegerValue };
+                return new JObject { ["message"] = $"📋 Created keynote legend (ID: {legend.Id.Value})", ["elementId"] = legend.Id.Value };
             }
         }
 
@@ -65,7 +65,7 @@ namespace RevitMCPPlugin.Core
                 tx.Start(); if (!symbol.IsActive) symbol.Activate();
                 var inst = doc.Create.NewFamilyInstance(new XYZ(parameters["x"]?.Value<double>() ?? 0, parameters["y"]?.Value<double>() ?? 0, 0), symbol, uidoc.ActiveView);
                 tx.Commit();
-                return new JObject { ["message"] = $"✏️ Placed detail component (ID: {inst.Id.IntegerValue})", ["elementId"] = inst.Id.IntegerValue };
+                return new JObject { ["message"] = $"✏️ Placed detail component (ID: {inst.Id.Value})", ["elementId"] = inst.Id.Value };
             }
         }
 
@@ -79,7 +79,7 @@ namespace RevitMCPPlugin.Core
             {
                 tx.Start();
                 foreach (var room in rooms)
-                    try { var loc = room.Location as LocationPoint; if (loc != null) { doc.Create.NewRoomTag(new LinkElementId(room.Id), new UV(loc.Point.X, loc.Point.Y), view.Id); tagged++; } } catch { }
+                    try { var loc = room.Location as LocationPoint; if (loc != null) { doc.Create.NewRoomTag(new LinkElementId(room.Id), new UV(loc.Point.X, loc.Point.Y), view.Id); tagged++; } } catch (Exception ex) { Logger.Log($"Room tag failed for '{room.Name}': {ex.Message}"); }
                 tx.Commit();
             }
             return new JObject { ["message"] = $"🏷️ Tagged {tagged}/{rooms.Count} rooms in '{view.Name}'", ["tagged"] = tagged };

@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <!-- Multi-target: net48 for Revit 2020-2024, net8.0-windows for Revit 2025-2026 -->
-    <TargetFrameworks>net48;net8.0-windows</TargetFrameworks>
+    <TargetFrameworks>net8.0-windows</TargetFrameworks>
     <RootNamespace>RevitMCPPlugin</RootNamespace>
     <AssemblyName>RevitMCPPlugin</AssemblyName>
     <AppendTargetFrameworkToOutputPath>true</AppendTargetFrameworkToOutputPath>
@@ -18,11 +18,11 @@
 
   <!-- Revit API version per framework target -->
   <PropertyGroup Condition="'$(TargetFramework)' == 'net48'">
-    <!-- Build against Revit 2025 API (compatible with 2020-2024 at runtime) -->
-    <RevitVersion>2025</RevitVersion>
+    <!-- Build against Revit 2026 API -->
+    <RevitVersion>2026</RevitVersion>
   </PropertyGroup>
   <PropertyGroup Condition="'$(TargetFramework)' == 'net8.0-windows'">
-    <RevitVersion>2025</RevitVersion>
+    <RevitVersion>2026</RevitVersion>
   </PropertyGroup>
 
   <ItemGroup>

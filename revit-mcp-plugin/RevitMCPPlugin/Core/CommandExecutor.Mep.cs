@@ -27,7 +27,7 @@ namespace RevitMCPPlugin.Core
                     new XYZ(parameters["startX"]?.Value<double>() ?? 0, parameters["startY"]?.Value<double>() ?? 0, parameters["startZ"]?.Value<double>() ?? 0),
                     new XYZ(parameters["endX"]?.Value<double>() ?? 0, parameters["endY"]?.Value<double>() ?? 0, parameters["endZ"]?.Value<double>() ?? 0));
                 tx.Commit();
-                return new JObject { ["message"] = $"🔧 Created duct (ID: {duct.Id.IntegerValue})", ["elementId"] = duct.Id.IntegerValue };
+                return new JObject { ["message"] = $"🔧 Created duct (ID: {duct.Id.Value})", ["elementId"] = duct.Id.Value };
             }
         }
 
@@ -46,7 +46,7 @@ namespace RevitMCPPlugin.Core
                     new XYZ(parameters["startX"]?.Value<double>() ?? 0, parameters["startY"]?.Value<double>() ?? 0, parameters["startZ"]?.Value<double>() ?? 0),
                     new XYZ(parameters["endX"]?.Value<double>() ?? 0, parameters["endY"]?.Value<double>() ?? 0, parameters["endZ"]?.Value<double>() ?? 0));
                 tx.Commit();
-                return new JObject { ["message"] = $"🔧 Created pipe (ID: {pipe.Id.IntegerValue})", ["elementId"] = pipe.Id.IntegerValue };
+                return new JObject { ["message"] = $"🔧 Created pipe (ID: {pipe.Id.Value})", ["elementId"] = pipe.Id.Value };
             }
         }
 
@@ -66,7 +66,7 @@ namespace RevitMCPPlugin.Core
                 tx.Start();
                 var fd = FlexDuct.Create(doc, sysType.Id, flexType.Id, level.Id, pts.First(), pts.Last(), pts);
                 tx.Commit();
-                return new JObject { ["message"] = $"🔧 Created flex duct (ID: {fd.Id.IntegerValue})", ["elementId"] = fd.Id.IntegerValue };
+                return new JObject { ["message"] = $"🔧 Created flex duct (ID: {fd.Id.Value})", ["elementId"] = fd.Id.Value };
             }
         }
 
@@ -82,7 +82,7 @@ namespace RevitMCPPlugin.Core
                 var spaceName = parameters["spaceName"]?.ToString();
                 if (!string.IsNullOrEmpty(spaceName)) space.get_Parameter(BuiltInParameter.ROOM_NAME)?.Set(spaceName);
                 tx.Commit();
-                return new JObject { ["message"] = $"📦 Created MEP space (ID: {space.Id.IntegerValue})", ["elementId"] = space.Id.IntegerValue };
+                return new JObject { ["message"] = $"📦 Created MEP space (ID: {space.Id.Value})", ["elementId"] = space.Id.Value };
             }
         }
 
@@ -90,9 +90,9 @@ namespace RevitMCPPlugin.Core
         {
             var systems = new JArray();
             foreach (var sys in new FilteredElementCollector(doc).OfClass(typeof(MechanicalSystem)).Cast<MechanicalSystem>())
-                systems.Add(new JObject { ["id"] = sys.Id.IntegerValue, ["name"] = sys.Name, ["type"] = "Mechanical", ["elements"] = sys.DuctNetwork?.Size ?? 0 });
+                systems.Add(new JObject { ["id"] = sys.Id.Value, ["name"] = sys.Name, ["type"] = "Mechanical", ["elements"] = sys.DuctNetwork?.Size ?? 0 });
             foreach (var sys in new FilteredElementCollector(doc).OfClass(typeof(PipingSystem)).Cast<PipingSystem>())
-                systems.Add(new JObject { ["id"] = sys.Id.IntegerValue, ["name"] = sys.Name, ["type"] = "Piping", ["elements"] = sys.PipingNetwork?.Size ?? 0 });
+                systems.Add(new JObject { ["id"] = sys.Id.Value, ["name"] = sys.Name, ["type"] = "Piping", ["elements"] = sys.PipingNetwork?.Size ?? 0 });
             return new JObject { ["message"] = $"🔧 Found {systems.Count} MEP systems", ["systems"] = systems };
         }
 
@@ -104,7 +104,7 @@ namespace RevitMCPPlugin.Core
             var items = new JArray();
             foreach (var e in elements.Take(50))
             {
-                var item = new JObject { ["id"] = e.Id.IntegerValue, ["name"] = e.Name };
+                var item = new JObject { ["id"] = e.Id.Value, ["name"] = e.Name };
                 var sizeP = e.get_Parameter(BuiltInParameter.RBS_CALCULATED_SIZE); if (sizeP != null) item["size"] = sizeP.AsString();
                 items.Add(item);
             }

@@ -112,7 +112,7 @@ namespace RevitMCPPlugin.PowerBI
         {
             FinalizeCurrentElement();
 
-            _currentElementId = elementId.IntegerValue;
+            _currentElementId = (int)elementId.Value;
             _currentMesh = new MeshData();
             _vertexOffset = 0;
 

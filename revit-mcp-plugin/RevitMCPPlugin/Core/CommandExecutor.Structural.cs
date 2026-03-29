@@ -24,7 +24,7 @@ namespace RevitMCPPlugin.Core
                 var line = Line.CreateBound(new XYZ(parameters["startX"]?.Value<double>() ?? 0, parameters["startY"]?.Value<double>() ?? 0, level.Elevation), new XYZ(parameters["endX"]?.Value<double>() ?? 0, parameters["endY"]?.Value<double>() ?? 0, level.Elevation));
                 var beam = doc.Create.NewFamilyInstance(line, beamType, level, StructuralType.Beam);
                 tx.Commit();
-                return new JObject { ["message"] = $"🏗️ Created beam (ID: {beam.Id.IntegerValue})", ["elementId"] = beam.Id.IntegerValue };
+                return new JObject { ["message"] = $"🏗️ Created beam (ID: {beam.Id.Value})", ["elementId"] = beam.Id.Value };
             }
         }
 
@@ -42,7 +42,7 @@ namespace RevitMCPPlugin.Core
                 var topLevelName = parameters["topLevelName"]?.ToString();
                 if (!string.IsNullOrEmpty(topLevelName)) { var tl = FindLevel(doc, topLevelName); if (tl != null) col.get_Parameter(BuiltInParameter.FAMILY_TOP_LEVEL_PARAM)?.Set(tl.Id); }
                 tx.Commit();
-                return new JObject { ["message"] = $"🏗️ Created column (ID: {col.Id.IntegerValue})", ["elementId"] = col.Id.IntegerValue };
+                return new JObject { ["message"] = $"🏗️ Created column (ID: {col.Id.Value})", ["elementId"] = col.Id.Value };
             }
         }
 
@@ -52,7 +52,7 @@ namespace RevitMCPPlugin.Core
             var wall = doc.GetElement(new ElementId(wallId)) as Wall;
             if (wall == null) return new JObject { ["error"] = $"Wall {wallId} not found" };
             var foundTypes = new FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_StructuralFoundation).OfClass(typeof(FamilySymbol)).Cast<FamilySymbol>().ToList();
-            return new JObject { ["message"] = $"🏗️ Wall foundation: {foundTypes.Count} types available for wall {wallId}", ["types"] = JArray.FromObject(foundTypes.Select(t => new { t.Name, id = t.Id.IntegerValue })), ["hint"] = "Use execute_code: doc.Create.NewFamilyInstance(curve, foundationType, wall, level, StructuralType.Footing)" };
+            return new JObject { ["message"] = $"🏗️ Wall foundation: {foundTypes.Count} types available for wall {wallId}", ["types"] = JArray.FromObject(foundTypes.Select(t => new { t.Name, id = t.Id.Value })), ["hint"] = "Use execute_code: doc.Create.NewFamilyInstance(curve, foundationType, wall, level, StructuralType.Footing)" };
         }
 
         private static JToken CreateRebar(Document doc, JObject parameters)
@@ -61,7 +61,7 @@ namespace RevitMCPPlugin.Core
             var host = doc.GetElement(new ElementId(hostId));
             if (host == null) return new JObject { ["error"] = $"Host element {hostId} not found" };
             var barTypes = new FilteredElementCollector(doc).OfClass(typeof(RebarBarType)).Cast<RebarBarType>().ToList();
-            return new JObject { ["message"] = $"🏗️ {barTypes.Count} rebar types available for '{host.Name}'", ["barTypes"] = JArray.FromObject(barTypes.Select(b => new { b.Name, id = b.Id.IntegerValue })), ["hint"] = "Use execute_code: Rebar.CreateFromCurves(doc, rebarStyle, barType, hookType, hookType, host, normal, curves, hookOrient, hookOrient, useExistingShape, createNewShape)" };
+            return new JObject { ["message"] = $"🏗️ {barTypes.Count} rebar types available for '{host.Name}'", ["barTypes"] = JArray.FromObject(barTypes.Select(b => new { b.Name, id = b.Id.Value })), ["hint"] = "Use execute_code: Rebar.CreateFromCurves(doc, rebarStyle, barType, hookType, hookType, host, normal, curves, hookOrient, hookOrient, useExistingShape, createNewShape)" };
         }
 
         private static JToken GetStructuralElements(Document doc, JObject parameters)
@@ -71,7 +71,7 @@ namespace RevitMCPPlugin.Core
             var elements = new FilteredElementCollector(doc).OfCategory(bic).WhereElementIsNotElementType().ToList();
             var items = new JArray();
             foreach (var e in elements.Take(100))
-                items.Add(new JObject { ["id"] = e.Id.IntegerValue, ["name"] = e.Name, ["family"] = (e as FamilyInstance)?.Symbol?.Family?.Name });
+                items.Add(new JObject { ["id"] = e.Id.Value, ["name"] = e.Name, ["family"] = (e as FamilyInstance)?.Symbol?.Family?.Name });
             return new JObject { ["message"] = $"🏗️ {elements.Count} {cat} elements", ["elements"] = items };
         }
 
@@ -84,7 +84,7 @@ namespace RevitMCPPlugin.Core
                 {
                     var elem = doc.GetElement(new ElementId(int.Parse(idStr.Trim())));
                     if (elem == null) continue;
-                    var item = new JObject { ["id"] = elem.Id.IntegerValue, ["name"] = elem.Name, ["category"] = elem.Category?.Name };
+                    var item = new JObject { ["id"] = elem.Id.Value, ["name"] = elem.Name, ["category"] = elem.Category?.Name };
                     var bb = elem.get_BoundingBox(null);
                     if (bb != null) item["centroid"] = new JObject { ["x"] = Math.Round((bb.Min.X + bb.Max.X) / 2, 4), ["y"] = Math.Round((bb.Min.Y + bb.Max.Y) / 2, 4), ["z"] = Math.Round((bb.Min.Z + bb.Max.Z) / 2, 4) };
                     items.Add(item);
