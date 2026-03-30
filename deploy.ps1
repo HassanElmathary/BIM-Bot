@@ -1,8 +1,9 @@
 # Deploy RevitMCPPlugin to all installed Revit versions
 # Routes net48 build to Revit 2020-2024, net8.0-windows build to Revit 2025-2026
 
-$sourceNet48 = "c:\Users\hassa\OneDrive\01-me\Revit MCP\revit-mcp-plugin\RevitMCPPlugin\bin\Release\net48"
-$sourceNet8 = "c:\Users\hassa\OneDrive\01-me\Revit MCP\revit-mcp-plugin\RevitMCPPlugin\bin\Release\net8.0-windows"
+$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$sourceNet48 = Join-Path $scriptDir "revit-mcp-plugin\RevitMCPPlugin\bin\Release\net48"
+$sourceNet8 = Join-Path $scriptDir "revit-mcp-plugin\RevitMCPPlugin\bin\Release\net8.0-windows"
 $destBase = "C:\Program Files\Revit MCP\plugin"
 $destNet48 = "$destBase\net48"
 $destNet8 = "$destBase\net8"

@@ -14,7 +14,7 @@ $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"  # Faster downloads
 
 # ── Branding ─────────────────────────────────────────────────
-$VERSION = "2.0.0"
+$VERSION = "2.0.1"
 $REPO = "HassanElmathary/Revit-MCP"
 $RELEASE_URL = "https://github.com/$REPO/releases/latest/download/RevitMCP-v$VERSION.zip"
 $RAW_BASE = "https://raw.githubusercontent.com/$REPO/main"
