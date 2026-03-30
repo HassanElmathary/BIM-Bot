@@ -25,7 +25,7 @@ namespace RevitMCPPlugin.Core
         public static SocketService? SocketServiceInstance => _socketService;
         public static ExternalEventManager? EventManagerInstance => _eventManager;
 
-        public static string Version => "2.0.2";
+        public static string Version => "2.0.3";
 
         public Result OnStartup(UIControlledApplication application)
         {

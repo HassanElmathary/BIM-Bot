@@ -120,10 +120,21 @@ public class DynamicRevitCode
 }}
 ";
 
-            var syntaxTree = CSharpSyntaxTree.ParseText(fullSource);
+            // --- REFLECTION-BASED ROSLYN BINDING ---
+            // This prevents MissingMethodException DLL clashes with Dynamo's Roslyn.
+            
+            // 1. CSharpSyntaxTree.ParseText
+            var parseTextMethod = typeof(CSharpSyntaxTree).GetMethods(BindingFlags.Public | BindingFlags.Static)
+                .First(m => m.Name == "ParseText" && m.GetParameters().Length > 0 && m.GetParameters()[0].ParameterType == typeof(string));
+            var parseArgs = BuildArgs(parseTextMethod.GetParameters(), fullSource);
+            var syntaxTree = parseTextMethod.Invoke(null, parseArgs);
+
+            // 2. SyntaxTree[] Array Creation
+            var syntaxTreeArray = Array.CreateInstance(typeof(SyntaxTree), 1);
+            syntaxTreeArray.SetValue(syntaxTree, 0);
 
             // Collect references from currently loaded assemblies in Revit's AppDomain
-            // This automatically gets the correct Revit API version + .NET runtime
+            var referencesType = typeof(List<MetadataReference>);
             var references = new List<MetadataReference>();
             foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
             {
@@ -134,13 +145,9 @@ public class DynamicRevitCode
                         references.Add(MetadataReference.CreateFromFile(asm.Location));
                     }
                 }
-                catch
-                {
-                    // Skip assemblies that can't be referenced
-                }
+                catch { }
             }
 
-            // Also explicitly add the Revit API assemblies from the running Revit installation
             var revitDir = Path.GetDirectoryName(typeof(Autodesk.Revit.DB.Document).Assembly.Location);
             if (revitDir != null)
             {
@@ -152,21 +159,44 @@ public class DynamicRevitCode
                     references.Add(MetadataReference.CreateFromFile(revitApiUI));
             }
 
-            var compilation = CSharpCompilation.Create(
-                assemblyName: $"DynamicCode_{Guid.NewGuid():N}",
-                syntaxTrees: new[] { syntaxTree },
-                references: references,
-                options: new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary)
-                    .WithOptimizationLevel(OptimizationLevel.Release)
-            );
+            // 3. CSharpCompilationOptions
+            var optionsType = typeof(CSharpCompilationOptions);
+            var optionsCtor = optionsType.GetConstructors()
+                .First(c => c.GetParameters().Length > 0 && c.GetParameters()[0].ParameterType == typeof(OutputKind));
+            var optionsArgs = BuildArgs(optionsCtor.GetParameters(), OutputKind.DynamicallyLinkedLibrary);
+            var options = optionsCtor.Invoke(optionsArgs);
+            
+            // Apply OptimizationLevel.Release via reflection
+            var withOptMethod = optionsType.GetMethod("WithOptimizationLevel");
+            if (withOptMethod != null)
+            {
+                var optArgs = BuildArgs(withOptMethod.GetParameters(), OptimizationLevel.Release);
+                options = withOptMethod.Invoke(options, optArgs);
+            }
+
+            // 4. CSharpCompilation.Create
+            var createMethod = typeof(CSharpCompilation).GetMethods(BindingFlags.Public | BindingFlags.Static)
+                .First(m => m.Name == "Create" && m.GetParameters().Length >= 4
+                       && m.GetParameters()[0].ParameterType == typeof(string)
+                       && m.GetParameters()[3].ParameterType == typeof(CSharpCompilationOptions));
+            
+            var createArgs = BuildArgs(createMethod.GetParameters(), 
+                $"DynamicCode_{Guid.NewGuid():N}", 
+                syntaxTreeArray, 
+                references, 
+                options);
+            
+            dynamic compilation = createMethod.Invoke(null, createArgs);
 
             using (var ms = new MemoryStream())
             {
                 var emitResult = compilation.Emit(ms);
 
-                if (!emitResult.Success)
+                bool isSuccess = emitResult.Success;
+                if (!isSuccess)
                 {
-                    var errors = emitResult.Diagnostics
+                    var diagnostics = (IEnumerable<Diagnostic>)emitResult.Diagnostics;
+                    var errors = diagnostics
                         .Where(d => d.Severity == DiagnosticSeverity.Error)
                         .Select(d =>
                         {
@@ -242,6 +272,27 @@ public class DynamicRevitCode
             {
                 return result.ToString();
             }
+        }
+
+        /// <summary>
+        /// Helper to build default args for a Method/Constructor with optional parameters at runtime.
+        /// </summary>
+        private static object[] BuildArgs(ParameterInfo[] parameters, params object[] knownArgs)
+        {
+            var args = new object[parameters.Length];
+            for (int i = 0; i < args.Length; i++)
+            {
+                if (i < knownArgs.Length)
+                {
+                    args[i] = knownArgs[i];
+                }
+                else
+                {
+                    args[i] = parameters[i].HasDefaultValue ? parameters[i].DefaultValue :
+                        (parameters[i].ParameterType.IsValueType ? Activator.CreateInstance(parameters[i].ParameterType) : null);
+                }
+            }
+            return args;
         }
 
         // Dangerous API patterns that should be flagged
