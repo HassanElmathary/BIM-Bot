@@ -5,7 +5,7 @@
 ; ============================================================
 
 #define MyAppName      "Revit MCP"
-#define MyAppVersion   "2.0.1"
+#define MyAppVersion   "2.0.2"
 #define MyAppPublisher "Hassan Ahmed Elmathary"
 #define MyAppURL       "https://github.com/HassanElmathary/Revit-MCP"
 #define MyAppExeName   "Start MCP Server.bat"
