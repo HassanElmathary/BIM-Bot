@@ -396,7 +396,7 @@ namespace RevitMCPPlugin.Core
                 foreach (var vpId in sheet.GetAllViewports())
                 {
                     var vp = doc.GetElement(vpId) as Viewport;
-                    if (vp != null) sheetsWithViewIds.Add((int)vp.ViewId.Value);
+                    if (vp != null) sheetsWithViewIds.Add((int)(long)vp.ViewId.Value);
                 }
             }
 

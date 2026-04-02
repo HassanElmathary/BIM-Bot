@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -220,7 +222,7 @@ namespace RevitMCPPlugin.UI
                 case "deepseek": models = DeepSeekModels; break;
                 case "perplexity": models = PerplexityModels; break;
                 case "openrouter": models = OpenRouterModels; break;
-                case "ollama": models = OllamaModels; break;
+                case "ollama": models = GetInstalledOllamaModels(); break;
                 case "cerebras": models = CerebrasModels; break;
                 case "groq": models = GroqModels; break;
                 case "openai": models = OpenAIModels; break;
@@ -240,6 +242,64 @@ namespace RevitMCPPlugin.UI
                 _modelCombo.Items.Add(item);
             }
             if (_modelCombo.SelectedIndex < 0) _modelCombo.SelectedIndex = 0;
+        }
+
+        private string[] GetInstalledOllamaModels()
+        {
+            var installed = new HashSet<string>();
+            string ollamaPath = null;
+            var localApp = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            var path = Path.Combine(localApp, "Programs", "Ollama", "ollama.exe");
+            if (File.Exists(path)) ollamaPath = path;
+            else
+            {
+                try
+                {
+                    var psiCheck = new ProcessStartInfo("ollama", "--version") { RedirectStandardOutput = true, UseShellExecute = false, CreateNoWindow = true };
+                    var pCheck = Process.Start(psiCheck);
+                    pCheck?.WaitForExit(2000);
+                    if (pCheck?.ExitCode == 0) ollamaPath = "ollama";
+                }
+                catch { }
+            }
+
+            if (ollamaPath != null)
+            {
+                try
+                {
+                    var psi = new ProcessStartInfo(ollamaPath, "list")
+                    {
+                        RedirectStandardOutput = true,
+                        UseShellExecute = false,
+                        CreateNoWindow = true
+                    };
+                    var p = Process.Start(psi);
+                    var output = p?.StandardOutput.ReadToEnd() ?? "";
+                    p?.WaitForExit(3000);
+
+                    foreach (var line in output.Split('\n'))
+                    {
+                        var trimmed = line.Trim();
+                        if (string.IsNullOrEmpty(trimmed) || trimmed.StartsWith("NAME")) continue;
+                        var parts = trimmed.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+                        if (parts.Length > 0 && !installed.Contains(parts[0]))
+                        {
+                            installed.Add(parts[0]);
+                        }
+                    }
+                }
+                catch { }
+            }
+
+            var finalModels = new List<string>(installed);
+            foreach (var m in OllamaModels)
+            {
+                if (!installed.Contains(m))
+                {
+                    finalModels.Add(m);
+                }
+            }
+            return finalModels.ToArray();
         }
     }
 }

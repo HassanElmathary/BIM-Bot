@@ -5,9 +5,6 @@ using System.Linq;
 using System.Reflection;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
-using Autodesk.Revit.UI.Selection;
-using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
 using Newtonsoft.Json.Linq;
 
 namespace RevitMCPPlugin.Core
@@ -20,7 +17,6 @@ namespace RevitMCPPlugin.Core
     /// - Revit API imports (using statements)
     /// - A class + method wrapper
     /// - Access to Document, UIDocument, UIApplication via __doc__, __uidoc__, __uiapp__
-    /// - Automatic transaction handling
     /// </summary>
     public static class CodeExecutor
     {
@@ -120,92 +116,151 @@ public class DynamicRevitCode
 }}
 ";
 
-            // --- REFLECTION-BASED ROSLYN BINDING ---
-            // This prevents MissingMethodException DLL clashes with Dynamo's Roslyn.
+            // Determine framework and Roslyn assembly paths
+            var pluginDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? "";
+            var csharpDllPath = Path.Combine(pluginDir, "Microsoft.CodeAnalysis.CSharp.dll");
+            var coreDllPath = Path.Combine(pluginDir, "Microsoft.CodeAnalysis.dll");
+            var collectionsDllPath = Path.Combine(pluginDir, "System.Collections.Immutable.dll");
+
+            Assembly rCSharp = null;
+            Assembly rCore = null;
+
+#if NET5_0_OR_GREATER || NETCOREAPP
+            // In .NET 8 (Revit 2025/2026), use a custom AssemblyLoadContext to heavily isolate Roslyn
+            // Prevents Dynamo's Roslyn assemblies from causing MethodNotFound exceptions.
+            var context = new System.Runtime.Loader.AssemblyLoadContext("RevitMCPRoslyn隔离", isCollectible: true);
+            try
+            {
+                if (File.Exists(collectionsDllPath)) context.LoadFromAssemblyPath(collectionsDllPath);
+                if (File.Exists(coreDllPath)) rCore = context.LoadFromAssemblyPath(coreDllPath);
+                if (File.Exists(csharpDllPath)) rCSharp = context.LoadFromAssemblyPath(csharpDllPath);
+            }
+            catch { }
+#endif
             
-            // 1. CSharpSyntaxTree.ParseText
-            var parseTextMethod = typeof(CSharpSyntaxTree).GetMethods(BindingFlags.Public | BindingFlags.Static)
+            // Fallback for .NET 4.8 or if ALC loading fails
+            if (rCSharp == null || rCore == null)
+            {
+                if (File.Exists(csharpDllPath)) rCSharp = Assembly.LoadFrom(csharpDllPath);
+                else rCSharp = AppDomain.CurrentDomain.GetAssemblies().FirstOrDefault(a => a.GetName().Name == "Microsoft.CodeAnalysis.CSharp");
+
+                if (File.Exists(coreDllPath)) rCore = Assembly.LoadFrom(coreDllPath);
+                else rCore = AppDomain.CurrentDomain.GetAssemblies().FirstOrDefault(a => a.GetName().Name == "Microsoft.CodeAnalysis");
+            }
+
+            if (rCSharp == null || rCore == null)
+                throw new Exception("Could not load Roslyn compiler assemblies (Microsoft.CodeAnalysis / Microsoft.CodeAnalysis.CSharp).");
+
+            var csharpSyntaxTreeType = rCSharp.GetType("Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree");
+            var csharpCompilationOptionsType = rCSharp.GetType("Microsoft.CodeAnalysis.CSharp.CSharpCompilationOptions");
+            var csharpCompilationType = rCSharp.GetType("Microsoft.CodeAnalysis.CSharp.CSharpCompilation");
+            var outputKindType = rCore.GetType("Microsoft.CodeAnalysis.OutputKind");
+            var metadataReferenceType = rCore.GetType("Microsoft.CodeAnalysis.MetadataReference");
+            var diagnosticSeverityType = rCore.GetType("Microsoft.CodeAnalysis.DiagnosticSeverity");
+            var optimizationLevelType = rCore.GetType("Microsoft.CodeAnalysis.OptimizationLevel");
+
+            // 1. CSharpSyntaxTree.ParseText(fullSource)
+            var parseTextMethod = csharpSyntaxTreeType.GetMethods(BindingFlags.Public | BindingFlags.Static)
                 .First(m => m.Name == "ParseText" && m.GetParameters().Length > 0 && m.GetParameters()[0].ParameterType == typeof(string));
             var parseArgs = BuildArgs(parseTextMethod.GetParameters(), fullSource);
             var syntaxTree = parseTextMethod.Invoke(null, parseArgs);
 
-            // 2. SyntaxTree[] Array Creation
-            var syntaxTreeArray = Array.CreateInstance(typeof(SyntaxTree), 1);
+            // Create array of syntax trees
+            var syntaxTreeArray = Array.CreateInstance(csharpSyntaxTreeType.BaseType ?? typeof(object), 1);
             syntaxTreeArray.SetValue(syntaxTree, 0);
 
-            // Collect references from currently loaded assemblies in Revit's AppDomain
-            var referencesType = typeof(List<MetadataReference>);
-            var references = new List<MetadataReference>();
-            foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+            // 2. Build MetadataReferences natively using reflection
+            var createFromFileMethod = metadataReferenceType.GetMethods(BindingFlags.Public | BindingFlags.Static)
+                .First(m => m.Name == "CreateFromFile" && m.GetParameters().Length > 0 && m.GetParameters()[0].ParameterType == typeof(string));
+
+            var referencesListType = typeof(List<>).MakeGenericType(metadataReferenceType);
+            dynamic references = Activator.CreateInstance(referencesListType);
+
+            var addedRefPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            void SafeAddReference(string path)
             {
+                if (string.IsNullOrWhiteSpace(path) || !File.Exists(path) || !addedRefPaths.Add(path)) return;
                 try
                 {
-                    if (!asm.IsDynamic && !string.IsNullOrEmpty(asm.Location))
-                    {
-                        references.Add(MetadataReference.CreateFromFile(asm.Location));
-                    }
+                    var args = BuildArgs(createFromFileMethod.GetParameters(), path);
+                    var reference = createFromFileMethod.Invoke(null, args);
+                    references.Add((dynamic)reference);
                 }
                 catch { }
             }
 
-            var revitDir = Path.GetDirectoryName(typeof(Autodesk.Revit.DB.Document).Assembly.Location);
-            if (revitDir != null)
+            foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
             {
-                var revitApi = Path.Combine(revitDir, "RevitAPI.dll");
-                var revitApiUI = Path.Combine(revitDir, "RevitAPIUI.dll");
-                if (File.Exists(revitApi) && !references.Any(r => r.Display?.Contains("RevitAPI") == true))
-                    references.Add(MetadataReference.CreateFromFile(revitApi));
-                if (File.Exists(revitApiUI) && !references.Any(r => r.Display?.Contains("RevitAPIUI") == true))
-                    references.Add(MetadataReference.CreateFromFile(revitApiUI));
+                if (!asm.IsDynamic && !string.IsNullOrWhiteSpace(asm.Location))
+                    SafeAddReference(asm.Location);
+            }
+
+            var revitDir = Path.GetDirectoryName(typeof(Autodesk.Revit.DB.Document).Assembly.Location);
+            if (!string.IsNullOrEmpty(revitDir))
+            {
+                SafeAddReference(Path.Combine(revitDir, "RevitAPI.dll"));
+                SafeAddReference(Path.Combine(revitDir, "RevitAPIUI.dll"));
             }
 
             // 3. CSharpCompilationOptions
-            var optionsType = typeof(CSharpCompilationOptions);
-            var optionsCtor = optionsType.GetConstructors()
-                .First(c => c.GetParameters().Length > 0 && c.GetParameters()[0].ParameterType == typeof(OutputKind));
-            var optionsArgs = BuildArgs(optionsCtor.GetParameters(), OutputKind.DynamicallyLinkedLibrary);
+            int outputKindDll = 2; // OutputKind.DynamicallyLinkedLibrary = 2
+            if (outputKindType != null) outputKindDll = (int)Enum.Parse(outputKindType, "DynamicallyLinkedLibrary");
+
+            var optionsCtor = csharpCompilationOptionsType.GetConstructors()
+                .First(c => c.GetParameters().Length > 0 && c.GetParameters()[0].ParameterType.Name == "OutputKind");
+            var optionsArgs = BuildArgs(optionsCtor.GetParameters(), Enum.ToObject(outputKindType, outputKindDll));
             var options = optionsCtor.Invoke(optionsArgs);
-            
-            // Apply OptimizationLevel.Release via reflection
-            var withOptMethod = optionsType.GetMethod("WithOptimizationLevel");
-            if (withOptMethod != null)
+
+            var withOptMethod = csharpCompilationOptionsType.GetMethod("WithOptimizationLevel");
+            if (withOptMethod != null && optimizationLevelType != null)
             {
-                var optArgs = BuildArgs(withOptMethod.GetParameters(), OptimizationLevel.Release);
+                var optArgs = BuildArgs(withOptMethod.GetParameters(), Enum.ToObject(optimizationLevelType, 1)); // Release = 1
                 options = withOptMethod.Invoke(options, optArgs);
             }
 
             // 4. CSharpCompilation.Create
-            var createMethod = typeof(CSharpCompilation).GetMethods(BindingFlags.Public | BindingFlags.Static)
+            var createMethod = csharpCompilationType.GetMethods(BindingFlags.Public | BindingFlags.Static)
                 .First(m => m.Name == "Create" && m.GetParameters().Length >= 4
                        && m.GetParameters()[0].ParameterType == typeof(string)
-                       && m.GetParameters()[3].ParameterType == typeof(CSharpCompilationOptions));
-            
+                       && m.GetParameters()[3].ParameterType == csharpCompilationOptionsType);
+
             var createArgs = BuildArgs(createMethod.GetParameters(), 
                 $"DynamicCode_{Guid.NewGuid():N}", 
                 syntaxTreeArray, 
                 references, 
                 options);
-            
+
             dynamic compilation = createMethod.Invoke(null, createArgs);
 
+            // 5. Emit
             using (var ms = new MemoryStream())
             {
                 var emitResult = compilation.Emit(ms);
-
                 bool isSuccess = emitResult.Success;
+
                 if (!isSuccess)
                 {
-                    var diagnostics = (IEnumerable<Diagnostic>)emitResult.Diagnostics;
-                    var errors = diagnostics
-                        .Where(d => d.Severity == DiagnosticSeverity.Error)
-                        .Select(d =>
-                        {
-                            var lineSpan = d.Location.GetLineSpan();
-                            var line = lineSpan.StartLinePosition.Line - 20; // Offset for wrapper (imports + aliases)
-                            return $"Line {line}: {d.GetMessage()}";
-                        })
-                        .ToList();
+                    IEnumerable<dynamic> rawDiagnostics = emitResult.Diagnostics;
+                    var errors = new List<string>();
 
+                    foreach (var d in rawDiagnostics)
+                    {
+                        var severity = (int)d.Severity;
+                        if (severity == 3) // Error = 3
+                        {
+                            var location = d.Location;
+                            int line = 0;
+                            try
+                            {
+                                var lineSpan = location.GetLineSpan();
+                                line = lineSpan.StartLinePosition.Line - 20; // Offset wrapper
+                            }
+                            catch { }
+
+                            errors.Add($"Line {line}: {d.GetMessage()}");
+                        }
+                    }
                     throw new CompilationException(errors);
                 }
 
@@ -215,7 +270,8 @@ public class DynamicRevitCode
         }
 
         /// <summary>
-        /// Execute the compiled assembly within a Revit transaction.
+        /// Execute the compiled assembly directly.
+        /// Code must handle its own Transactions if it modifies the document.
         /// </summary>
         private static object ExecuteAssembly(Assembly assembly, UIApplication uiApp, UIDocument uidoc, Document doc)
         {
@@ -228,27 +284,15 @@ public class DynamicRevitCode
             if (method == null)
                 throw new Exception("Failed to find the Run method in compiled code.");
 
-            // Execute within a transaction so the code can modify the model
             object result = null;
-            using (var trans = new Transaction(doc, "AI Code Execution"))
+            try
             {
-                trans.Start();
-                try
-                {
-                    result = method.Invoke(instance, new object[] { uiApp, uidoc, doc });
-                    trans.Commit();
-                }
-                catch (TargetInvocationException ex)
-                {
-                    trans.RollBack();
-                    // Unwrap the inner exception for a cleaner error message
-                    throw ex.InnerException ?? ex;
-                }
-                catch
-                {
-                    trans.RollBack();
-                    throw;
-                }
+                result = method.Invoke(instance, new object[] { uiApp, uidoc, doc });
+            }
+            catch (TargetInvocationException ex)
+            {
+                // Unwrap the inner exception for a cleaner error message
+                throw ex.InnerException ?? ex;
             }
 
             // Convert result to a readable string
