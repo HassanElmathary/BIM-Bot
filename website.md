@@ -50,7 +50,7 @@ The correct category count is 18: Reading, Creating, Editing, Documentation, QA/
 Large CTA button:
 > **Download BIM-Bot v2.1.0** — `BIMBot-Setup-2.1.0.exe` (Windows)
 
-Link to: `https://github.com/HassanElmathary/Revit-MCP/releases/latest`
+Link to: `https://github.com/HassanElmathary/MIB-Mot/releases/latest`
 
 **What it does (show as animated checklist):**
 - ✅ Installs BIM-Bot with a guided setup wizard
@@ -93,7 +93,7 @@ Add an expandable/accordion section with:
 
 **One-Line Uninstall:**
 ```powershell
-irm https://raw.githubusercontent.com/HassanElmathary/Revit-MCP/main/install.ps1 | iex; Install-BIMBot -Uninstall
+irm https://raw.githubusercontent.com/HassanElmathary/MIB-Mot/main/install.ps1 | iex; Install-BIMBot -Uninstall
 ```
 
 **What it removes:**
