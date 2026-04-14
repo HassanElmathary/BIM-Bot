@@ -76,7 +76,7 @@ namespace BIMBotPlugin.UI.Tools
             DarkTheme.Apply(this);
 
             var mainGrid = new Grid();
-            mainGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(60) });     // Header
+            mainGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });     // Header
             mainGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(40) });     // Tab bar
             mainGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); // Content
             mainGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });        // Footer

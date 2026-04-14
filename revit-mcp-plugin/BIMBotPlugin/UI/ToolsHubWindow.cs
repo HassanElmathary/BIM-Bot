@@ -49,7 +49,7 @@ namespace BIMBotPlugin.UI
         private void BuildUI()
         {
             var mainGrid = new Grid();
-            mainGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(70) });     // Header
+            mainGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });     // Header
             mainGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); // Content
             mainGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });        // Footer
 
@@ -318,6 +318,9 @@ namespace BIMBotPlugin.UI
                         break;
                     case "apply_view_template":
                         dialog = new Tools.ApplyViewTemplateWindow { Owner = this };
+                        break;
+                    case "clash_detection":
+                        dialog = new Tools.ClashDetectionWindow { Owner = this };
                         break;
                     default:
                         dialog = new ToolDialogWindow(tool) { Owner = this };

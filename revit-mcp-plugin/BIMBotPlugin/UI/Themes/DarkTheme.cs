@@ -190,7 +190,7 @@ namespace BIMBotPlugin.UI.Themes
             string title, string subtitle = null, double headerHeight = 68)
         {
             var mg = new Grid();
-            mg.RowDefinitions.Add(new RowDefinition { Height = new GridLength(headerHeight) });
+            mg.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             mg.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
             mg.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 

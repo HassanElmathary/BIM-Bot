@@ -14,7 +14,7 @@
 `179 MCP Tools | 17 Categories | 7 Revit Versions`
 
 **Change to:**
-`179 MCP Tools | 18 Categories | 7 Revit Versions`
+`70 MCP Tools | 18 Categories | 7 Revit Versions`
 
 The correct category count is 18: Reading, Creating, Editing, Documentation, QA/QC, AI, Power Tools, Advanced, Drafting, Export, Extended, File Management, MEP, Power BI, Rendering, Settings, Sketch, Transactions.
 
@@ -26,7 +26,7 @@ The correct category count is 18: Reading, Creating, Editing, Documentation, QA/
 `179 tools across 17 categories`
 
 **Change to:**
-`179 tools across 18 categories`
+`70 tools across 18 categories`
 
 ---
 
@@ -148,6 +148,10 @@ This builds trust and shows the tool is actively used.
 ### 10. 📱 NEW: Multi-Language Support (Low Priority)
 
 Add a language toggle (EN | 中文) in the navbar. For now, just add the toggle UI — the Chinese translation will be provided later.
+
+### 11. 🆕 NEW FEATURE: Clash Detection
+
+Add a note in the Features section highlighting the new **Clash Detection** tool that has been added to the plugin UI.
 
 ---
 

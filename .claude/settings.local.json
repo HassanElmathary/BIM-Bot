@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dotnet build:*)",
+      "Read(//c/Users/hassa/AppData/Roaming/Autodesk/Revit/Addins/**)",
+      "Read(//c/ProgramData/Autodesk/Revit/Addins/**)"
+    ]
+  }
+}

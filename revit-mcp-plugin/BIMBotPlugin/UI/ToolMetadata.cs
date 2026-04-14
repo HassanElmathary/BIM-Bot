@@ -216,6 +216,21 @@ namespace BIMBotPlugin.UI
                         new ToolParam("viewIds", "View IDs", "text", required: true, hint: "Comma-separated view IDs"),
                         new ToolParam("templateName", "Template Name", "text", required: true, hint: "View template name")
                     }
+                },
+
+                // ===== QA/QC =====
+                new ToolInfo("clash_detection", "Clash Detection", "Detect geometric intersections between element categories", "⚡", "QA/QC")
+                {
+                    Parameters = new List<ToolParam>
+                    {
+                        new ToolParam("category1", "Category 1", "dropdown", required: true, def: "Structural Columns",
+                            options: new[] { "Walls", "Structural Columns", "Structural Framing", "Pipes", "Ducts", "Cable Trays", "Conduits", "Floors", "Mechanical Equipment", "Plumbing Fixtures", "Electrical Equipment", "Ceilings", "Roofs" }),
+                        new ToolParam("category2", "Category 2", "dropdown", required: true, def: "Pipes",
+                            options: new[] { "Walls", "Structural Columns", "Structural Framing", "Pipes", "Ducts", "Cable Trays", "Conduits", "Floors", "Mechanical Equipment", "Plumbing Fixtures", "Electrical Equipment", "Ceilings", "Roofs" }),
+                        new ToolParam("tolerance", "Tolerance (ft)", "number", def: "0", hint: "Bounding box expansion (default: 0)"),
+                        new ToolParam("maxResults", "Max Results", "number", def: "100", hint: "Maximum clashes to return"),
+                        new ToolParam("levelName", "Filter by Level", "text", hint: "Level name (optional)")
+                    }
                 }
             };
         }

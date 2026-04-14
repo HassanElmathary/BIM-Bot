@@ -264,6 +264,8 @@ namespace BIMBotPlugin.Core
                     return ApplyViewTemplate(uidoc!, doc, parameters);
                 case "resolve_warnings":
                     return ResolveWarnings(doc, parameters);
+                case "clash_detection":
+                    return ClashDetection(doc, parameters);
                 case "wall_floor_sync":
                     return WallFloorSync(doc, parameters);
                 case "snap_beams_to_columns":
@@ -5623,6 +5625,192 @@ namespace BIMBotPlugin.Core
                 ["mode"] = result.Mode,
                 ["exportScope"] = exportScope,
                 ["exportView"] = exportView.Name
+            };
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
+        //  CLASH DETECTION (QA/QC)
+        // ═══════════════════════════════════════════════════════════════════
+
+        /// <summary>
+        /// Detect geometric clashes (intersections) between elements of two categories.
+        /// Uses BoundingBoxIntersectsFilter as a fast pre-filter followed by
+        /// ElementIntersectsElementFilter for precise geometric intersection checks.
+        /// </summary>
+        private static JToken ClashDetection(Document doc, JObject parameters)
+        {
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+
+            var cat1Name = parameters["category1"]?.ToString() ?? "Structural Columns";
+            var cat2Name = parameters["category2"]?.ToString() ?? "Pipes";
+            var tolerance = parameters["tolerance"]?.Value<double>() ?? 0.0;
+            var maxResults = parameters["maxResults"]?.Value<int>() ?? 100;
+            var levelName = parameters["levelName"]?.ToString();
+
+            // Resolve categories
+            var bic1 = GetBuiltInCategory(cat1Name);
+            var bic2 = GetBuiltInCategory(cat2Name);
+
+            if (bic1 == BuiltInCategory.INVALID)
+                throw new InvalidOperationException($"Unknown category: {cat1Name}");
+            if (bic2 == BuiltInCategory.INVALID)
+                throw new InvalidOperationException($"Unknown category: {cat2Name}");
+
+            // Collect elements for category 1
+            var collector1 = new FilteredElementCollector(doc)
+                .OfCategory(bic1)
+                .WhereElementIsNotElementType();
+
+            // Collect elements for category 2
+            var collector2 = new FilteredElementCollector(doc)
+                .OfCategory(bic2)
+                .WhereElementIsNotElementType();
+
+            // Optional level filter
+            if (!string.IsNullOrEmpty(levelName))
+            {
+                var level = new FilteredElementCollector(doc)
+                    .OfClass(typeof(Level))
+                    .FirstOrDefault(l => l.Name.Equals(levelName, StringComparison.OrdinalIgnoreCase)) as Level;
+
+                if (level != null)
+                {
+                    var levelFilter = new ElementLevelFilter(level.Id);
+                    collector1 = new FilteredElementCollector(doc)
+                        .OfCategory(bic1)
+                        .WhereElementIsNotElementType()
+                        .WherePasses(levelFilter);
+                    collector2 = new FilteredElementCollector(doc)
+                        .OfCategory(bic2)
+                        .WhereElementIsNotElementType()
+                        .WherePasses(levelFilter);
+                }
+            }
+
+            var elements1 = collector1.ToList();
+            var elements2 = collector2.ToList();
+
+            if (elements1.Count == 0)
+                return new JObject
+                {
+                    ["message"] = $"No elements found for category '{cat1Name}'",
+                    ["totalClashes"] = 0,
+                    ["clashes"] = new JArray(),
+                    ["category1Count"] = 0,
+                    ["category2Count"] = elements2.Count
+                };
+
+            if (elements2.Count == 0)
+                return new JObject
+                {
+                    ["message"] = $"No elements found for category '{cat2Name}'",
+                    ["totalClashes"] = 0,
+                    ["clashes"] = new JArray(),
+                    ["category1Count"] = elements1.Count,
+                    ["category2Count"] = 0
+                };
+
+            // Set to track already-found clash pairs (avoid duplicates)
+            var foundPairs = new HashSet<string>();
+            var clashes = new JArray();
+            int totalClashes = 0;
+
+            foreach (var elem1 in elements1)
+            {
+                if (totalClashes >= maxResults) break;
+
+                // Get bounding box for fast pre-filter
+                var bb = elem1.get_BoundingBox(null);
+                if (bb == null) continue;
+
+                // Expand bounding box by tolerance
+                var outline = new Outline(
+                    new XYZ(bb.Min.X - tolerance, bb.Min.Y - tolerance, bb.Min.Z - tolerance),
+                    new XYZ(bb.Max.X + tolerance, bb.Max.Y + tolerance, bb.Max.Z + tolerance));
+
+                // Fast pass: bounding box intersection
+                var bbFilter = new BoundingBoxIntersectsFilter(outline);
+                var candidates = new FilteredElementCollector(doc)
+                    .OfCategory(bic2)
+                    .WhereElementIsNotElementType()
+                    .WherePasses(bbFilter)
+                    .ToList();
+
+                if (candidates.Count == 0) continue;
+
+                // Slow pass: precise geometry intersection
+                ElementIntersectsElementFilter geomFilter;
+                try
+                {
+                    geomFilter = new ElementIntersectsElementFilter(elem1);
+                }
+                catch
+                {
+                    // Element has no solid geometry — skip
+                    continue;
+                }
+
+                foreach (var candidate in candidates)
+                {
+                    if (totalClashes >= maxResults) break;
+                    if (candidate.Id == elem1.Id) continue;
+
+                    // Dedup: sort IDs to create a unique pair key
+                    var pairKey = elem1.Id.Value < candidate.Id.Value
+                        ? $"{elem1.Id.Value}_{candidate.Id.Value}"
+                        : $"{candidate.Id.Value}_{elem1.Id.Value}";
+
+                    if (foundPairs.Contains(pairKey)) continue;
+
+                    try
+                    {
+                        if (!geomFilter.PassesFilter(candidate)) continue;
+                    }
+                    catch
+                    {
+                        continue; // Candidate has no solid geometry
+                    }
+
+                    foundPairs.Add(pairKey);
+                    totalClashes++;
+
+                    // Get midpoint location for the clash
+                    var loc = "";
+                    var bb1 = elem1.get_BoundingBox(null);
+                    var bb2 = candidate.get_BoundingBox(null);
+                    if (bb1 != null && bb2 != null)
+                    {
+                        var mid1 = (bb1.Min + bb1.Max) / 2;
+                        var mid2 = (bb2.Min + bb2.Max) / 2;
+                        var cp = (mid1 + mid2) / 2;
+                        loc = $"({cp.X:F1}, {cp.Y:F1}, {cp.Z:F1}) ft";
+                    }
+
+                    clashes.Add(new JObject
+                    {
+                        ["element1Id"] = elem1.Id.Value,
+                        ["element1Name"] = $"{elem1.Category?.Name}: {elem1.Name}",
+                        ["element2Id"] = candidate.Id.Value,
+                        ["element2Name"] = $"{candidate.Category?.Name}: {candidate.Name}",
+                        ["location"] = loc
+                    });
+                }
+            }
+
+            sw.Stop();
+
+            return new JObject
+            {
+                ["message"] = totalClashes == 0
+                    ? $"✅ No clashes found between {cat1Name} and {cat2Name}"
+                    : $"⚠️ {totalClashes} clash(es) found between {cat1Name} and {cat2Name}",
+                ["totalClashes"] = totalClashes,
+                ["clashes"] = clashes,
+                ["category1"] = cat1Name,
+                ["category2"] = cat2Name,
+                ["category1Count"] = elements1.Count,
+                ["category2Count"] = elements2.Count,
+                ["elapsed"] = $"({sw.ElapsedMilliseconds}ms)"
             };
         }
 

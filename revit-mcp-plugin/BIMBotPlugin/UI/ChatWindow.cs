@@ -94,7 +94,7 @@ namespace BIMBotPlugin.UI
 
             // ===== Build UI =====
             var mainGrid = new Grid();
-            mainGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(60) });    // Header
+            mainGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });    // Header
             mainGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); // Chat
             mainGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // Input
             mainGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // Footer

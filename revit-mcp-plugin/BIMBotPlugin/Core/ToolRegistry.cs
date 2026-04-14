@@ -718,6 +718,14 @@ namespace BIMBotPlugin.Core
                 new[] { "wall floor sync" },
                 ToolParam.Opt("levelName", "string", "Level filter"));
 
+            R("clash_detection", "Detect geometric clashes between element categories", ToolCategory.QAQC,
+                new[] { "clash detection", "interference check", "clash check", "find clashes" },
+                ToolParam.Req("category1", "string", "First category (e.g. Structural Columns)"),
+                ToolParam.Req("category2", "string", "Second category (e.g. Pipes)"),
+                ToolParam.Opt("tolerance", "number", "Tolerance in feet for bounding box expansion (default: 0)"),
+                ToolParam.Opt("maxResults", "integer", "Max clashes to return (default: 100)"),
+                ToolParam.Opt("levelName", "string", "Level filter"));
+
             R("import_data_from_csv", "Import parameter data from CSV", ToolCategory.QAQC,
                 new[] { "import from csv", "import csv data" },
                 ToolParam.Req("filePath", "string", "CSV file path"),

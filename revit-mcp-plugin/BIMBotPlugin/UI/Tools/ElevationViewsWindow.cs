@@ -24,7 +24,7 @@ namespace BIMBotPlugin.UI.Tools
             DarkTheme.Apply(this);
 
             var mg = new Grid();
-            mg.RowDefinitions.Add(new RowDefinition { Height = new GridLength(60) });
+            mg.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             mg.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
             mg.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
