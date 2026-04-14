@@ -7,17 +7,17 @@ namespace BIMBotPlugin.UI.Themes
 {
     /// <summary>
     /// Sketch-style vector icons for the chat UI — drawn with WPF Path geometry.
-    /// Inspired by Claude's hand-drawn aesthetic with rounded, organic strokes.
+    /// Colors aligned with the BIM Professional design system (DarkTheme.cs).
     /// </summary>
     public static class ChatIcons
     {
-        // ── Icon Colors ──
-        private static readonly SolidColorBrush Warm     = B(0xD4, 0x94, 0x6B); // Warm terracotta
-        private static readonly SolidColorBrush Muted    = B(0x9C, 0x8E, 0x80); // Muted warm gray
-        private static readonly SolidColorBrush Soft     = B(0xB8, 0xAA, 0x9A); // Soft taupe
-        private static readonly SolidColorBrush Accent   = B(0xD4, 0x7B, 0x4E); // Claude orange
-        private static readonly SolidColorBrush Success  = B(0x7D, 0xB3, 0x7D); // Soft sage green
-        private static readonly SolidColorBrush Danger   = B(0xCC, 0x6B, 0x6B); // Soft red
+        // ── Icon Colors — aligned with DarkTheme.cs brand palette ──
+        private static readonly SolidColorBrush Warm     = new SolidColorBrush(DarkTheme.BrandTeal);    // #06B6D4 Teal
+        private static readonly SolidColorBrush Muted    = DarkTheme.FgDim;                             // #909296 Cool gray
+        private static readonly SolidColorBrush Soft     = DarkTheme.FgLight;                           // #C1C2C5 Light gray
+        private static readonly SolidColorBrush Accent   = new SolidColorBrush(DarkTheme.BrandPrimary); // #2563EB Vivid Blue
+        private static readonly SolidColorBrush Success  = new SolidColorBrush(DarkTheme.BrandGreen);   // #10B981 Emerald
+        private static readonly SolidColorBrush Danger   = new SolidColorBrush(DarkTheme.BrandRed);     // #EF4444 Red
 
         /// <summary>AI assistant sparkle icon — sketch style.</summary>
         public static UIElement Sparkle(double size = 20, Brush fill = null)
@@ -167,7 +167,7 @@ namespace BIMBotPlugin.UI.Themes
             canvas.Children.Add(MakePath(
                 $"M {11 * s},{2 * s} L {5 * s},{11 * s} L {9 * s},{11 * s} L {8 * s},{18 * s} " +
                 $"L {15 * s},{8 * s} L {11 * s},{8 * s} Z",
-                fill ?? B(0xFF, 0xC1, 0x07), strokeThickness: 0));
+                fill ?? DarkTheme.FgGold, strokeThickness: 0));
 
             return canvas;
         }
