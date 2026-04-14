@@ -5,7 +5,11 @@ node_modules/
 build/
 bin/
 obj/
-
+# Build outputs
+build/
+bin/
+obj/
+dist/
 # Config with secrets
 config/
 .env
@@ -34,3 +38,4 @@ revit-mcp-powerbi-visual/.tmp/
 # Legacy upstream backups (if they reappear)
 revit-mcp-plugin-base/
 revit-mcp-server-base/
+*.zip

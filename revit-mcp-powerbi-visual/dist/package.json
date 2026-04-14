@@ -1,14 +1,14 @@
 {
 		"version": "1.0.0.0",
-		"author": {"name":"Revit MCP","email":"revitmcp@local.dev"},
+		"author": {"name":"BIM-Bot","email":"hassan.elmathary@gmail.com"},
 		"resources": [
 			{
 				"resourceId": "rId0",
 				"sourceType": 5,
-				"file": "resources/revitMCP3DViewer1A2B3C4D.pbiviz.json"
+				"file": "resources/bimBot3DViewer1A2B3C4D.pbiviz.json"
 			}
 		],
-		"visual": {"name":"RevitMCPViewer","displayName":"Revit MCP 3D Viewer","guid":"revitMCP3DViewer1A2B3C4D","visualClassName":"Visual","version":"1.0.0.0","description":"3D Revit model viewer for Power BI with cross-filtering. Part of the Revit MCP pipeline.","supportUrl":"https://github.com/revit-mcp","gitHubUrl":""},
+		"visual": {"name":"BIMBotViewer","displayName":"BIM-Bot 3D Viewer","guid":"bimBot3DViewer1A2B3C4D","visualClassName":"Visual","version":"1.0.0.0","description":"3D Revit model viewer for Power BI with cross-filtering. Part of the BIM-Bot pipeline.","supportUrl":"https://github.com/HassanElmathary/Revit-MCP","gitHubUrl":""},
 		"metadata": {
 			"pbivizjson": {
 				"resourceId": "rId0"

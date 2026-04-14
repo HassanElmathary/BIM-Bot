@@ -1,5 +1,5 @@
 # ============================================================
-#  Revit MCP — Uninstaller
+#  BIM-Bot — Uninstaller
 #  Usage: irm https://raw.githubusercontent.com/HassanElmathary/Revit-MCP/main/uninstall.ps1 | iex
 # ============================================================
 
@@ -8,7 +8,7 @@ $ErrorActionPreference = "Stop"
 function Write-Banner {
     Write-Host ""
     Write-Host "  ╔══════════════════════════════════════════════════╗" -ForegroundColor Red
-    Write-Host "  ║        🗑️  Revit MCP — Uninstaller               ║" -ForegroundColor Red
+    Write-Host "  ║        🗑️  BIM-Bot — Uninstaller                 ║" -ForegroundColor Red
     Write-Host "  ╚══════════════════════════════════════════════════╝" -ForegroundColor Red
     Write-Host ""
 }
@@ -16,7 +16,7 @@ function Write-Banner {
 Write-Banner
 
 # ── Confirm ──────────────────────────────────────────────────
-$confirm = Read-Host "  Are you sure you want to uninstall Revit MCP? (y/N)"
+$confirm = Read-Host "  Are you sure you want to uninstall BIM-Bot? (y/N)"
 if ($confirm -notin @("y", "Y", "yes", "Yes")) {
     Write-Host "  Cancelled." -ForegroundColor Gray
     return
@@ -29,8 +29,8 @@ Write-Host "  [1/4] Removing Revit plugin files..." -ForegroundColor Yellow
 
 for ($year = 2020; $year -le 2027; $year++) {
     $addinsDir = Join-Path $env:ProgramData "Autodesk\Revit\Addins\$year"
-    $addinFile = Join-Path $addinsDir "RevitMCP.addin"
-    $mcpDir = Join-Path $addinsDir "RevitMCP"
+    $addinFile = Join-Path $addinsDir "BIMBot.addin"
+    $mcpDir = Join-Path $addinsDir "BIMBot"
 
     if (Test-Path $addinFile) {
         Remove-Item $addinFile -Force -ErrorAction SilentlyContinue
@@ -43,8 +43,8 @@ for ($year = 2020; $year -le 2027; $year++) {
 
     # Also check user-level addins
     $userAddinsDir = Join-Path $env:APPDATA "Autodesk\Revit\Addins\$year"
-    $userAddinFile = Join-Path $userAddinsDir "RevitMCP.addin"
-    $userMcpDir = Join-Path $userAddinsDir "RevitMCP"
+    $userAddinFile = Join-Path $userAddinsDir "BIMBot.addin"
+    $userMcpDir = Join-Path $userAddinsDir "BIMBot"
     if (Test-Path $userAddinFile) {
         Remove-Item $userAddinFile -Force -ErrorAction SilentlyContinue
     }
@@ -60,12 +60,12 @@ $claudeConfig = Join-Path $env:APPDATA "Claude\claude_desktop_config.json"
 if (Test-Path $claudeConfig) {
     try {
         $json = Get-Content $claudeConfig -Raw | ConvertFrom-Json
-        if ($json.mcpServers -and $json.mcpServers.PSObject.Properties["revit-mcp"]) {
-            $json.mcpServers.PSObject.Properties.Remove("revit-mcp")
+        if ($json.mcpServers -and $json.mcpServers.PSObject.Properties["bim-bot"]) {
+            $json.mcpServers.PSObject.Properties.Remove("bim-bot")
             $json | ConvertTo-Json -Depth 10 | Set-Content $claudeConfig -Encoding UTF8
-            Write-Host "        ✅ Removed revit-mcp from Claude Desktop config" -ForegroundColor Green
+            Write-Host "        ✅ Removed bim-bot from Claude Desktop config" -ForegroundColor Green
         } else {
-            Write-Host "        ⏭️  No revit-mcp entry found in Claude Desktop config" -ForegroundColor DarkGray
+            Write-Host "        ⏭️  No bim-bot entry found in Claude Desktop config" -ForegroundColor DarkGray
         }
     } catch {
         Write-Host "        ⚠️  Could not update Claude Desktop config: $_" -ForegroundColor Yellow
@@ -78,8 +78,8 @@ if (Test-Path $claudeConfig) {
 Write-Host "  [3/4] Removing installation files..." -ForegroundColor Yellow
 
 $installDirs = @(
-    (Join-Path $env:ProgramFiles "RevitMCP"),
-    (Join-Path $env:LOCALAPPDATA "RevitMCP")
+    (Join-Path $env:ProgramFiles "BIMBot"),
+    (Join-Path $env:LOCALAPPDATA "BIMBot")
 )
 
 foreach ($dir in $installDirs) {
@@ -109,7 +109,7 @@ if ($claudeProcess) {
 # ── Done ─────────────────────────────────────────────────────
 Write-Host ""
 Write-Host "  ╔══════════════════════════════════════════════════╗" -ForegroundColor Green
-Write-Host "  ║        ✅  Revit MCP Uninstalled Successfully    ║" -ForegroundColor Green
+Write-Host "  ║        ✅  BIM-Bot Uninstalled Successfully      ║" -ForegroundColor Green
 Write-Host "  ╚══════════════════════════════════════════════════╝" -ForegroundColor Green
 Write-Host ""
 Write-Host "  Restart Revit to complete removal." -ForegroundColor Gray

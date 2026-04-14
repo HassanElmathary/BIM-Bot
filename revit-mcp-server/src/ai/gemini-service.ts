@@ -13,7 +13,7 @@ interface ChatMessage {
 }
 
 /**
- * Google Gemini API integration for the Revit MCP server.
+ * Google Gemini API integration for the BIM-Bot server.
  * Supports both API key auth and OAuth token auth.
  * Provides chat, single-turn, and tool-augmented generation.
  */
@@ -175,7 +175,7 @@ export class GeminiService {
     }
 
     private getDefaultSystemInstruction(): string {
-        return `You are an expert Revit BIM automation assistant integrated into the Revit MCP (Model Context Protocol) system.
+        return `You are an expert Revit BIM automation assistant integrated into the BIM-Bot (Model Context Protocol) system.
 
 You have access to 55 tools for interacting with Autodesk Revit through the MCP protocol:
 

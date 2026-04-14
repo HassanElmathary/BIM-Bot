@@ -1,6 +1,6 @@
 # ============================================================
-#  Revit MCP — One-Line Global Installer
-#  Usage: irm https://raw.githubusercontent.com/HassanElmathary/Revit-MCP/main/install.ps1 | iex
+#  BIM-Bot — One-Line Global Installer
+#  Usage: irm https://raw.githubusercontent.com/HassanElmathary/bim-bot/main/install.ps1 | iex
 # ============================================================
 
 param(
@@ -14,16 +14,16 @@ $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"  # Faster downloads
 
 # ── Branding ─────────────────────────────────────────────────
-$VERSION = "2.0.4"
-$REPO = "HassanElmathary/Revit-MCP"
-$RELEASE_URL = "https://github.com/$REPO/releases/latest/download/RevitMCP-v$VERSION.zip"
+$VERSION = "2.1.0"
+$REPO = "HassanElmathary/bim-bot"
+$RELEASE_URL = "https://github.com/$REPO/releases/latest/download/BIMBot-v$VERSION.zip"
 $RAW_BASE = "https://raw.githubusercontent.com/$REPO/main"
 
 function Write-Banner {
     Write-Host ""
     Write-Host "  ╔══════════════════════════════════════════════════╗" -ForegroundColor Cyan
     Write-Host "  ║                                                  ║" -ForegroundColor Cyan
-    Write-Host "  ║        🏗️  Revit MCP — AI-Powered BIM           ║" -ForegroundColor Cyan
+    Write-Host "  ║        🏗️  BIM-Bot — AI-Powered BIM           ║" -ForegroundColor Cyan
     Write-Host "  ║           179 Tools for Autodesk Revit           ║" -ForegroundColor Cyan
     Write-Host "  ║                                                  ║" -ForegroundColor Cyan
     Write-Host "  ║        by Hassan Ahmed Elmathary                 ║" -ForegroundColor Cyan
@@ -70,9 +70,9 @@ function Test-Admin {
 function Get-InstallDir {
     if ($InstallPath) { return $InstallPath }
     if (Test-Admin) {
-        return Join-Path $env:ProgramFiles "RevitMCP"
+        return Join-Path $env:ProgramFiles "BIMBot"
     } else {
-        return Join-Path $env:LOCALAPPDATA "RevitMCP"
+        return Join-Path $env:LOCALAPPDATA "BIMBot"
     }
 }
 
@@ -89,7 +89,9 @@ function Get-InstalledRevitVersions {
 }
 
 function Get-FrameworkForYear([int]$Year) {
-    if ($Year -le 2024) { return "net48" } else { return "net8" }
+    if ($Year -le 2024) { return "net48" }
+    elseif ($Year -le 2026) { return "net8" }
+    else { return "net10" }
 }
 
 function Get-AddinsDir([int]$Year) {
@@ -104,16 +106,17 @@ function Get-ClaudeConfigPath {
 
 function Invoke-Uninstall {
     Write-Banner
-    Write-Host "  Uninstalling Revit MCP..." -ForegroundColor Yellow
+    Write-Host "  Uninstalling BIM-Bot..." -ForegroundColor Yellow
     Write-Host ""
 
     $installDir = Get-InstallDir
 
-    # Remove .addin files for all Revit versions
+    # Remove .addin files for all Revit versions (current + legacy)
     for ($year = 2020; $year -le 2027; $year++) {
         $addinsDir = Get-AddinsDir $year
-        $addinFile = Join-Path $addinsDir "RevitMCP.addin"
-        $mcpDir = Join-Path $addinsDir "RevitMCP"
+        # Current BIMBot files
+        $addinFile = Join-Path $addinsDir "BIMBot.addin"
+        $mcpDir = Join-Path $addinsDir "BIMBot"
         if (Test-Path $addinFile) {
             Remove-Item $addinFile -Force -ErrorAction SilentlyContinue
             Write-OK "Removed .addin for Revit $year"
@@ -121,17 +124,33 @@ function Invoke-Uninstall {
         if (Test-Path $mcpDir) {
             Remove-Item $mcpDir -Recurse -Force -ErrorAction SilentlyContinue
         }
+        # Legacy RevitMCP files
+        $legacyAddin = Join-Path $addinsDir "RevitMCP.addin"
+        $legacyDir = Join-Path $addinsDir "RevitMCP"
+        if (Test-Path $legacyAddin) {
+            Remove-Item $legacyAddin -Force -ErrorAction SilentlyContinue
+            Write-OK "Removed legacy .addin for Revit $year"
+        }
+        if (Test-Path $legacyDir) {
+            Remove-Item $legacyDir -Recurse -Force -ErrorAction SilentlyContinue
+        }
     }
 
-    # Remove Claude Desktop config entry
+    # Remove Claude Desktop config entry (current + legacy keys)
     $claudeConfig = Get-ClaudeConfigPath
     if (Test-Path $claudeConfig) {
         try {
             $json = Get-Content $claudeConfig -Raw | ConvertFrom-Json
-            if ($json.mcpServers.PSObject.Properties["revit-mcp"]) {
-                $json.mcpServers.PSObject.Properties.Remove("revit-mcp")
+            $removed = $false
+            foreach ($key in @("BIM-Bot", "bim-bot", "revit-mcp")) {
+                if ($json.mcpServers.PSObject.Properties[$key]) {
+                    $json.mcpServers.PSObject.Properties.Remove($key)
+                    $removed = $true
+                }
+            }
+            if ($removed) {
                 $json | ConvertTo-Json -Depth 10 | Set-Content $claudeConfig -Encoding UTF8
-                Write-OK "Removed revit-mcp from Claude Desktop config"
+                Write-OK "Removed BIM-Bot entries from Claude Desktop config"
             }
         } catch {
             Write-Warn "Could not update Claude Desktop config: $_"
@@ -145,7 +164,7 @@ function Invoke-Uninstall {
     }
 
     Write-Host ""
-    Write-Host "  ✅ Revit MCP has been uninstalled." -ForegroundColor Green
+    Write-Host "  ✅ BIM-Bot has been uninstalled." -ForegroundColor Green
     Write-Host "     Restart Revit and Claude Desktop to complete removal." -ForegroundColor Gray
     Write-Host ""
     return
@@ -172,10 +191,10 @@ if (-not $isAdmin) {
 # ────────────────────────────────────
 # STEP 1: Download release
 # ────────────────────────────────────
-Write-Step "1/5" "Downloading Revit MCP v$VERSION..."
+Write-Step "1/5" "Downloading BIM-Bot v$VERSION..."
 
-$tempZip = Join-Path $env:TEMP "RevitMCP-v$VERSION.zip"
-$tempExtract = Join-Path $env:TEMP "RevitMCP-extract"
+$tempZip = Join-Path $env:TEMP "BIMBot-v$VERSION.zip"
+$tempExtract = Join-Path $env:TEMP "BIMBot-extract"
 
 try {
     # Try GitHub Release first
@@ -186,7 +205,7 @@ try {
     try {
         $releaseApi = "https://api.github.com/repos/$REPO/releases/latest"
         $release = Invoke-RestMethod -Uri $releaseApi -UseBasicParsing
-        $asset = $release.assets | Where-Object { $_.name -like "RevitMCP-*.zip" } | Select-Object -First 1
+        $asset = $release.assets | Where-Object { $_.name -like "BIMBot-*.zip" } | Select-Object -First 1
         if ($asset) {
             Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $tempZip -UseBasicParsing
             Write-OK "Downloaded from GitHub Releases (latest)"
@@ -198,7 +217,7 @@ try {
         Write-Host "        https://github.com/$REPO/releases" -ForegroundColor Cyan
         Write-Host ""
         Write-Host "  Alternative: Install the MCP server via npm:" -ForegroundColor Yellow
-        Write-Host "    npm install -g revit-mcp-server" -ForegroundColor Cyan
+        Write-Host "    npm install -g bim-bot-server" -ForegroundColor Cyan
         Write-Host ""
         return
     }
@@ -246,7 +265,7 @@ if (-not $SkipRevitPlugin) {
     $installedRevit = Get-InstalledRevitVersions
 
     if ($installedRevit.Count -eq 0) {
-        Write-Warn "No Revit installations found (2020–2026)"
+        Write-Warn "No Revit installations found (2020–2027)"
         Write-Host "        The MCP server will still be installed. Add the Revit plugin later." -ForegroundColor DarkGray
     } else {
         Write-OK "Found: Revit $($installedRevit -join ', Revit ')"
@@ -255,7 +274,13 @@ if (-not $SkipRevitPlugin) {
         foreach ($year in $installedRevit) {
             $fw = Get-FrameworkForYear $year
             $addinsDir = Get-AddinsDir $year
-            $pluginDir = Join-Path $addinsDir "RevitMCP"
+            $pluginDir = Join-Path $addinsDir "BIMBot"
+
+            # Legacy cleanup: remove old RevitMCP files
+            $legacyAddin = Join-Path $addinsDir "RevitMCP.addin"
+            $legacyDir = Join-Path $addinsDir "RevitMCP"
+            if (Test-Path $legacyAddin) { Remove-Item $legacyAddin -Force -ErrorAction SilentlyContinue }
+            if (Test-Path $legacyDir) { Remove-Item $legacyDir -Recurse -Force -ErrorAction SilentlyContinue }
 
             # Create directories
             if (!(Test-Path $addinsDir)) { New-Item -ItemType Directory -Path $addinsDir -Force | Out-Null }
@@ -277,21 +302,21 @@ if (-not $SkipRevitPlugin) {
             }
 
             # Write .addin manifest
-            $assemblyPath = Join-Path $pluginDir "RevitMCPPlugin.dll"
+            $assemblyPath = Join-Path $pluginDir "BIMBotPlugin.dll"
             $addinContent = @"
 <?xml version="1.0" encoding="utf-8"?>
 <RevitAddIns>
   <AddIn Type="Application">
-    <Name>Revit MCP Plugin</Name>
+    <Name>BIM-Bot Plugin</Name>
     <Assembly>$assemblyPath</Assembly>
-    <FullClassName>RevitMCPPlugin.Core.Application</FullClassName>
+    <FullClassName>BIMBotPlugin.Core.Application</FullClassName>
     <ClientId>A1B2C3D4-E5F6-7890-ABCD-EF1234567890</ClientId>
     <VendorId>HassanElmathary</VendorId>
-    <VendorDescription>AI-Powered Revit Plugin by Hassan Ahmed Elmathary</VendorDescription>
+    <VendorDescription>AI-Powered BIM-Bot Plugin by Hassan Ahmed Elmathary</VendorDescription>
   </AddIn>
 </RevitAddIns>
 "@
-            Set-Content -Path (Join-Path $addinsDir "RevitMCP.addin") -Value $addinContent -Encoding UTF8
+            Set-Content -Path (Join-Path $addinsDir "BIMBot.addin") -Value $addinContent -Encoding UTF8
             Write-OK "Installed plugin for Revit $year ($fw)"
         }
     }
@@ -342,15 +367,22 @@ if (-not $SkipClaudeConfig) {
                 $config | Add-Member -NotePropertyName "mcpServers" -NotePropertyValue ([PSCustomObject]@{})
             }
 
-            # Add/update revit-mcp entry
-            if ($config.mcpServers.PSObject.Properties["revit-mcp"]) {
-                $config.mcpServers."revit-mcp" = [PSCustomObject]$mcpEntry
+            # Legacy cleanup: remove old keys
+            foreach ($legacyKey in @("revit-mcp", "bim-bot")) {
+                if ($config.mcpServers.PSObject.Properties[$legacyKey]) {
+                    $config.mcpServers.PSObject.Properties.Remove($legacyKey)
+                }
+            }
+
+            # Add/update BIM-Bot entry
+            if ($config.mcpServers.PSObject.Properties["BIM-Bot"]) {
+                $config.mcpServers."BIM-Bot" = [PSCustomObject]$mcpEntry
             } else {
-                $config.mcpServers | Add-Member -NotePropertyName "revit-mcp" -NotePropertyValue ([PSCustomObject]$mcpEntry)
+                $config.mcpServers | Add-Member -NotePropertyName "BIM-Bot" -NotePropertyValue ([PSCustomObject]$mcpEntry)
             }
 
             $config | ConvertTo-Json -Depth 10 | Set-Content $claudeConfig -Encoding UTF8
-            Write-OK "Updated Claude Desktop config (merged revit-mcp server)"
+            Write-OK "Updated Claude Desktop config (merged BIM-Bot server)"
         } catch {
             Write-Warn "Could not update existing Claude config: $_"
             Write-Host "        You may need to add the MCP server manually." -ForegroundColor DarkGray
@@ -362,11 +394,11 @@ if (-not $SkipClaudeConfig) {
 
             $newConfig = @{
                 mcpServers = @{
-                    "revit-mcp" = $mcpEntry
+                    "BIM-Bot" = $mcpEntry
                 }
             }
             $newConfig | ConvertTo-Json -Depth 10 | Set-Content $claudeConfig -Encoding UTF8
-            Write-OK "Created Claude Desktop config with revit-mcp server"
+            Write-OK "Created Claude Desktop config with BIM-Bot server"
         } catch {
             Write-Warn "Could not create Claude config: $_"
         }
@@ -401,10 +433,10 @@ $serverJsFinal = Join-Path $installDir "server\build\index.js"
 # Start MCP Server batch file
 $startBat = @"
 @echo off
-title Revit MCP Server v$VERSION
+title BIM-Bot Server v$VERSION
 echo.
 echo   ======================================
-echo     Revit MCP Server v$VERSION
+echo     BIM-Bot Server v$VERSION
 echo     by Hassan Ahmed Elmathary
 echo   ======================================
 echo.
@@ -419,7 +451,7 @@ Set-Content -Path (Join-Path $installDir "Start MCP Server.bat") -Value $startBa
 # Save config reference
 $mcpConfigRef = @{
     mcpServers = @{
-        "revit-mcp" = @{
+        "BIM-Bot" = @{
             command = $nodeExeFinal
             args = @($serverJsFinal)
             env = @{}
@@ -454,7 +486,7 @@ if (Test-Path $claudeConfigCheck) {
 Write-Host ""
 Write-Host "  Next Steps:" -ForegroundColor Yellow
 Write-Host "  1. Open Revit → look for 'Chat with me' in the Add-ins tab" -ForegroundColor White
-Write-Host "  2. Open Claude Desktop → Revit MCP tools are ready to use" -ForegroundColor White
+Write-Host "  2. Open Claude Desktop → BIM-Bot tools are ready to use" -ForegroundColor White
 Write-Host "  3. Click ⚙️ Settings in Revit to configure AI providers" -ForegroundColor White
 Write-Host ""
 Write-Host "  📖 Docs: https://github.com/$REPO" -ForegroundColor Cyan
@@ -463,3 +495,4 @@ Write-Host ""
 Write-Host "  To uninstall:" -ForegroundColor DarkGray
 Write-Host "  irm https://raw.githubusercontent.com/$REPO/main/install.ps1 | iex -Uninstall" -ForegroundColor DarkGray
 Write-Host ""
+

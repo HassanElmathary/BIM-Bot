@@ -35,7 +35,7 @@ export async function exportToExcel(
         );
 
     const workbook = new ExcelJS.Workbook();
-    workbook.creator = "Revit MCP Data Bridge";
+    workbook.creator = "BIM-Bot Data Bridge";
     workbook.created = new Date();
 
     const worksheet = workbook.addWorksheet(sheetName);

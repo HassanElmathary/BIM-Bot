@@ -14,7 +14,7 @@ async function main() {
     try {
         // Create server
         const server = new McpServer({
-            name: "revit-mcp-test",
+            name: "bim-bot-test",
             version: "1.0.0",
         });
         console.log("  ✓ Server instance created");

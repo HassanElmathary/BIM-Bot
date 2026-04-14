@@ -4,7 +4,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 > **MCP Server for Autodesk Revit** — 179 AI-powered tools for BIM automation.  
-> Works with Claude Desktop, Cursor, Windsurf, and any MCP client. Supports **Revit 2020–2026**.
+> Works with Claude Desktop, Cursor, Windsurf, and any MCP client. Supports **Revit 2020–2027**.
 
 ## ⚡ Quick Start
 
@@ -27,7 +27,7 @@ Add to `%APPDATA%\Claude\claude_desktop_config.json`:
 ```json
 {
   "mcpServers": {
-    "revit-mcp": {
+    "bim-bot": {
       "command": "npx",
       "args": ["-y", "revit-mcp-server"]
     }
@@ -47,7 +47,7 @@ irm https://raw.githubusercontent.com/HassanElmathary/Revit-MCP/main/install.ps1
 
 This will:
 - ✅ Download & install everything
-- ✅ Auto-detect Revit 2020–2026
+- ✅ Auto-detect Revit 2020–2027
 - ✅ Deploy the correct plugin for each version
 - ✅ Auto-configure Claude Desktop
 
@@ -88,6 +88,7 @@ The MCP server communicates with the Revit plugin over TCP on port 8080. The plu
 |---------|-----------|
 | 2020–2024 | .NET Framework 4.8 |
 | 2025–2026 | .NET 8.0 |
+| 2027+ | .NET 10.0 |
 
 ## Uninstall
 

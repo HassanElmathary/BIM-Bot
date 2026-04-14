@@ -1,11 +1,11 @@
 ; ============================================================
-;  Revit MCP — Professional Installer (Inno Setup 6)
+;  BIM-Bot — Professional Installer (Inno Setup 6)
 ;  AI-Powered BIM Automation • 179 MCP Tools • Revit 2020–2026
 ;  by Hassan Ahmed Elmathary
 ; ============================================================
 
-#define MyAppName      "Revit MCP"
-#define MyAppVersion   "2.0.3"
+#define MyAppName      "BIM-Bot"
+#define MyAppVersion   "2.1.0"
 #define MyAppPublisher "Hassan Ahmed Elmathary"
 #define MyAppURL       "https://github.com/HassanElmathary/Revit-MCP"
 #define MyAppExeName   "Start MCP Server.bat"
@@ -19,19 +19,19 @@ AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppURL}/issues
 AppUpdatesURL={#MyAppURL}/releases
-DefaultDirName={autopf}\RevitMCP
+DefaultDirName={autopf}\BIMBot
 DefaultGroupName={#MyAppName}
 AllowNoIcons=yes
 ; License
 LicenseFile=..\LICENSE
 ; Output
 OutputDir=output
-OutputBaseFilename=RevitMCP-Setup-{#MyAppVersion}
+OutputBaseFilename=BIMBot-Setup-{#MyAppVersion}
 ; Branding
-SetupIconFile=assets\revitmcp.ico
+SetupIconFile=assets\bimbot.ico
 WizardImageFile=assets\WizardImageFile.bmp
 WizardSmallImageFile=assets\WizardSmallImageFile.bmp
-UninstallDisplayIcon={app}\revitmcp.ico
+UninstallDisplayIcon={app}\bimbot.ico
 ; Compression
 Compression=lzma2/ultra64
 SolidCompression=yes
@@ -61,7 +61,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 WelcomeLabel1=Welcome to {#MyAppName}
 WelcomeLabel2=This will install {#MyAppName} v{#MyAppVersion} on your computer.%n%n{#MyAppName} provides 179 AI-powered MCP tools for Autodesk Revit, enabling intelligent BIM automation through Claude Desktop, Cursor, Windsurf, and any MCP client.%n%nSupports Revit 2020–2026.
 FinishedHeadingLabel=Installation Complete!
-FinishedLabel={#MyAppName} has been successfully installed.%n%nNext Steps:%n  1. Open Revit → look for "Chat with me" in the Add-ins tab%n  2. Open Claude Desktop → Revit MCP tools are ready to use
+FinishedLabel={#MyAppName} has been successfully installed.%n%nNext Steps:%n  1. Open Revit → look for the "BIM-Bot" tab in the ribbon%n  2. Open Claude Desktop → BIM-Bot tools are ready to use
 
 [Types]
 Name: "full"; Description: "Full installation (recommended)"
@@ -88,7 +88,7 @@ Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription:
 
 [Files]
 ; Icon for uninstall entry
-Source: "assets\revitmcp.ico"; DestDir: "{app}"; Flags: ignoreversion
+Source: "assets\bimbot.ico"; DestDir: "{app}"; Flags: ignoreversion
 
 ; Node.js portable runtime
 Source: "nodejs\*"; DestDir: "{app}\nodejs"; Flags: ignoreversion recursesubdirs; Components: nodejs
@@ -99,19 +99,19 @@ Source: "..\revit-mcp-server\node_modules\*"; DestDir: "{app}\server\node_module
 Source: "..\revit-mcp-server\package.json"; DestDir: "{app}\server"; Flags: ignoreversion; Components: server
 
 ; Revit Plugin DLLs (both framework targets)
-Source: "..\revit-mcp-plugin\RevitMCPPlugin\bin\Release\net48\*"; DestDir: "{app}\plugin\net48"; Flags: ignoreversion recursesubdirs; Components: plugin
-Source: "..\revit-mcp-plugin\RevitMCPPlugin\bin\Release\net8.0-windows\*"; DestDir: "{app}\plugin\net8"; Flags: ignoreversion recursesubdirs; Components: plugin
+Source: "..\revit-mcp-plugin\BIMBotPlugin\bin\Release\net48\*"; DestDir: "{app}\plugin\net48"; Flags: ignoreversion recursesubdirs; Components: plugin
+Source: "..\revit-mcp-plugin\BIMBotPlugin\bin\Release\net8.0-windows\*"; DestDir: "{app}\plugin\net8"; Flags: ignoreversion recursesubdirs; Components: plugin
 
 ; License
 Source: "..\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 ; Start Menu shortcuts
-Name: "{group}\Start MCP Server"; Filename: "{app}\Start MCP Server.bat"; IconFilename: "{app}\revitmcp.ico"; Comment: "Start the Revit MCP Server"
-Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"; IconFilename: "{app}\revitmcp.ico"
-Name: "{group}\Documentation"; Filename: "{#MyAppURL}"; IconFilename: "{app}\revitmcp.ico"
+Name: "{group}\Start MCP Server"; Filename: "{app}\Start MCP Server.bat"; IconFilename: "{app}\bimbot.ico"; Comment: "Start the BIM-Bot Server"
+Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"; IconFilename: "{app}\bimbot.ico"
+Name: "{group}\Documentation"; Filename: "{#MyAppURL}"; IconFilename: "{app}\bimbot.ico"
 ; Desktop shortcut (optional)
-Name: "{autodesktop}\Revit MCP Server"; Filename: "{app}\Start MCP Server.bat"; IconFilename: "{app}\revitmcp.ico"; Comment: "Start the Revit MCP Server"; Tasks: desktopicon
+Name: "{autodesktop}\BIM-Bot Server"; Filename: "{app}\Start MCP Server.bat"; IconFilename: "{app}\bimbot.ico"; Comment: "Start the BIM-Bot Server"; Tasks: desktopicon
 
 
 
@@ -160,22 +160,28 @@ begin
   AddInDir := GetRevitAddInsDir(Year);
   ForceDirectories(AddInDir);
 
+  // Legacy cleanup: remove old RevitMCP files
+  if FileExists(AddInDir + '\RevitMCP.addin') then
+    DeleteFile(AddInDir + '\RevitMCP.addin');
+  if DirExists(AddInDir + '\RevitMCP') then
+    DelTree(AddInDir + '\RevitMCP', True, True, True);
+
   YearInt := StrToInt(Year);
   PluginFolder := GetPluginSubfolder(YearInt);
 
   AddinContent := '<?xml version="1.0" encoding="utf-8"?>' + #13#10 +
     '<RevitAddIns>' + #13#10 +
     '  <AddIn Type="Application">' + #13#10 +
-    '    <Name>Revit MCP Plugin</Name>' + #13#10 +
-    '    <Assembly>' + ExpandConstant('{app}') + '\plugin\' + PluginFolder + '\RevitMCPPlugin.dll</Assembly>' + #13#10 +
-    '    <FullClassName>RevitMCPPlugin.Core.Application</FullClassName>' + #13#10 +
+    '    <Name>BIM-Bot Plugin</Name>' + #13#10 +
+    '    <Assembly>' + ExpandConstant('{app}') + '\plugin\' + PluginFolder + '\BIMBotPlugin.dll</Assembly>' + #13#10 +
+    '    <FullClassName>BIMBotPlugin.Core.Application</FullClassName>' + #13#10 +
     '    <ClientId>A1B2C3D4-E5F6-7890-ABCD-EF1234567890</ClientId>' + #13#10 +
     '    <VendorId>HassanElmathary</VendorId>' + #13#10 +
-    '    <VendorDescription>AI-Powered Revit Plugin by Hassan Ahmed Elmathary</VendorDescription>' + #13#10 +
+    '    <VendorDescription>AI-Powered BIM-Bot Plugin by Hassan Ahmed Elmathary</VendorDescription>' + #13#10 +
     '  </AddIn>' + #13#10 +
     '</RevitAddIns>';
 
-  SaveStringToFile(AddInDir + '\RevitMCP.addin', AddinContent, False);
+  SaveStringToFile(AddInDir + '\BIMBot.addin', AddinContent, False);
   Log('Installed .addin for Revit ' + Year + ' (' + PluginFolder + ')');
 end;
 
@@ -184,10 +190,17 @@ var
   AddinPath: string;
   PluginDir: string;
 begin
-  AddinPath := GetRevitAddInsDir(Year) + '\RevitMCP.addin';
+  AddinPath := GetRevitAddInsDir(Year) + '\BIMBot.addin';
   if FileExists(AddinPath) then
     DeleteFile(AddinPath);
   // Also remove plugin directory from addins
+  PluginDir := GetRevitAddInsDir(Year) + '\BIMBot';
+  if DirExists(PluginDir) then
+    DelTree(PluginDir, True, True, True);
+  // Legacy cleanup: remove old RevitMCP files too
+  AddinPath := GetRevitAddInsDir(Year) + '\RevitMCP.addin';
+  if FileExists(AddinPath) then
+    DeleteFile(AddinPath);
   PluginDir := GetRevitAddInsDir(Year) + '\RevitMCP';
   if DirExists(PluginDir) then
     DelTree(PluginDir, True, True, True);
@@ -221,9 +234,9 @@ begin
       ExistingStr := String(ExistingAnsi);
 
       // Skip if already configured
-      if Pos('"revit-mcp"', ExistingStr) > 0 then
+      if Pos('"BIM-Bot"', ExistingStr) > 0 then
       begin
-        Log('Claude Desktop config already contains revit-mcp entry — skipping');
+        Log('Claude Desktop config already contains BIM-Bot entry — skipping');
         Exit;
       end;
 
@@ -232,13 +245,13 @@ begin
       begin
         StringChangeEx(ExistingStr, '"mcpServers": {',
           '"mcpServers": {' + #13#10 +
-          '    "revit-mcp": {' + #13#10 +
+          '    "BIM-Bot": {' + #13#10 +
           '      "command": "' + NodeExe + '",' + #13#10 +
           '      "args": ["' + ServerJs + '"],' + #13#10 +
           '      "env": {}' + #13#10 +
           '    },', True);
         SaveStringToFile(ClaudeConfig, AnsiString(ExistingStr), False);
-        Log('Merged revit-mcp into existing Claude Desktop config');
+        Log('Merged BIM-Bot into existing Claude Desktop config');
         Exit;
       end;
     end;
@@ -248,7 +261,7 @@ begin
   ForceDirectories(ClaudeDir);
   ConfigContent := '{' + #13#10 +
     '  "mcpServers": {' + #13#10 +
-    '    "revit-mcp": {' + #13#10 +
+    '    "BIM-Bot": {' + #13#10 +
     '      "command": "' + NodeExe + '",' + #13#10 +
     '      "args": ["' + ServerJs + '"],' + #13#10 +
     '      "env": {}' + #13#10 +
@@ -256,7 +269,7 @@ begin
     '  }' + #13#10 +
     '}';
   SaveStringToFile(ClaudeConfig, AnsiString(ConfigContent), False);
-  Log('Created Claude Desktop config with revit-mcp');
+  Log('Created Claude Desktop config with BIM-Bot');
 end;
 
 procedure RemoveClaudeDesktopConfig();
@@ -265,7 +278,7 @@ var
 begin
   ClaudeConfig := ExpandConstant('{userappdata}\Claude\claude_desktop_config.json');
   if FileExists(ClaudeConfig) then
-    Log('Claude Desktop config found — revit-mcp entry left for manual cleanup');
+    Log('Claude Desktop config found — BIM-Bot entry left for manual cleanup');
 end;
 
 // ── Start MCP Server Batch File ─────────────────────────────
@@ -280,10 +293,10 @@ begin
   ServerJs := ExpandConstant('{app}\server\build\index.js');
 
   BatContent := '@echo off' + #13#10 +
-    'title Revit MCP Server v{#MyAppVersion}' + #13#10 +
+    'title BIM-Bot Server v{#MyAppVersion}' + #13#10 +
     'echo.' + #13#10 +
     'echo   ======================================' + #13#10 +
-    'echo     Revit MCP Server v{#MyAppVersion}' + #13#10 +
+    'echo     BIM-Bot Server v{#MyAppVersion}' + #13#10 +
     'echo     by Hassan Ahmed Elmathary' + #13#10 +
     'echo   ======================================' + #13#10 +
     'echo.' + #13#10 +
@@ -311,7 +324,7 @@ begin
 
   ConfigContent := '{' + #13#10 +
     '  "mcpServers": {' + #13#10 +
-    '    "revit-mcp": {' + #13#10 +
+    '    "BIM-Bot": {' + #13#10 +
     '      "command": "' + NodeExe + '",' + #13#10 +
     '      "args": ["' + ServerJs + '"],' + #13#10 +
     '      "env": {}' + #13#10 +
@@ -319,6 +332,75 @@ begin
     '  }' + #13#10 +
     '}';
   SaveStringToFile(ExpandConstant('{app}\mcp-config.json'), ConfigContent, False);
+end;
+
+// ── Existing Installation Detection ─────────────────────────
+
+const
+  UninstallRegKey = 'SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}_is1';
+
+function GetUninstallString(): string;
+var
+  UninstallStr: string;
+begin
+  Result := '';
+  if not RegQueryStringValue(HKLM, UninstallRegKey, 'UninstallString', UninstallStr) then
+    RegQueryStringValue(HKCU, UninstallRegKey, 'UninstallString', UninstallStr);
+  Result := RemoveQuotes(UninstallStr);
+end;
+
+function GetInstalledVersion(): string;
+var
+  Version: string;
+begin
+  Result := 'unknown';
+  if not RegQueryStringValue(HKLM, UninstallRegKey, 'DisplayVersion', Version) then
+    RegQueryStringValue(HKCU, UninstallRegKey, 'DisplayVersion', Version);
+  if Version <> '' then
+    Result := Version;
+end;
+
+function InitializeSetup(): Boolean;
+var
+  UninstallStr: string;
+  InstalledVersion: string;
+  ResultCode: Integer;
+  Choice: Integer;
+begin
+  Result := True;
+
+  UninstallStr := GetUninstallString();
+  if UninstallStr = '' then
+    Exit; // Not installed — proceed with fresh install
+
+  InstalledVersion := GetInstalledVersion();
+
+  Choice := MsgBox(
+    'BIM-Bot v' + InstalledVersion + ' is already installed.' + #13#10 + #13#10 +
+    'What would you like to do?' + #13#10 + #13#10 +
+    '    YES  =  Repair (reinstall v{#MyAppVersion})' + #13#10 +
+    '    NO   =  Uninstall' + #13#10 +
+    '    CANCEL =  Exit',
+    mbConfirmation, MB_YESNOCANCEL);
+
+  case Choice of
+    IDYES:
+    begin
+      // Repair — silently remove old version, then continue with fresh install
+      Exec(UninstallStr, '/SILENT /NORESTART /SUPPRESSMSGBOXES', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+      Result := True;
+    end;
+    IDNO:
+    begin
+      // Uninstall — run uninstaller with UI and exit setup
+      Exec(UninstallStr, '', '', SW_SHOW, ewWaitUntilTerminated, ResultCode);
+      Result := False;
+    end;
+    IDCANCEL:
+    begin
+      Result := False;
+    end;
+  end;
 end;
 
 // ── Post-Install Hook ───────────────────────────────────────

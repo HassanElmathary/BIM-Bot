@@ -1,11 +1,11 @@
-# Antigravity + Revit MCP — Setup Guide
+# Antigravity + BIM-Bot — Setup Guide
 
 > **Control Revit from your IDE chat. No API keys. No quota. Unlimited.**
 
 ## Prerequisites
 
 - [VS Code](https://code.visualstudio.com/) with the **Gemini Code Assist** (Antigravity) extension
-- Revit 2020–2026 with the MCP plugin installed (see [SETUP.md](SETUP.md))
+- Revit 2020–2027 with the MCP plugin installed (see [SETUP.md](SETUP.md))
 - PowerShell 7+ (`pwsh`) — included with Windows 11 or install from [aka.ms/powershell](https://aka.ms/powershell)
 
 ---
@@ -18,10 +18,10 @@
 
 ## 2. Open the Project
 
-Open the **Revit MCP** folder in VS Code:
+Open the **BIM-Bot** folder in VS Code:
 
 ```
-File → Open Folder → select "Revit MCP"
+File → Open Folder → select "BIM-Bot"
 ```
 
 Antigravity will automatically discover the `/revit` workflow from `.agents/workflows/revit.md`.
@@ -64,7 +64,7 @@ Antigravity will:
 |---------|-----|
 | "Connection timed out" | Make sure Revit is open and **MCP Service is started** |
 | `pwsh` not found | Install PowerShell 7: [aka.ms/powershell](https://aka.ms/powershell) |
-| Workflow not found | Ensure you opened the root `Revit MCP` folder in VS Code |
+| Workflow not found | Ensure you opened the root `BIM-Bot` folder in VS Code |
 
 ---
 
@@ -77,7 +77,7 @@ Antigravity reads /revit workflow
     ↓  picks the right tool
 pwsh scripts/revit-cmd.ps1
     ↓  TCP JSON-RPC to localhost:8080
-Revit MCP Plugin
+BIM-Bot Plugin
     ↓  executes in Revit API
 Results returned to chat
 ```

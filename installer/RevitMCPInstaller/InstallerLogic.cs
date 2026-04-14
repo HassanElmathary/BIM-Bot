@@ -15,7 +15,7 @@ namespace RevitMCPInstaller
         public string NodeSourceDir { get; set; } = "";
 
         public static string InstallDir => Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "RevitMCP");
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "BIMBot");
 
         public event Action<string>? OnProgress;
         public event Action<int>? OnPercentChanged;
@@ -110,8 +110,8 @@ namespace RevitMCPInstaller
             var addinsDir = GetAddinsDir(year);
             Directory.CreateDirectory(addinsDir);
 
-            // Copy DLLs to the per-version RevitMCP dir
-            var mcpDir = Path.Combine(addinsDir, "RevitMCP");
+            // Copy DLLs to the per-version BIMBot dir
+            var mcpDir = Path.Combine(addinsDir, "BIMBot");
             Directory.CreateDirectory(mcpDir);
 
             var pluginDir = Path.Combine(InstallDir, "plugin");
@@ -124,18 +124,18 @@ namespace RevitMCPInstaller
             }
 
             // Write .addin manifest
-            var assemblyPath = Path.Combine(mcpDir, "RevitMCPPlugin.dll");
-            var addinPath = Path.Combine(addinsDir, "RevitMCP.addin");
+            var assemblyPath = Path.Combine(mcpDir, "BIMBotPlugin.dll");
+            var addinPath = Path.Combine(addinsDir, "BIMBot.addin");
             var addinContent =
 $@"<?xml version=""1.0"" encoding=""utf-8""?>
 <RevitAddIns>
   <AddIn Type=""Application"">
-    <Name>Revit MCP Plugin</Name>
+    <Name>BIM-Bot Plugin</Name>
     <Assembly>{assemblyPath}</Assembly>
-    <FullClassName>RevitMCPPlugin.Core.Application</FullClassName>
+    <FullClassName>BIMBotPlugin.Core.Application</FullClassName>
     <ClientId>A1B2C3D4-E5F6-7890-ABCD-EF1234567890</ClientId>
     <VendorId>HassanElmathary</VendorId>
-    <VendorDescription>Chat with me - AI-Powered Revit Plugin by Hassan Ahmed Elmathary</VendorDescription>
+    <VendorDescription>AI-Powered BIM-Bot Plugin by Hassan Ahmed Elmathary</VendorDescription>
   </AddIn>
 </RevitAddIns>";
             File.WriteAllText(addinPath, addinContent);
@@ -150,9 +150,9 @@ $@"<?xml version=""1.0"" encoding=""utf-8""?>
             var serverEntry = Path.Combine(InstallDir, "server", "build", "index.js");
             File.WriteAllText(batPath,
 $@"@echo off
-title Revit MCP Server
+title BIM-Bot Server
 echo ========================================
-echo   Revit MCP Server - Starting...
+echo   BIM-Bot Server - Starting...
 echo   by Hassan Ahmed Elmathary
 echo ========================================
 echo.
@@ -170,10 +170,10 @@ pause
             {
                 try
                 {
-                    var addinPath = Path.Combine(GetAddinsDir(year), "RevitMCP.addin");
+                    var addinPath = Path.Combine(GetAddinsDir(year), "BIMBot.addin");
                     if (File.Exists(addinPath)) File.Delete(addinPath);
 
-                    var mcpDir = Path.Combine(GetAddinsDir(year), "RevitMCP");
+                    var mcpDir = Path.Combine(GetAddinsDir(year), "BIMBot");
                     if (Directory.Exists(mcpDir)) Directory.Delete(mcpDir, true);
                 }
                 catch { }

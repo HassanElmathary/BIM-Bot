@@ -96,7 +96,7 @@ async function runTest(
 // --- Test Suite ---
 
 async function main() {
-    console.log("\n🧪 Revit MCP Socket Integration Tests\n");
+    console.log("\n🧪 BIM-Bot Socket Integration Tests\n");
 
     // Test 1: Connection
     await runTest("Can connect to Revit plugin on port 8080", async () => {

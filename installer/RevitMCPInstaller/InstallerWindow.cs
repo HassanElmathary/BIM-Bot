@@ -53,7 +53,7 @@ namespace RevitMCPInstaller
 
         public InstallerWindow()
         {
-            Title = "Revit MCP Installer — Chat with me";
+            Title = "BIM-Bot Installer — Chat with me";
             Width = 600;
             Height = 520;
             MinWidth = 500;
@@ -195,7 +195,7 @@ namespace RevitMCPInstaller
             };
             descBorder.Child = new TextBlock
             {
-                Text = "This installer will set up the Revit MCP Plugin on your computer.\n\n" +
+                Text = "This installer will set up the BIM-Bot Plugin on your computer.\n\n" +
                        "✦  AI chat panel inside Revit\n" +
                        "✦  44+ tools for model analysis & modification\n" +
                        "✦  Supports Gemini & DeepSeek AI providers\n" +
@@ -308,7 +308,7 @@ namespace RevitMCPInstaller
                     });
 
                     // Add manual year options
-                    for (int year = 2022; year <= 2026; year++)
+                    for (int year = 2022; year <= 2027; year++)
                     {
                         var cb = MakeVersionCheckbox(year, false);
                         _versionCheckboxes.Add(cb);
@@ -459,7 +459,7 @@ namespace RevitMCPInstaller
 
             panel.Children.Add(new TextBlock
             {
-                Text = "Revit MCP is already installed",
+                Text = "BIM-Bot is already installed",
                 FontSize = 22,
                 FontWeight = FontWeights.Bold,
                 Foreground = FgWhite,
@@ -487,7 +487,7 @@ namespace RevitMCPInstaller
             uninstallBtn.Click += (s, e) =>
             {
                 var result = MessageBox.Show(
-                    "Are you sure you want to uninstall Revit MCP?\n\n" +
+                    "Are you sure you want to uninstall BIM-Bot?\n\n" +
                     "This will remove the plugin from all Revit versions.",
                     "Confirm Uninstall",
                     MessageBoxButton.YesNo,
@@ -499,7 +499,7 @@ namespace RevitMCPInstaller
                     {
                         InstallerLogic.Uninstall();
                         _completeTitle.Text = "Uninstalled Successfully";
-                        _completeMessage.Text = "Revit MCP has been removed from your computer.\n\n" +
+                        _completeMessage.Text = "BIM-Bot has been removed from your computer.\n\n" +
                                                 "Restart Revit to complete the removal.";
                         ShowPanel(_completePanel);
                     }
@@ -542,7 +542,7 @@ namespace RevitMCPInstaller
             // Set source dirs — look relative to the installer EXE
             var baseDir = AppDomain.CurrentDomain.BaseDirectory;
             _installer.PluginSourceDir = FindDir(baseDir, "plugin",
-                System.IO.Path.Combine(baseDir, "..", "..", "revit-mcp-plugin", "RevitMCPPlugin", "bin", "Release", "net48"));
+                System.IO.Path.Combine(baseDir, "..", "..", "revit-mcp-plugin", "BIMBotPlugin", "bin", "Release", "net48"));
             _installer.ServerSourceDir = FindDir(baseDir, "server",
                 System.IO.Path.Combine(baseDir, "..", "..", "revit-mcp-server"));
             _installer.NodeSourceDir = FindDir(baseDir, "nodejs",

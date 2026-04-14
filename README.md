@@ -1,11 +1,11 @@
-# Revit MCP — AI-Powered Revit Automation
+# BIM-Bot — AI-Powered Revit Automation
 
 [![npm version](https://img.shields.io/npm/v/revit-mcp-server.svg)](https://www.npmjs.com/package/revit-mcp-server)
 [![GitHub release](https://img.shields.io/github/v/release/HassanElmathary/Revit-MCP)](https://github.com/HassanElmathary/Revit-MCP/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Revit](https://img.shields.io/badge/Revit-2020--2026-blue.svg)](#)
+[![Revit](https://img.shields.io/badge/Revit-2020--2027-blue.svg)](#)
 
-> Model Context Protocol (MCP) server + Revit plugin for AI-driven BIM automation with **179 tools**, built-in Gemini AI chat, and Power BI 3D export.
+> BIM-Bot: Model Context Protocol (MCP) server + Revit plugin for AI-driven BIM automation with **179 tools**, built-in Gemini AI chat, and Power BI 3D export.
 
 ---
 
@@ -20,8 +20,8 @@ irm https://raw.githubusercontent.com/HassanElmathary/Revit-MCP/main/install.ps1
 ```
 
 **That's it!** The installer will:
-- ✅ Download & install Revit MCP
-- ✅ Auto-detect your Revit versions (2020–2026)
+- ✅ Download & install BIM-Bot
+- ✅ Auto-detect your Revit versions (2020–2027)
 - ✅ Deploy the correct plugin for each version
 - ✅ Auto-configure Claude Desktop
 - ✅ Ready to use in 60 seconds
@@ -44,7 +44,7 @@ Then add to your Claude Desktop config (`%APPDATA%\Claude\claude_desktop_config.
 ```json
 {
   "mcpServers": {
-    "revit-mcp": {
+    "BIM-Bot": {
       "command": "npx",
       "args": ["-y", "revit-mcp-server"]
     }
@@ -59,21 +59,17 @@ Then add to your Claude Desktop config (`%APPDATA%\Claude\claude_desktop_config.
 <details>
 <summary>📥 <strong>Manual Download</strong> (offline install)</summary>
 
-1. Download the latest ZIP from [GitHub Releases](https://github.com/HassanElmathary/Revit-MCP/releases)
-2. Extract the ZIP
+1. Download `BIMBot-v2.1.0.zip` from [GitHub Releases](https://github.com/HassanElmathary/Revit-MCP/releases)
+2. Extract the ZIP to `C:\Program Files\BIMBot` (or any folder)
 3. Run `Install.bat` as Administrator
-4. Open Revit — look for **"Chat with me"** in the Add-ins tab
+4. Open Revit — look for **"BIM-Bot"** in the Add-ins tab
 
 </details>
 
 <details>
 <summary>🗑️ <strong>Uninstall</strong></summary>
 
-```powershell
-irm https://raw.githubusercontent.com/HassanElmathary/Revit-MCP/main/uninstall.ps1 | iex
-```
-
-This removes the plugin from all Revit versions, cleans up Claude Desktop config, and deletes install files.
+See the [Uninstall](#-uninstall) section below.
 
 </details>
 
@@ -86,9 +82,9 @@ The installer auto-configures Claude Desktop. If you need to do it manually, add
 ```json
 {
   "mcpServers": {
-    "revit-mcp": {
-      "command": "C:\\Program Files\\RevitMCP\\nodejs\\node.exe",
-      "args": ["C:\\Program Files\\RevitMCP\\server\\build\\index.js"],
+    "BIM-Bot": {
+      "command": "C:\\Program Files\\BIMBot\\nodejs\\node.exe",
+      "args": ["C:\\Program Files\\BIMBot\\server\\build\\index.js"],
       "env": {}
     }
   }
@@ -96,6 +92,91 @@ The installer auto-configures Claude Desktop. If you need to do it manually, add
 ```
 
 > **Restart Claude Desktop** after editing the config to load the new MCP server.
+
+---
+
+## 🗑️ Uninstall
+
+### One-Line Uninstall (Recommended)
+
+Open PowerShell and paste:
+
+```powershell
+irm https://raw.githubusercontent.com/HassanElmathary/Revit-MCP/main/install.ps1 | iex; Install-BIMBot -Uninstall
+```
+
+The uninstaller will:
+- 🧹 Remove the Revit plugin (`.addin` files + DLLs) from **all** Revit versions (2020–2027)
+- 🧹 Remove the `BIM-Bot` entry from Claude Desktop config (+ legacy `revit-mcp` / `bim-bot` keys)
+- 🧹 Delete the installation directory (`C:\Program Files\BIMBot` or `%LOCALAPPDATA%\BIMBot`)
+- 🔄 Prompt to restart Revit and Claude Desktop
+
+> **Note:** Restart Revit after uninstalling to fully unload the plugin.
+
+### Manual Uninstall
+
+If you prefer to remove everything by hand:
+
+<details>
+<summary>📋 <strong>Click to expand manual steps</strong></summary>
+
+#### 1. Remove the Revit plugin
+
+Delete the following files/folders for each Revit version you have (replace `20XX` with your version):
+
+```
+%ProgramData%\Autodesk\Revit\Addins\20XX\BIMBot.addin
+%ProgramData%\Autodesk\Revit\Addins\20XX\BIMBot\        (entire folder)
+```
+
+Also check the user-level addins folder:
+```
+%APPDATA%\Autodesk\Revit\Addins\20XX\BIMBot.addin
+%APPDATA%\Autodesk\Revit\Addins\20XX\BIMBot\
+```
+
+#### 2. Remove Claude Desktop config entry
+
+Open `%APPDATA%\Claude\claude_desktop_config.json` in a text editor and delete the `"BIM-Bot"` block from `"mcpServers"`:
+
+```diff
+  {
+    "mcpServers": {
+-     "BIM-Bot": {
+-       "command": "C:\\Program Files\\BIMBot\\nodejs\\node.exe",
+-       "args": ["C:\\Program Files\\BIMBot\\server\\build\\index.js"],
+-       "env": {}
+-     }
+    }
+  }
+```
+
+#### 3. Delete the installation folder
+
+```powershell
+# If installed as Admin:
+Remove-Item "C:\Program Files\BIMBot" -Recurse -Force
+
+# If installed as regular user:
+Remove-Item "$env:LOCALAPPDATA\BIMBot" -Recurse -Force
+```
+
+#### 4. Restart applications
+
+- **Restart Revit** to fully unload the plugin
+- **Restart Claude Desktop** to reload the MCP config
+
+</details>
+
+### NPX / npm Global Uninstall
+
+If you installed the MCP server via npm:
+
+```powershell
+npm uninstall -g revit-mcp-server
+```
+
+> This only removes the MCP server. The Revit plugin must be removed separately using the steps above.
 
 ---
 
@@ -126,7 +207,7 @@ The installer auto-configures Claude Desktop. If you need to do it manually, add
 - **Power BI 3D Visual** — Custom Three.js visual for Revit geometry in Power BI dashboards
 - **Integrations** — Google Sheets, Excel, Notion, SQLite connectors
 - **Local AI Support** — Ollama integration for offline AI capabilities
-- **Revit 2020–2026** support (multi-target plugin)
+- **Revit 2020–2027** support (multi-target plugin)
 - **Auto-updater** via GitHub Releases
 - **One-click installer** (.exe) with portable Node.js
 
@@ -141,6 +222,7 @@ The installer auto-configures Claude Desktop. If you need to do it manually, add
 | Revit 2024 | .NET Framework 4.8 | ✅ Supported |
 | Revit 2025 | .NET 8.0 | ✅ Supported |
 | Revit 2026 | .NET 8.0 | ✅ Supported |
+| Revit 2027 | .NET 10.0 | ✅ Supported |
 
 ## Architecture
 
@@ -179,7 +261,7 @@ Add to your MCP client config (e.g. Claude Desktop, Cursor, Windsurf, etc.):
 ```json
 {
   "mcpServers": {
-    "revit-mcp": {
+    "BIM-Bot": {
       "command": "node",
       "args": ["<path-to>/revit-mcp-server/build/index.js"],
       "env": {}
@@ -196,7 +278,7 @@ Add to your MCP client config (e.g. Claude Desktop, Cursor, Windsurf, etc.):
 ## Project Structure
 
 ```
-Revit MCP/
+BIM-Bot/
 ├── revit-mcp-server/              # MCP Server (TypeScript/Node.js)
 │   └── src/
 │       ├── index.ts               # Server entry point
@@ -234,7 +316,7 @@ Revit MCP/
 │           └── ConnectionManager.ts
 │
 ├── revit-mcp-plugin/              # Revit Plugin (C# Add-in)
-│   └── RevitMCPPlugin/
+│   └── BIMBotPlugin/
 │       ├── Core/                  # Application core
 │       │   ├── Application.cs
 │       │   ├── CommandExecutor.cs

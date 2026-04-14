@@ -1,11 +1,11 @@
 <#
 .SYNOPSIS
-    Antigravity watcher — transparent JSON-RPC proxy to Revit MCP.
-    Polls %APPDATA%\RevitMCP\antigravity\request.json every 500ms.
+    Antigravity watcher — transparent JSON-RPC proxy to BIM-Bot.
+    Polls %APPDATA%\BIMBot\antigravity\request.json every 500ms.
     Forwards ANY method+params directly to Revit TCP on localhost:8080.
 #>
 
-$bridgeDir = Join-Path $env:APPDATA "RevitMCP\antigravity"
+$bridgeDir = Join-Path $env:APPDATA "BIMBot\antigravity"
 $requestFile = Join-Path $bridgeDir "request.json"
 
 # ── All tools keyword map (every tool in CommandExecutor.cs) ──
@@ -331,13 +331,13 @@ function Send-RevitCommand {
             $connected = $connectTask.Wait(5000)
             if (-not $connected) {
                 $client.Dispose()
-                return "Connection timed out. Is Revit MCP service started? (Start it from Revit > MCP tab > Start Service)"
+                return "Connection timed out. Is BIM-Bot service started? (Start it from Revit > MCP tab > Start Service)"
             }
         }
         catch {
             $client.Dispose()
             $inner = if ($_.Exception.InnerException) { $_.Exception.InnerException.Message } else { $_.Exception.Message }
-            return "Cannot connect to Revit MCP on port 8080. Start the MCP service in Revit first. ($inner)"
+            return "Cannot connect to BIM-Bot on port 8080. Start the MCP service in Revit first. ($inner)"
         }
 
         $stream = $client.GetStream()
@@ -413,7 +413,7 @@ Write-Host ""
 Write-Host "  ╔═══════════════════════════════════════════════╗" -ForegroundColor DarkMagenta
 Write-Host "  ║   Antigravity Watcher — Full Authority Mode   ║" -ForegroundColor DarkMagenta
 Write-Host "  ╠═══════════════════════════════════════════════╣" -ForegroundColor DarkMagenta
-Write-Host "  ║  All 70 Revit MCP tools available             ║" -ForegroundColor DarkMagenta
+Write-Host "  ║  All 70 BIM-Bot tools available             ║" -ForegroundColor DarkMagenta
 Write-Host "  ║  Transparent JSON-RPC proxy to localhost:8080  ║" -ForegroundColor DarkMagenta
 Write-Host "  ╚═══════════════════════════════════════════════╝" -ForegroundColor DarkMagenta
 Write-Host ""
@@ -499,3 +499,4 @@ while ($true) {
     }
     Start-Sleep -Milliseconds 500
 }
+

@@ -1,13 +1,13 @@
-<#
+﻿<#
 .SYNOPSIS
-    Sends a JSON-RPC 2.0 command to the Revit MCP plugin via TCP.
+    Sends a JSON-RPC 2.0 command to the BIM-Bot plugin via TCP.
 
 .DESCRIPTION
     Connects to localhost:8080, sends a JSON-RPC request, and returns the
     JSON response. Used by the Antigravity /revit workflow.
 
 .PARAMETER Method
-    The Revit MCP tool name, e.g. "get_levels", "create_wall".
+    The BIM-Bot tool name, e.g. "get_levels", "create_wall".
 
 .PARAMETER Params
     JSON string of parameters. Default: "{}"
@@ -95,3 +95,4 @@ finally {
     if ($null -ne $stream) { $stream.Dispose() }
     if ($null -ne $client) { $client.Dispose() }
 }
+

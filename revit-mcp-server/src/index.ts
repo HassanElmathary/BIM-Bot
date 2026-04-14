@@ -6,7 +6,7 @@ import { registerTools } from "./tools/register.js";
 const APP_VERSION = "2.0.1";
 
 const server = new McpServer({
-    name: "revit-mcp",
+    name: "bim-bot",
     version: APP_VERSION,
 });
 
@@ -14,17 +14,17 @@ async function main() {
     await registerTools(server);
     const transport = new StdioServerTransport();
     await server.connect(transport);
-    console.error(`Revit MCP Server v${APP_VERSION} started successfully`);
+    console.error(`BIM-Bot Server v${APP_VERSION} started successfully`);
 }
 
 // Graceful shutdown
 process.on("SIGINT", () => {
-    console.error("Revit MCP Server shutting down...");
+    console.error("BIM-Bot Server shutting down...");
     process.exit(0);
 });
 
 process.on("SIGTERM", () => {
-    console.error("Revit MCP Server shutting down...");
+    console.error("BIM-Bot Server shutting down...");
     process.exit(0);
 });
 
@@ -35,6 +35,6 @@ process.on("unhandledRejection", (reason) => {
 });
 
 main().catch((error) => {
-    console.error("Error starting Revit MCP Server:", error);
+    console.error("Error starting BIM-Bot Server:", error);
     process.exit(1);
 });

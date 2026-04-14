@@ -142,7 +142,7 @@ export class GoogleAuth {
                   <div style="text-align: center; background: white; padding: 40px; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.3);">
                     <div style="font-size: 64px; margin-bottom: 16px;">✅</div>
                     <h1 style="color: #333; margin: 0 0 8px 0;">Signed In Successfully!</h1>
-                    <p style="color: #666;">Revit MCP is now connected to your Google account.</p>
+                    <p style="color: #666;">BIM-Bot is now connected to your Google account.</p>
                     <p style="color: #999; font-size: 14px;">You can close this window.</p>
                   </div>
                   <script>setTimeout(()=>window.close(),5000)</script>

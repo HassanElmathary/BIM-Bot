@@ -1,12 +1,12 @@
-# Revit MCP — Setup & GitHub Guide
+# BIM-Bot — Setup & GitHub Guide
 
 ## Quick Setup
 
-### 1. Set Gemini API Key
+### 1. Set API Key (Optional)
 ```bash
 cd revit-mcp-server
 copy .env.example .env
-# Edit .env and add your key from https://aistudio.google.com/apikey
+# Edit .env and add your key if you wish to use server-side AI features
 ```
 
 ### 2. Run Local Test
@@ -17,17 +17,16 @@ node build/tests/test-startup.js
 ```
 
 ### 3. Install Plugin to Revit
-Double-click the installer: `installer\output\RevitMCP-Setup-1.0.0.exe`
+Double-click the installer: `installer\output\BIMBot-Setup-1.0.0.exe`
 
 ### 4. Connect an AI Client
 Add to your MCP client config:
 ```json
 {
   "mcpServers": {
-    "revit-mcp": {
+    "bim-bot": {
       "command": "node",
-      "args": ["C:/path/to/Revit MCP/revit-mcp-server/build/index.js"],
-      "env": { "GOOGLE_API_KEY": "your_key" }
+      "args": ["C:/path/to/BIM-Bot/revit-mcp-server/build/index.js"]
     }
   }
 }
@@ -48,7 +47,7 @@ cd "d:\OneDrive\01-me\Revit MCP"
 gh repo create revit-mcp --public --source . --push --description "AI-Powered Revit MCP Server + Plugin"
 
 # 3. Create first release (enables auto-update)
-gh release create v1.0.0 "installer/output/RevitMCP-Setup-1.0.0.exe" --title "Revit MCP v1.0.0" --notes "Initial release with 63 MCP tools and Gemini AI integration"
+gh release create v1.0.0 "installer/output/BIMBot-Setup-1.0.0.exe" --title "BIM-Bot v1.0.0" --notes "Initial release with 63 MCP tools and Gemini AI integration"
 ```
 
 ### After GitHub is set up:

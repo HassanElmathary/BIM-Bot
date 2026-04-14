@@ -1,13 +1,12 @@
 {
     "mcpServers": {
-        "revit-mcp": {
+        "bim-bot": {
             "command": "node",
             "args": [
                 "build/index.js"
             ],
             "cwd": ".",
             "env": {
-                "GOOGLE_API_KEY": "YOUR_GEMINI_API_KEY_HERE"
             }
         }
     }

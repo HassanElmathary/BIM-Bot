@@ -1,5 +1,5 @@
 /**
- * Revit MCP 3D Viewer — Power BI Custom Visual
+ * BIM-Bot 3D Viewer — Power BI Custom Visual
  *
  * Renders Revit 3D geometry from SQLite-exported MeshJSON data using Three.js.
  * Supports bi-directional cross-filtering:

@@ -1,7 +1,7 @@
 {
     "name": "revit-mcp-powerbi-visual",
     "version": "1.0.0",
-    "description": "Revit MCP 3D Viewer — Power BI custom visual with Three.js",
+    "description": "BIM-Bot 3D Viewer — Power BI custom visual with Three.js",
     "main": "src/visual.ts",
     "scripts": {
         "pbiviz": "pbiviz",
