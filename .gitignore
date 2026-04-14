@@ -5,11 +5,8 @@ node_modules/
 build/
 bin/
 obj/
-# Build outputs
-build/
-bin/
-obj/
 dist/
+
 # Config with secrets
 config/
 .env
@@ -23,6 +20,7 @@ config/
 # Installer binaries (too large for git — distribute via GitHub Releases)
 installer/output/
 installer/nodejs/node.exe
+*.zip
 
 # Temp
 *.tsbuildinfo
@@ -35,7 +33,9 @@ installer/nodejs/node.exe
 # Power BI visual build artifacts
 revit-mcp-powerbi-visual/.tmp/
 
-# Legacy upstream backups (if they reappear)
+# Legacy files (removed — install/uninstall is .exe only)
+install.ps1
+uninstall.ps1
+deploy.bat
 revit-mcp-plugin-base/
 revit-mcp-server-base/
-*.zip
