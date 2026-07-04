@@ -14,7 +14,7 @@
 `179 MCP Tools | 17 Categories | 7 Revit Versions`
 
 **Change to:**
-`70 MCP Tools | 18 Categories | 7 Revit Versions`
+`182 MCP Tools | 19 Categories | 8 Revit Versions`
 
 The correct category count is 18: Reading, Creating, Editing, Documentation, QA/QC, AI, Power Tools, Advanced, Drafting, Export, Extended, File Management, MEP, Power BI, Rendering, Settings, Sketch, Transactions.
 
@@ -26,7 +26,7 @@ The correct category count is 18: Reading, Creating, Editing, Documentation, QA/
 `179 tools across 17 categories`
 
 **Change to:**
-`70 tools across 18 categories`
+`182 tools across 19 categories`
 
 ---
 
