@@ -652,7 +652,7 @@ namespace BIMBotPlugin.Core
 
         private static JToken RotateSectionBox(Document doc, UIDocument uiDoc, JObject parameters)
         {
-            var elementId = parameters["elementId"]?.Value<int>();
+            var elementIdInt = parameters["elementId"]?.Value<int>();
             var angle = parameters["angle"]?.Value<double>() ?? 0;
 
             var view = uiDoc.ActiveView as View3D;
@@ -667,10 +667,10 @@ namespace BIMBotPlugin.Core
                 var box = view.GetSectionBox();
                 var transform = box.Transform;
 
-                if (elementId.HasValue)
+                if (elementIdInt.HasValue)
                 {
                     // Orient to element
-                    var elem = doc.GetElement(new ElementId(elementId.Value));
+                    var elem = doc.GetElement(new ElementId(elementIdInt.Value));
                     if (elem != null)
                     {
                         var loc = elem.Location as LocationCurve;

@@ -3,7 +3,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { registerTools } from "./tools/register.js";
 
-const APP_VERSION = "2.0.1";
+const APP_VERSION = "2.1.0";
 
 const server = new McpServer({
     name: "bim-bot",

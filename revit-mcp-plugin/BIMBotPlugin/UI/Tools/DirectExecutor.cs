@@ -68,6 +68,7 @@ namespace BIMBotPlugin.UI.Tools
                 if (value is string s && string.IsNullOrWhiteSpace(s)) continue;
                 if (value is bool b) obj[key] = b;
                 else if (value is int i) obj[key] = i;
+                else if (value is long l) obj[key] = l;
                 else if (value is double d) obj[key] = d;
                 else obj[key] = value.ToString();
             }

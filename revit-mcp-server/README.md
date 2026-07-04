@@ -4,7 +4,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 > **MCP Server for Autodesk Revit** — 179 AI-powered tools for BIM automation.  
-> Works with Claude Desktop, Cursor, Windsurf, and any MCP client. Supports **Revit 2020–2027**.
+> Works with Claude Desktop, Cursor, Windsurf, and any MCP client. Supports **Revit 2024–2026**.
 
 ## ⚡ Quick Start
 
@@ -47,7 +47,7 @@ irm https://raw.githubusercontent.com/HassanElmathary/Revit-MCP/main/install.ps1
 
 This will:
 - ✅ Download & install everything
-- ✅ Auto-detect Revit 2020–2027
+- ✅ Auto-detect Revit 2024–2026
 - ✅ Deploy the correct plugin for each version
 - ✅ Auto-configure Claude Desktop
 

@@ -28,6 +28,8 @@ namespace BIMBotPlugin.Core
         private readonly List<TcpClient> _clients = new List<TcpClient>();
 
         private const string ContentLengthHeader = "Content-Length: ";
+        private const int MaxStartRetries = 5;
+        private const int RetryDelayMs = 2000;
 
         public bool IsRunning { get; private set; }
 
@@ -37,26 +39,49 @@ namespace BIMBotPlugin.Core
             _eventManager = eventManager;
         }
 
+        /// <summary>
+        /// Start the TCP listener with automatic retry if the port is busy.
+        /// Retries up to 5 times with 2-second delays. Also kills stale
+        /// processes holding the port before each attempt.
+        /// </summary>
         public void Start()
         {
             if (IsRunning) return;
 
-            try
-            {
-                _cts = new CancellationTokenSource();
-                _listener = new TcpListener(IPAddress.Loopback, _port);
-                _listener.Start();
-                IsRunning = true;
+            _cts = new CancellationTokenSource();
+            Exception? lastException = null;
 
-                Task.Run(() => AcceptClientsAsync(_cts.Token));
-                Logger.Log($"Socket service started on port {_port}");
-            }
-            catch (SocketException ex)
+            for (int attempt = 1; attempt <= MaxStartRetries; attempt++)
             {
-                Logger.LogError($"Failed to start socket service on port {_port} — port may be in use", ex);
-                IsRunning = false;
-                throw;
+                try
+                {
+                    // Try to free the port if something stale is holding it
+                    if (attempt > 1)
+                    {
+                        TryKillStalePortHolder(_port);
+                        Thread.Sleep(RetryDelayMs);
+                    }
+
+                    _listener = new TcpListener(IPAddress.Loopback, _port);
+                    _listener.Start();
+                    IsRunning = true;
+
+                    Task.Run(() => AcceptClientsWithWatchdogAsync(_cts.Token));
+                    Logger.Log($"Socket service started on port {_port} (attempt {attempt})");
+                    return; // Success
+                }
+                catch (SocketException ex)
+                {
+                    lastException = ex;
+                    Logger.LogError($"Start attempt {attempt}/{MaxStartRetries} failed on port {_port}", ex);
+                    try { _listener?.Stop(); } catch { }
+                    _listener = null;
+                }
             }
+
+            IsRunning = false;
+            Logger.LogError($"All {MaxStartRetries} start attempts failed on port {_port}");
+            throw lastException ?? new SocketException((int)SocketError.AddressAlreadyInUse);
         }
 
         public void Stop()
@@ -77,6 +102,97 @@ namespace BIMBotPlugin.Core
             try { _listener?.Stop(); } catch { }
             IsRunning = false;
             Logger.Log("Socket service stopped");
+        }
+
+        /// <summary>
+        /// Clean restart: stop then start with full retry logic.
+        /// </summary>
+        public void Restart()
+        {
+            Logger.Log("Restarting socket service...");
+            Stop();
+            Thread.Sleep(500); // Brief pause to let the port release
+            Start();
+        }
+
+        /// <summary>
+        /// Kill any process holding our port. Best-effort — failures are silently ignored.
+        /// </summary>
+        private static void TryKillStalePortHolder(int port)
+        {
+            try
+            {
+                var psi = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = "cmd.exe",
+                    Arguments = $"/c netstat -ano | findstr \":{port}\" | findstr \"LISTENING\"",
+                    RedirectStandardOutput = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                };
+                using var proc = System.Diagnostics.Process.Start(psi);
+                if (proc == null) return;
+                var output = proc.StandardOutput.ReadToEnd();
+                proc.WaitForExit(3000);
+
+                // Parse PID from netstat output (last column)
+                foreach (var line in output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
+                {
+                    var parts = line.Trim().Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+                    if (parts.Length >= 5 && int.TryParse(parts[parts.Length - 1], out var pid) && pid > 0)
+                    {
+                        // Don't kill the current process
+                        if (pid == System.Diagnostics.Process.GetCurrentProcess().Id) continue;
+
+                        try
+                        {
+                            var stale = System.Diagnostics.Process.GetProcessById(pid);
+                            Logger.Log($"Killing stale process {pid} ({stale.ProcessName}) holding port {port}");
+                            stale.Kill();
+                        }
+                        catch { } // Process may have already exited
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError("TryKillStalePortHolder failed (non-critical)", ex);
+            }
+        }
+
+        /// <summary>
+        /// Watchdog wrapper: runs AcceptClientsAsync and auto-restarts the listener
+        /// if it crashes unexpectedly (e.g. listener disposed, socket error).
+        /// </summary>
+        private async Task AcceptClientsWithWatchdogAsync(CancellationToken ct)
+        {
+            while (!ct.IsCancellationRequested)
+            {
+                try
+                {
+                    await AcceptClientsAsync(ct);
+                }
+                catch (Exception ex) when (!ct.IsCancellationRequested)
+                {
+                    Logger.LogError("AcceptClients crashed — watchdog will restart in 3s", ex);
+                    await Task.Delay(3000, ct);
+
+                    // Recreate the listener
+                    try
+                    {
+                        _listener?.Stop();
+                        _listener = new TcpListener(IPAddress.Loopback, _port);
+                        _listener.Start();
+                        Logger.Log("Watchdog: listener restarted successfully");
+                    }
+                    catch (Exception restartEx)
+                    {
+                        Logger.LogError("Watchdog: failed to restart listener", restartEx);
+                        IsRunning = false;
+                        return;
+                    }
+                }
+            }
         }
 
         private async Task AcceptClientsAsync(CancellationToken ct)
@@ -106,7 +222,10 @@ namespace BIMBotPlugin.Core
                 catch (Exception ex)
                 {
                     if (!ct.IsCancellationRequested)
+                    {
                         Logger.LogError("Error accepting client", ex);
+                        throw; // Let watchdog handle it
+                    }
                 }
             }
         }

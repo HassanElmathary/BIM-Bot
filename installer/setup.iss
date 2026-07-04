@@ -1,6 +1,6 @@
 ; ============================================================
 ;  BIM-Bot — Professional Installer (Inno Setup 6)
-;  AI-Powered BIM Automation • 179 MCP Tools • Revit 2020–2026
+;  AI-Powered BIM Automation • 179 MCP Tools • Revit 2020–2027
 ;  by Hassan Ahmed Elmathary
 ; ============================================================
 
@@ -41,8 +41,10 @@ WizardSizePercent=100
 DisableWelcomePage=no
 DisableDirPage=no
 DisableProgramGroupPage=yes
-; Requirements
+; Requirements — admin by default, but allow per-user install (no admin
+; rights needed; addins then go to the user's %APPDATA% Revit folder)
 PrivilegesRequired=admin
+PrivilegesRequiredOverridesAllowed=dialog commandline
 ArchitecturesInstallIn64BitMode=x64
 ; Info shown in Add/Remove Programs
 VersionInfoVersion={#MyAppVersion}.0
@@ -59,7 +61,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Messages]
 WelcomeLabel1=Welcome to {#MyAppName}
-WelcomeLabel2=This will install {#MyAppName} v{#MyAppVersion} on your computer.%n%n{#MyAppName} provides 179 AI-powered MCP tools for Autodesk Revit, enabling intelligent BIM automation through Claude Desktop, Cursor, Windsurf, and any MCP client.%n%nSupports Revit 2020–2026.
+WelcomeLabel2=This will install {#MyAppName} v{#MyAppVersion} on your computer.%n%n{#MyAppName} provides 179 AI-powered MCP tools for Autodesk Revit, enabling intelligent BIM automation through Claude Desktop, Cursor, Windsurf, and any MCP client.%n%nSupports Revit 2020–2027.
 FinishedHeadingLabel=Installation Complete!
 FinishedLabel={#MyAppName} has been successfully installed.%n%nNext Steps:%n  1. Open Revit → look for the "BIM-Bot" tab in the ribbon%n  2. Open Claude Desktop → BIM-Bot tools are ready to use
 
@@ -75,7 +77,7 @@ Name: "plugin"; Description: "Revit Plugin — connects Revit to the MCP Server"
 Name: "claude"; Description: "Auto-configure Claude Desktop"; Types: full custom
 
 [Tasks]
-; Auto-detect installed Revit versions — only show those found
+; Auto-detect installed Revit versions — only show those found.
 Name: "revit2020"; Description: "Revit 2020 (.NET 4.8)"; GroupDescription: "Deploy Revit plugin to:"; Components: plugin; Check: IsRevitInstalled('2020')
 Name: "revit2021"; Description: "Revit 2021 (.NET 4.8)"; GroupDescription: "Deploy Revit plugin to:"; Components: plugin; Check: IsRevitInstalled('2021')
 Name: "revit2022"; Description: "Revit 2022 (.NET 4.8)"; GroupDescription: "Deploy Revit plugin to:"; Components: plugin; Check: IsRevitInstalled('2022')
@@ -83,6 +85,7 @@ Name: "revit2023"; Description: "Revit 2023 (.NET 4.8)"; GroupDescription: "Depl
 Name: "revit2024"; Description: "Revit 2024 (.NET 4.8)"; GroupDescription: "Deploy Revit plugin to:"; Components: plugin; Check: IsRevitInstalled('2024')
 Name: "revit2025"; Description: "Revit 2025 (.NET 8.0)"; GroupDescription: "Deploy Revit plugin to:"; Components: plugin; Check: IsRevitInstalled('2025')
 Name: "revit2026"; Description: "Revit 2026 (.NET 8.0)"; GroupDescription: "Deploy Revit plugin to:"; Components: plugin; Check: IsRevitInstalled('2026')
+Name: "revit2027"; Description: "Revit 2027 (.NET 8.0)"; GroupDescription: "Deploy Revit plugin to:"; Components: plugin; Check: IsRevitInstalled('2027')
 ; Additional options
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional options:"
 
@@ -97,6 +100,7 @@ Source: "nodejs\*"; DestDir: "{app}\nodejs"; Flags: ignoreversion recursesubdirs
 Source: "..\revit-mcp-server\build\*"; DestDir: "{app}\server\build"; Flags: ignoreversion recursesubdirs; Components: server
 Source: "..\revit-mcp-server\node_modules\*"; DestDir: "{app}\server\node_modules"; Flags: ignoreversion recursesubdirs; Components: server
 Source: "..\revit-mcp-server\package.json"; DestDir: "{app}\server"; Flags: ignoreversion; Components: server
+Source: "..\revit-mcp-server\scripts\configure-claude.cjs"; DestDir: "{app}\server\scripts"; Flags: ignoreversion; Components: server
 
 ; Revit Plugin DLLs (both framework targets)
 Source: "..\revit-mcp-plugin\BIMBotPlugin\bin\Release\net48\*"; DestDir: "{app}\plugin\net48"; Flags: ignoreversion recursesubdirs; Components: plugin
@@ -137,7 +141,11 @@ end;
 
 function GetRevitAddInsDir(Year: string): string;
 begin
-  Result := ExpandConstant('{commonappdata}\Autodesk\Revit\Addins\' + Year);
+  // Machine-wide addins need admin; per-user installs use %APPDATA%
+  if IsAdminInstallMode then
+    Result := ExpandConstant('{commonappdata}\Autodesk\Revit\Addins\' + Year)
+  else
+    Result := ExpandConstant('{userappdata}\Autodesk\Revit\Addins\' + Year);
 end;
 
 function GetPluginSubfolder(YearInt: Integer): string;
@@ -206,9 +214,16 @@ begin
     DelTree(PluginDir, True, True, True);
 end;
 
-// ── Claude Desktop Configuration ────────────────────────────
+// ── Claude Configuration ────────────────────────────────────
+//
+// Primary path: run configure-claude.cjs with the bundled Node runtime.
+// It does a real JSON parse/merge, validates that configured paths still
+// exist, and REPAIRS stale entries (the old Pascal string-injection
+// skipped whenever a "BIM-Bot" key was present, so a broken entry from a
+// previous install location was never fixed).
+// Fallback: legacy Pascal string injection if Node execution fails.
 
-procedure ConfigureClaudeDesktop();
+procedure ConfigureClaudeDesktopFallback();
 var
   ClaudeDir: string;
   ClaudeConfig: string;
@@ -270,6 +285,35 @@ begin
     '}';
   SaveStringToFile(ClaudeConfig, AnsiString(ConfigContent), False);
   Log('Created Claude Desktop config with BIM-Bot');
+end;
+
+procedure ConfigureClaudeDesktop();
+var
+  NodeExe: string;
+  Script: string;
+  ResultCode: Integer;
+begin
+  NodeExe := ExpandConstant('{app}\nodejs\node.exe');
+  Script := ExpandConstant('{app}\server\scripts\configure-claude.cjs');
+
+  if FileExists(NodeExe) and FileExists(Script) then
+  begin
+    if Exec(NodeExe, '"' + Script + '"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+    begin
+      if ResultCode = 0 then
+      begin
+        Log('Claude configured via configure-claude.cjs');
+        Exit;
+      end;
+      Log('configure-claude.cjs exited with code ' + IntToStr(ResultCode) + ' — using fallback');
+    end
+    else
+      Log('Failed to execute node for configure-claude.cjs — using fallback');
+  end
+  else
+    Log('Bundled node or configure script missing — using fallback');
+
+  ConfigureClaudeDesktopFallback();
 end;
 
 procedure RemoveClaudeDesktopConfig();
@@ -407,13 +451,13 @@ end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
 var
-  Years: array[0..6] of string;
-  Tasks: array[0..6] of string;
+  Years: array[0..7] of string;
+  Tasks: array[0..7] of string;
   i: Integer;
 begin
   if CurStep = ssPostInstall then
   begin
-    // Install .addin files for selected Revit versions
+    // Install .addin files for selected Revit versions (2020–2027)
     Years[0] := '2020'; Tasks[0] := 'revit2020';
     Years[1] := '2021'; Tasks[1] := 'revit2021';
     Years[2] := '2022'; Tasks[2] := 'revit2022';
@@ -421,8 +465,9 @@ begin
     Years[4] := '2024'; Tasks[4] := 'revit2024';
     Years[5] := '2025'; Tasks[5] := 'revit2025';
     Years[6] := '2026'; Tasks[6] := 'revit2026';
+    Years[7] := '2027'; Tasks[7] := 'revit2027';
 
-    for i := 0 to 6 do
+    for i := 0 to 7 do
     begin
       if WizardIsTaskSelected(Tasks[i]) then
         InstallAddinForRevit(Years[i]);
@@ -444,7 +489,7 @@ end;
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
-  Years: array[0..6] of string;
+  Years: array[0..7] of string;
   i: Integer;
 begin
   if CurUninstallStep = usUninstall then
@@ -456,8 +501,9 @@ begin
     Years[4] := '2024';
     Years[5] := '2025';
     Years[6] := '2026';
+    Years[7] := '2027';
 
-    for i := 0 to 6 do
+    for i := 0 to 7 do
       RemoveAddinForRevit(Years[i]);
 
     RemoveClaudeDesktopConfig();

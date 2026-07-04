@@ -43,6 +43,8 @@ export class RevitSocketClient {
     private setupListeners(): void {
         this.socket.on("connect", () => {
             this.connected = true;
+            // Enable TCP keepalive to detect dead connections early
+            this.socket.setKeepAlive(true, 30000); // 30-second keepalive interval
         });
 
         this.socket.on("data", (data) => {
@@ -55,7 +57,7 @@ export class RevitSocketClient {
             this.connected = false;
             // Reject any pending callbacks — connection was lost
             for (const [id, cb] of this.responseCallbacks) {
-                cb.reject(new Error("Connection to Revit closed while waiting for response"));
+                cb.reject(new Error("Connection to Revit closed while waiting for response. The BIM-Bot service may have stopped."));
             }
             this.responseCallbacks.clear();
         });
@@ -218,6 +220,19 @@ export class RevitSocketClient {
     disconnect(): void {
         this.socket.destroy(); // destroy is safer than end — ensures immediate cleanup
         this.connected = false;
+    }
+
+    /**
+     * Clean reconnect: destroy current socket, create fresh one, and connect.
+     * Useful when the connection is in a bad/half-open state.
+     */
+    reconnect(): void {
+        this.disconnect();
+        this.buffer = Buffer.alloc(0);
+        this.responseCallbacks.clear();
+        this.socket = new net.Socket();
+        this.setupListeners();
+        this.socket.connect(this.port, this.host);
     }
 
     private generateId(): string {

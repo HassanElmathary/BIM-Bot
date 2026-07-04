@@ -320,8 +320,10 @@ namespace BIMBotPlugin.UI
                         dialog = new Tools.ApplyViewTemplateWindow { Owner = this };
                         break;
                     case "clash_detection":
-                        dialog = new Tools.ClashDetectionWindow { Owner = this };
-                        break;
+                        // Must use Show() (non-modal) so Revit's event loop stays free
+                        // for external events (zoom, select) fired from inside the window
+                        new Tools.ClashDetectionWindow().Show();
+                        return;
                     default:
                         dialog = new ToolDialogWindow(tool) { Owner = this };
                         break;

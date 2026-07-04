@@ -465,6 +465,31 @@ namespace BIMBotPlugin.Core
             return bmp;
         }
 
+        /// <summary>QA/QC icon — shield with a checkmark.</summary>
+        public static BitmapSource QaQc(int size) => Render(size, (dc, s) =>
+        {
+            double m = s * 0.08, cx = s / 2.0;
+            // Shield body
+            var shield = new StreamGeometry();
+            using (var ctx = shield.Open())
+            {
+                ctx.BeginFigure(new Point(cx, m), true, true);
+                ctx.LineTo(new Point(s - m, m * 2.2), true, false);
+                ctx.LineTo(new Point(s - m, s * 0.55), true, false);
+                ctx.BezierTo(new Point(s - m, s * 0.78), new Point(cx, s - m), new Point(cx, s - m), true, false);
+                ctx.BezierTo(new Point(cx, s - m), new Point(m, s * 0.78), new Point(m, s * 0.55), true, false);
+                ctx.LineTo(new Point(m, m * 2.2), true, false);
+            }
+            shield.Freeze();
+            dc.DrawGeometry(B(CPrimary), null, shield);
+            dc.DrawGeometry(null, P(CDark, s * 0.04), shield);
+            // Checkmark
+            var pen = P(Colors.White, s * 0.1);
+            double t = s * 0.3, mid = s * 0.56, bot = s * 0.7;
+            dc.DrawLine(pen, new Point(cx - t * 0.5, mid), new Point(cx - t * 0.05, bot - s * 0.05));
+            dc.DrawLine(pen, new Point(cx - t * 0.05, bot - s * 0.05), new Point(cx + t * 0.6, t * 0.85));
+        });
+
         /// <summary>Draw a 4-point sparkle star.</summary>
         private static void DrawStar4(DrawingContext dc, double cx, double cy, double r, Color color)
         {

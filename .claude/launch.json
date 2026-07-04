@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "website",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "3000", "--directory", "C:/Users/hassa/Documents/OneDrive/01-me/revit-mcp-website"],
+      "port": 3000
+    }
+  ]
+}

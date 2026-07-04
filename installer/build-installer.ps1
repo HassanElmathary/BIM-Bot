@@ -10,10 +10,10 @@ $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 if (-not (Test-Path "$root\revit-mcp-plugin")) { $root = $PSScriptRoot | Split-Path }
 
-# 1. Build plugin (multi-target: net48 + net8.0-windows)
-Write-Host "[1/4] Building Revit Plugin (multi-target)..."
+# 1. Build plugin (target net8.0-windows only to prevent failure on machines without older Revit SDKs)
+Write-Host "[1/4] Building Revit Plugin..."
 Push-Location "$root\revit-mcp-plugin\BIMBotPlugin"
-dotnet build -c Release 2>&1 | Out-Null
+dotnet build -c Release -f net8.0-windows 2>&1 | Out-Null
 if ($LASTEXITCODE -ne 0) { Write-Host "FAILED to build plugin!"; exit 1 }
 Pop-Location
 Write-Host "  [OK] Plugin built (net48 + net8.0-windows + net10.0-windows)"
@@ -33,8 +33,8 @@ if (Test-Path $distDir) { Remove-Item $distDir -Recurse -Force }
 New-Item -ItemType Directory -Path $distDir -Force | Out-Null
 
 # Copy installer EXE
-Copy-Item "$root\installer\RevitMCPInstaller\bin\Release\net8.0-windows\RevitMCP-Setup.exe" -Destination $distDir
-Copy-Item "$root\installer\RevitMCPInstaller\bin\Release\net8.0-windows\Newtonsoft.Json.dll" -Destination $distDir
+Copy-Item "$root\installer\RevitMCPInstaller\bin\Release\net48\RevitMCP-Setup.exe" -Destination $distDir
+Copy-Item "$root\installer\RevitMCPInstaller\bin\Release\net48\Newtonsoft.Json.dll" -Destination $distDir
 
 # Copy plugin files (both framework builds)
 $pluginNet48 = "$distDir\plugin\net48"
@@ -43,9 +43,16 @@ $pluginNet10 = "$distDir\plugin\net10"
 New-Item -ItemType Directory -Path $pluginNet48 -Force | Out-Null
 New-Item -ItemType Directory -Path $pluginNet8 -Force | Out-Null
 New-Item -ItemType Directory -Path $pluginNet10 -Force | Out-Null
-Copy-Item "$root\revit-mcp-plugin\BIMBotPlugin\bin\Release\net48\*" -Destination $pluginNet48 -Recurse
-Copy-Item "$root\revit-mcp-plugin\BIMBotPlugin\bin\Release\net8.0-windows\*" -Destination $pluginNet8 -Recurse
-Copy-Item "$root\revit-mcp-plugin\BIMBotPlugin\bin\Release\net10.0-windows\*" -Destination $pluginNet10 -Recurse
+
+if (Test-Path "$root\revit-mcp-plugin\BIMBotPlugin\bin\Release\net48") {
+    Copy-Item "$root\revit-mcp-plugin\BIMBotPlugin\bin\Release\net48\*" -Destination $pluginNet48 -Recurse
+}
+if (Test-Path "$root\revit-mcp-plugin\BIMBotPlugin\bin\Release\net8.0-windows") {
+    Copy-Item "$root\revit-mcp-plugin\BIMBotPlugin\bin\Release\net8.0-windows\*" -Destination $pluginNet8 -Recurse
+}
+if (Test-Path "$root\revit-mcp-plugin\BIMBotPlugin\bin\Release\net10.0-windows") {
+    Copy-Item "$root\revit-mcp-plugin\BIMBotPlugin\bin\Release\net10.0-windows\*" -Destination $pluginNet10 -Recurse
+}
 
 # Copy MCP server (build + node_modules + package.json)
 $serverDest = "$distDir\server"

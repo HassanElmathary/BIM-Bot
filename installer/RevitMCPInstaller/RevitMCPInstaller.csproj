@@ -12,6 +12,8 @@
     <Product>Revit MCP Plugin</Product>
     <Version>1.1.0</Version>
     <UseWPF>true</UseWPF>
+    <CodePage>65001</CodePage>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
 
   <ItemGroup>

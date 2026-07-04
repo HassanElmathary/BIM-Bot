@@ -14,7 +14,7 @@
 1. Download **`BIMBot-Setup-v2.1.0.exe`** from [GitHub Releases](https://github.com/HassanElmathary/MIB-Mot/releases)
 2. Run the installer as **Administrator**
 3. Follow the wizard — it will:
-   - ✅ Auto-detect your Revit versions (2020–2027)
+   - ✅ Auto-detect your Revit versions (2024–2026)
    - ✅ Deploy the correct plugin for each version
    - ✅ Bundle a portable Node.js runtime (no separate install needed)
    - ✅ Auto-configure Claude Desktop
@@ -24,9 +24,19 @@
 
 ---
 
-## Claude Desktop Configuration
+## Supported AI Clients
 
-The installer auto-configures Claude Desktop. If you need to do it manually, add this to `%APPDATA%\Claude\claude_desktop_config.json`:
+BIM-Bot works with **any MCP-compatible AI client**. The installer auto-configures Claude Desktop; for others, copy the config below.
+
+| Client | Config File |
+|--------|-------------|
+| Claude Desktop | `%APPDATA%\Claude\claude_desktop_config.json` |
+| Cursor | `~/.cursor/mcp.json` or Settings → Features → MCP |
+| Windsurf | `%USERPROFILE%\.codeium\windsurf\mcp_config.json` |
+| VS Code | `.vscode/mcp.json` or Command Palette → "MCP: Open User Configuration" |
+| Gemini CLI | `~/.gemini/settings.json` |
+
+### Claude Desktop / Cursor / Windsurf / Gemini CLI
 
 ```json
 {
@@ -40,7 +50,21 @@ The installer auto-configures Claude Desktop. If you need to do it manually, add
 }
 ```
 
-> **Restart Claude Desktop** after editing the config to load the new MCP server.
+### VS Code (Copilot / MCP Extension)
+
+```json
+{
+  "servers": {
+    "BIM-Bot": {
+      "type": "stdio",
+      "command": "C:\\Program Files\\BIMBot\\nodejs\\node.exe",
+      "args": ["C:\\Program Files\\BIMBot\\server\\build\\index.js"]
+    }
+  }
+}
+```
+
+> **Restart your AI client** after editing the config to load the new MCP server.
 
 ---
 
@@ -51,7 +75,7 @@ Open **Settings → Apps → Installed Apps**, find **BIM-Bot**, and click **Uni
 Or re-run the installer `.exe` — it detects the existing installation and offers a **Repair** or **Uninstall** option.
 
 The uninstaller will automatically:
-- 🧹 Remove the Revit plugin (`.addin` files) from **all** Revit versions (2020–2027)
+- 🧹 Remove the Revit plugin (`.addin` files) from **all** Revit versions (2020–2027, legacy entries included)
 - 🧹 Remove the `BIM-Bot` entry from Claude Desktop config
 - 🧹 Delete the installation directory
 
@@ -86,7 +110,7 @@ The uninstaller will automatically:
 - **Power BI 3D Visual** — Custom Three.js visual for Revit geometry in Power BI dashboards
 - **Integrations** — Google Sheets, Excel, Notion, SQLite connectors
 - **Local AI Support** — Ollama integration for offline AI capabilities
-- **Revit 2020–2027** support (multi-target plugin)
+- **Revit 2024–2026** support (multi-target plugin: .NET 4.8 for 2024, .NET 8 for 2025/2026)
 - **Auto-updater** via GitHub Releases
 - **One-click installer** (.exe) with portable Node.js
 

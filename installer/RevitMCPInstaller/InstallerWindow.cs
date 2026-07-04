@@ -308,7 +308,7 @@ namespace RevitMCPInstaller
                     });
 
                     // Add manual year options
-                    for (int year = 2022; year <= 2027; year++)
+                    for (int year = 2020; year <= 2027; year++)
                     {
                         var cb = MakeVersionCheckbox(year, false);
                         _versionCheckboxes.Add(cb);

@@ -2,7 +2,7 @@
 <RevitAddIns>
   <AddIn Type="Application">
     <Name>BIM-Bot Plugin</Name>
-    <Assembly>BIMBotPlugin.dll</Assembly>
+    <Assembly>C:\Users\hassa\Documents\OneDrive\01-me\Revit MCP\revit-mcp-plugin\BIMBotPlugin\bin\Release\net8.0-windows\BIMBotPlugin.dll</Assembly>
     <FullClassName>BIMBotPlugin.Core.Application</FullClassName>
     <ClientId>A1B2C3D4-E5F6-7890-ABCD-EF1234567890</ClientId>
     <VendorId>BIM-Bot</VendorId>

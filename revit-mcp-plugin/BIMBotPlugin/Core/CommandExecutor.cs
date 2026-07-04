@@ -7,6 +7,8 @@ using Autodesk.Revit.DB.Architecture;
 using Autodesk.Revit.UI;
 using Newtonsoft.Json.Linq;
 using BIMBotPlugin.PowerBI;
+using BIMBotPlugin.UI;
+using Newtonsoft.Json;
 
 namespace BIMBotPlugin.Core
 {
@@ -378,6 +380,8 @@ namespace BIMBotPlugin.Core
                     return ProjectFilesService.AnalyzeFile(doc.PathName, parameters);
                 case "search_project_files":
                     return ProjectFilesService.SearchFiles(doc.PathName, parameters);
+                case "write_project_file":
+                    return ProjectFilesService.WriteFile(doc.PathName, parameters);
                 case "export_elements_to_csv":
                     return ExportElementsToCsv(doc, parameters);
                 case "export_elements_to_excel":
@@ -618,6 +622,10 @@ namespace BIMBotPlugin.Core
                     return ZoomToElement(uidoc!, doc, parameters);
                 case "edit_schedule":
                     return EditSchedule(doc, parameters);
+
+                // ===== BIM DASHBOARD =====
+                case "show_bim_dashboard":
+                    return ShowBimDashboard(parameters);
 
                 default:
                     throw new InvalidOperationException($"Unknown command: {command}");
@@ -1518,13 +1526,140 @@ namespace BIMBotPlugin.Core
 
         private static JToken SelectElements(UIDocument uidoc, JObject parameters)
         {
-            var ids = (parameters["elementIds"] as JArray)?
-                .Select(id => new ElementId(id.Value<int>()))
+            var doc = uidoc.Document;
+            var isolate = parameters["isolate"]?.Value<bool>() ?? false;
+
+            var requestedIds = (parameters["elementIds"] as JArray)?
+                .Select(id => new ElementId(id.Value<long>()))
                 .ToList() ?? new List<ElementId>();
 
-            uidoc.Selection.SetElementIds(ids);
+            // ── Resolve every ID: host doc first (excluding RevitLinkInstance containers),
+            //    then linked docs. An ID may exist in both — prefer host unless the host
+            //    match IS a link instance (those aren't useful clash targets).
+            var links = new FilteredElementCollector(doc)
+                .OfClass(typeof(RevitLinkInstance))
+                .Cast<RevitLinkInstance>()
+                .ToList();
 
-            return new JObject { ["message"] = $"{ids.Count} elements selected" };
+            var hostIds        = new List<ElementId>();
+            var linkedMatches  = new List<(ElementId id, RevitLinkInstance link, Element elem)>();
+            var unresolvedIds  = new List<ElementId>();
+
+            foreach (var id in requestedIds)
+            {
+                var hostElem = doc.GetElement(id);
+                if (hostElem != null && !(hostElem is RevitLinkInstance))
+                {
+                    hostIds.Add(id);
+                    continue;
+                }
+
+                // Search linked models
+                bool found = false;
+                foreach (var link in links)
+                {
+                    var linkDoc = link.GetLinkDocument();
+                    if (linkDoc == null) continue;
+                    var linkedElem = linkDoc.GetElement(id);
+                    if (linkedElem == null) continue;
+
+                    linkedMatches.Add((id, link, linkedElem));
+                    found = true;
+                    break;
+                }
+                if (!found) unresolvedIds.Add(id);
+            }
+
+            // ── Build the Revit selection ──
+            // Use SetReferences so linked-model elements can participate in the real
+            // selection (SetElementIds only accepts host IDs and silently drops linked ones).
+            var selectionRefs = new List<Reference>();
+            var linkedResults = new List<string>();
+            var linkedFallback = new List<(ElementId id, RevitLinkInstance link)>();
+
+            foreach (var hid in hostIds)
+            {
+                var e = doc.GetElement(hid);
+                if (e == null) continue;
+                try { selectionRefs.Add(new Reference(e)); } catch { }
+            }
+
+            foreach (var (id, link, elem) in linkedMatches)
+            {
+                try
+                {
+                    var linkRef = new Reference(elem).CreateLinkReference(link);
+                    if (linkRef != null)
+                    {
+                        selectionRefs.Add(linkRef);
+                        linkedResults.Add($"ID {id} in '{link.Name}'");
+                        continue;
+                    }
+                }
+                catch { /* Some element types can't be referenced across links — fall back below. */ }
+
+                linkedFallback.Add((id, link));
+                linkedResults.Add($"ID {id} in '{link.Name}' (link container highlighted)");
+            }
+
+            // Apply selection — SetReferences handles both host and linked refs.
+            try
+            {
+                uidoc.Selection.SetReferences(selectionRefs);
+            }
+            catch
+            {
+                // Last-ditch fallback: at least select host elements the old way.
+                uidoc.Selection.SetElementIds(hostIds);
+            }
+
+            // ── Highlight link containers for any linked elements we couldn't select by reference ──
+            if (linkedFallback.Count > 0)
+            {
+                var highlightSettings = new OverrideGraphicSettings()
+                    .SetProjectionLineColor(new Color(255, 165, 0))
+                    .SetSurfaceForegroundPatternColor(new Color(255, 165, 0))
+                    .SetSurfaceForegroundPatternVisible(true);
+
+                using (var tx = new Transaction(doc, "Highlight Linked Clash Elements"))
+                {
+                    tx.Start();
+                    var view = uidoc.ActiveView;
+                    foreach (var (_, link) in linkedFallback)
+                    {
+                        try { view.SetElementOverrides(link.Id, highlightSettings); } catch { }
+                    }
+                    tx.Commit();
+                }
+            }
+
+            // ── Isolate: combine host IDs + link instance IDs of any matched linked elements ──
+            if (isolate)
+            {
+                var toIsolate = new List<ElementId>(hostIds);
+                foreach (var (_, link, _) in linkedMatches)
+                {
+                    if (!toIsolate.Contains(link.Id)) toIsolate.Add(link.Id);
+                }
+
+                if (toIsolate.Count > 0)
+                {
+                    using (var tx = new Transaction(doc, "Isolate Clash Elements"))
+                    {
+                        tx.Start();
+                        try { uidoc.ActiveView.IsolateElementsTemporary(toIsolate); } catch { }
+                        tx.Commit();
+                    }
+                }
+            }
+
+            var parts = new List<string>();
+            if (hostIds.Count > 0)        parts.Add($"{hostIds.Count} host element(s) selected");
+            if (linkedMatches.Count > 0)  parts.Add($"{linkedMatches.Count} linked element(s): {string.Join(", ", linkedResults)}");
+            if (unresolvedIds.Count > 0)  parts.Add($"{unresolvedIds.Count} ID(s) not found ({string.Join(", ", unresolvedIds)})");
+            if (parts.Count == 0)         parts.Add("No elements matched");
+
+            return new JObject { ["message"] = string.Join(" | ", parts) };
         }
 
         // ===== QA/QC IMPLEMENTATIONS =====
@@ -5812,6 +5947,52 @@ namespace BIMBotPlugin.Core
                 ["category2Count"] = elements2.Count,
                 ["elapsed"] = $"({sw.ElapsedMilliseconds}ms)"
             };
+        }
+
+        // ===== BIM DASHBOARD =====
+
+        private static JToken ShowBimDashboard(JObject parameters)
+        {
+            try
+            {
+                // The MCP server sends the full dashboard payload as a JSON object
+                var dataJson = parameters["data"]?.ToString();
+                BimDashboardData dashData;
+
+                if (!string.IsNullOrEmpty(dataJson))
+                {
+                    dashData = JsonConvert.DeserializeObject<BimDashboardData>(dataJson);
+                }
+                else
+                {
+                    // Try to deserialize from the parameters directly
+                    dashData = parameters.ToObject<BimDashboardData>();
+                }
+
+                if (dashData == null)
+                    return new JObject { ["error"] = "No dashboard data provided." };
+
+                // Open the WPF dashboard window — already on the Revit UI thread
+                var window = new BimDashboardWindow(dashData);
+                window.Show();
+
+                return new JObject
+                {
+                    ["message"] = $"✅ BIM Dashboard opened for '{dashData.ProjectName ?? "Project"}'.",
+                    ["totalElements"] = dashData.TotalElements,
+                    ["overallScore"] = dashData.OverallScore,
+                    ["categories"] = dashData.Categories?.Count ?? 0,
+                    ["issues"] = dashData.Issues?.Count ?? 0
+                };
+            }
+            catch (Exception ex)
+            {
+                return new JObject
+                {
+                    ["error"] = $"Failed to open BIM Dashboard: {ex.Message}",
+                    ["details"] = ex.ToString()
+                };
+            }
         }
 
     }

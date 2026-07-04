@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "BIM-Bot": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["revit-mcp-server/build/index.js"],
+      "env": {}
+    }
+  }
+}

@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <!-- Multi-target: net8.0-windows for Revit 2025-2026 (add net10.0-windows when SDK available) -->
-    <TargetFrameworks>net8.0-windows</TargetFrameworks>
+    <TargetFrameworks>net8.0-windows;net48</TargetFrameworks>
     <RootNamespace>BIMBotPlugin</RootNamespace>
     <AssemblyName>BIMBotPlugin</AssemblyName>
     <AppendTargetFrameworkToOutputPath>true</AppendTargetFrameworkToOutputPath>
@@ -14,12 +14,14 @@
     <Authors>BIM-Bot</Authors>
     <Description>BIM-Bot Plugin for Autodesk Revit - enables AI-powered interactions</Description>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <CodePage>65001</CodePage>
   </PropertyGroup>
 
   <!-- Revit API version per framework target -->
   <PropertyGroup Condition="'$(TargetFramework)' == 'net48'">
-    <!-- Build against Revit 2026 API -->
-    <RevitVersion>2026</RevitVersion>
+    <!-- Build against Revit 2024 API — the code uses ElementId.Value and
+         long-based BuiltInParameter, which don't exist before 2024. -->
+    <RevitVersion>2024</RevitVersion>
   </PropertyGroup>
   <PropertyGroup Condition="'$(TargetFramework)' == 'net8.0-windows'">
     <RevitVersion>2026</RevitVersion>
@@ -29,15 +31,11 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Revit API References -->
-    <Reference Include="RevitAPI">
-      <HintPath>C:\Program Files\Autodesk\Revit $(RevitVersion)\RevitAPI.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="RevitAPIUI">
-      <HintPath>C:\Program Files\Autodesk\Revit $(RevitVersion)\RevitAPIUI.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
+    <!-- Revit API from NuGet so the build works on machines without that
+         Revit version installed. ExcludeAssets=runtime keeps RevitAPI.dll
+         out of the output — Revit provides it at load time. -->
+    <PackageReference Include="Nice3point.Revit.Api.RevitAPI" Version="$(RevitVersion).*" ExcludeAssets="runtime" />
+    <PackageReference Include="Nice3point.Revit.Api.RevitAPIUI" Version="$(RevitVersion).*" ExcludeAssets="runtime" />
   </ItemGroup>
 
   <!-- Framework references needed only for net48 (included automatically in net8.0-windows) -->

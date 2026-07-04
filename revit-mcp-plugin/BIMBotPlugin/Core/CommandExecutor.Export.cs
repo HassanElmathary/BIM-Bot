@@ -364,13 +364,16 @@ namespace BIMBotPlugin.Core
                 }
 
                 if (viewIds.Count == 0)
-                    return new JObject { ["message"] = "âš  No exportable views found." };
+                    return new JObject { ["message"] = "⚠️ No exportable views found." };
 
                 var dwgOpts = new DWGExportOptions();
 
                 // Read hide options from parameters (default true)
                 dwgOpts.HideScopeBox = parameters?["hideScopeBox"]?.ToString() != "false";
                 dwgOpts.HideReferencePlane = parameters?["hideRefPlane"]?.ToString() != "false";
+
+                bool exportPointClouds = parameters?["exportPointClouds"]?.ToString() == "true";
+                bool scriptsGenerated = false;
 
                 int exported = 0;
                 foreach (var vid in viewIds.Take(50))
@@ -383,6 +386,80 @@ namespace BIMBotPlugin.Core
                         var cleanName = CleanFileName(view.Name);
 
                         doc.Export(outputFolder, cleanName, ids, dwgOpts);
+
+                        if (exportPointClouds)
+                        {
+                            var pcCollector = new FilteredElementCollector(doc, vid);
+                            var pointClouds = pcCollector.OfClass(typeof(PointCloudInstance)).Cast<PointCloudInstance>().ToList();
+                            if (pointClouds.Count > 0)
+                            {
+                                string scriptPath = System.IO.Path.Combine(outputFolder, cleanName + "_attach_pc.scr");
+                                using (var writer = new System.IO.StreamWriter(scriptPath, false, System.Text.Encoding.UTF8))
+                                {
+                                    double multiplier = 1.0;
+                                    switch (dwgOpts.TargetUnit)
+                                    {
+                                        case ExportUnit.Millimeter:
+                                            multiplier = 304.8;
+                                            break;
+                                        case ExportUnit.Centimeter:
+                                            multiplier = 30.48;
+                                            break;
+                                        case ExportUnit.Meter:
+                                            multiplier = 0.3048;
+                                            break;
+                                        case ExportUnit.Inch:
+                                            multiplier = 12.0;
+                                            break;
+                                        case ExportUnit.Foot:
+                                            multiplier = 1.0;
+                                            break;
+                                        case ExportUnit.Default:
+                                        default:
+                                            try
+                                            {
+                                                var lengthUnit = doc.GetUnits().GetFormatOptions(SpecTypeId.Length).GetUnitTypeId();
+                                                if (lengthUnit == UnitTypeId.Millimeters) multiplier = 304.8;
+                                                else if (lengthUnit == UnitTypeId.Meters) multiplier = 0.3048;
+                                                else if (lengthUnit == UnitTypeId.Centimeters) multiplier = 30.48;
+                                                else if (lengthUnit == UnitTypeId.Inches) multiplier = 12.0;
+                                                else multiplier = 1.0;
+                                            }
+                                            catch
+                                            {
+                                                multiplier = 1.0;
+                                            }
+                                            break;
+                                    }
+
+                                    foreach (var pc in pointClouds)
+                                    {
+                                        var typeId = pc.GetTypeId();
+                                        var pcType = doc.GetElement(typeId) as PointCloudType;
+                                        if (pcType == null) continue;
+
+                                        string pcPath = ModelPathUtils.ConvertModelPathToUserVisiblePath(pcType.GetPath());
+                                        if (string.IsNullOrEmpty(pcPath)) continue;
+
+                                        Transform trans = pc.GetTotalTransform();
+                                        XYZ origin = trans.Origin;
+                                        double x = origin.X * multiplier;
+                                        double y = origin.Y * multiplier;
+                                        double z = origin.Z * multiplier;
+
+                                        double rotationAngleRad = Math.Atan2(trans.BasisX.Y, trans.BasisX.X);
+                                        double rotationAngleDeg = rotationAngleRad * (180.0 / Math.PI);
+
+                                        writer.WriteLine("_-POINTCLOUDATTACH");
+                                        writer.WriteLine($"\"{pcPath}\"");
+                                        writer.WriteLine($"{x:F6},{y:F6},{z:F6}");
+                                        writer.WriteLine("1");
+                                        writer.WriteLine($"{rotationAngleDeg:F6}");
+                                    }
+                                }
+                                scriptsGenerated = true;
+                            }
+                        }
 
                         // NOTE: Revit generates companion files (.tif, .jpg, .png) as raster image
                         // references alongside the DWG. These MUST be kept or images won't display.
@@ -398,9 +475,15 @@ namespace BIMBotPlugin.Core
                     catch (Exception ex) { Logger.Log($"DWG export failed for view: {ex.Message}"); }
                 }
 
+                string msg = $"✅ Exported {exported} view(s) to DWG.\nOutput folder: {outputFolder}";
+                if (scriptsGenerated)
+                {
+                    msg += "\n\n💡 Point cloud attachment script(s) generated. To load the point clouds in AutoCAD, open each DWG and run its companion '_attach_pc.scr' script using the SCRIPT command.";
+                }
+
                 return new JObject
                 {
-                    ["message"] = $"âœ… Exported {exported} view(s) to DWG.\nOutput folder: {outputFolder}",
+                    ["message"] = msg,
                     ["count"] = exported
                 };
             }

@@ -732,6 +732,10 @@ namespace BIMBotPlugin.Core
                 ToolParam.Opt("category", "string", "Category"),
                 ToolParam.Opt("keyParameter", "string", "Key column (default: Number)"));
 
+            R("show_bim_dashboard", "Open native BIM Compliance Dashboard window with analysis data", ToolCategory.QAQC,
+                new[] { "bim dashboard", "compliance dashboard", "show dashboard", "bep dashboard" },
+                ToolParam.Req("data", "string", "JSON string containing the BimDashboardData payload"));
+
             // ===================== VIEWS (22 tools) =====================
             R("duplicate_sheets", "Duplicate sheet", ToolCategory.Views,
                 new[] { "duplicate sheet", "copy sheet" },
@@ -980,6 +984,12 @@ namespace BIMBotPlugin.Core
             R("search_project_files", "Search across project files for a keyword", ToolCategory.ProjectFiles,
                 new[] { "search files", "find in files" },
                 ToolParam.Req("keyword", "string", "Keyword to search for"));
+
+            R("write_project_file", "Write text content (HTML/JSON/CSV/TXT) to a file in the project folder", ToolCategory.ProjectFiles,
+                new[] { "write file", "save file", "create file", "write html" },
+                ToolParam.Req("fileName", "string", "File name including extension (e.g. Dashboard.html)"),
+                ToolParam.Req("content", "string", "Text content to write"),
+                ToolParam.Opt("subfolder", "string", "Optional subfolder within _ProjectFiles"));
 
             R("export_elements_to_csv", "Export Revit elements to CSV in project folder", ToolCategory.ProjectFiles,
                 new[] { "export to csv", "save to csv", "export csv" },

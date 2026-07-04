@@ -1093,32 +1093,62 @@ namespace BIMBotPlugin.Core
 
         private static JToken ZoomToElement(UIDocument uidoc, Document doc, JObject parameters)
         {
-            var elementId = parameters["elementId"]?.Value<int>() ?? 0;
-            var elem = doc.GetElement(new ElementId(elementId));
-            if (elem == null) throw new InvalidOperationException($"Element {elementId} not found");
+            var elementId = parameters["elementId"]?.Value<long>() ?? 0;
+            var eid = new ElementId(elementId);
 
-            var bb = elem.get_BoundingBox(uidoc.ActiveView);
-            if (bb == null)
-                throw new InvalidOperationException($"Element {elementId} has no bounding box in the current view.");
-
-            var uiViews = uidoc.GetOpenUIViews();
-            var activeUIView = uiViews.FirstOrDefault(v => v.ViewId == uidoc.ActiveView.Id);
-            if (activeUIView != null)
+            // ── Try host document first ──
+            var elem = doc.GetElement(eid);
+            if (elem != null)
             {
-                // Zoom with some padding
-                var padding = 2.0; // feet
-                var min = new XYZ(bb.Min.X - padding, bb.Min.Y - padding, bb.Min.Z - padding);
-                var max = new XYZ(bb.Max.X + padding, bb.Max.Y + padding, bb.Max.Z + padding);
-                activeUIView.ZoomAndCenterRectangle(min, max);
+                var bb = elem.get_BoundingBox(null) ?? elem.get_BoundingBox(uidoc.ActiveView);
+                if (bb == null)
+                    throw new InvalidOperationException($"Element {elementId} has no bounding box.");
+                ZoomToBoundingBox(uidoc, bb.Min, bb.Max);
+                return new JObject { ["message"] = $"Zoomed to element '{elem.Name}' (ID: {elementId})" };
             }
 
-            return new JObject
+            // ── Search linked models ──
+            var links = new FilteredElementCollector(doc)
+                .OfClass(typeof(RevitLinkInstance))
+                .Cast<RevitLinkInstance>();
+
+            foreach (var link in links)
             {
-                ["message"] = $"ðŸ” Zoomed to element '{elem.Name}' (ID: {elementId})",
-                ["elementId"] = elementId,
-                ["elementName"] = elem.Name
-            };
+                var linkDoc = link.GetLinkDocument();
+                if (linkDoc == null) continue;
+                var linkedElem = linkDoc.GetElement(eid);
+                if (linkedElem == null) continue;
+
+                var bb = linkedElem.get_BoundingBox(null);
+                if (bb == null) continue;
+
+                var transform = link.GetTotalTransform();
+                var p1 = transform.OfPoint(bb.Min);
+                var p2 = transform.OfPoint(bb.Max);
+                var trueMin = new XYZ(Math.Min(p1.X, p2.X), Math.Min(p1.Y, p2.Y), Math.Min(p1.Z, p2.Z));
+                var trueMax = new XYZ(Math.Max(p1.X, p2.X), Math.Max(p1.Y, p2.Y), Math.Max(p1.Z, p2.Z));
+                ZoomToBoundingBox(uidoc, trueMin, trueMax);
+
+                return new JObject
+                {
+                    ["message"] = $"Zoomed to element '{linkedElem.Name}' (ID: {elementId}) in linked model '{link.Name}'"
+                };
+            }
+
+            throw new InvalidOperationException($"Element {elementId} not found in host or any linked model.");
         }
+
+        private static void ZoomToBoundingBox(UIDocument uidoc, XYZ min, XYZ max)
+        {
+            var uiViews = uidoc.GetOpenUIViews();
+            var activeUIView = uiViews.FirstOrDefault(v => v.ViewId == uidoc.ActiveView.Id);
+            if (activeUIView == null) return;
+            const double padding = 2.0;
+            activeUIView.ZoomAndCenterRectangle(
+                new XYZ(min.X - padding, min.Y - padding, min.Z - padding),
+                new XYZ(max.X + padding, max.Y + padding, max.Z + padding));
+        }
+
 
         private static JToken EditSchedule(Document doc, JObject parameters)
         {

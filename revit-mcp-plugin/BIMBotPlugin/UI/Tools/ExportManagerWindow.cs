@@ -45,6 +45,7 @@ namespace BIMBotPlugin.UI.Tools
 
         // DWG settings
         private ComboBox _dwgVersion;
+        private CheckBox _dwgExportPointClouds;
 
         // IFC settings
         private ComboBox _ifcVersion;
@@ -485,6 +486,9 @@ namespace BIMBotPlugin.UI.Tools
             var optRegion = DarkTheme.MakeCheckBox("Region edges mask coincident lines", false);
             optRegion.FontSize = 11; optRegion.Margin = new Thickness(0, 2, 0, 2);
 
+            _dwgExportPointClouds = DarkTheme.MakeCheckBox("Include Point Clouds (AutoCAD Script)", false);
+            _dwgExportPointClouds.FontSize = 11; _dwgExportPointClouds.Margin = new Thickness(0, 2, 0, 2);
+
             optGroup.Children.Add(optViewLinks);
             optGroup.Children.Add(optHideRef);
             optGroup.Children.Add(optHideTags);
@@ -492,6 +496,7 @@ namespace BIMBotPlugin.UI.Tools
             optGroup.Children.Add(optHideCrop);
             optGroup.Children.Add(optReplace);
             optGroup.Children.Add(optRegion);
+            optGroup.Children.Add(_dwgExportPointClouds);
             rightCol.Children.Add(DarkTheme.MakeGroupBox("Options", optGroup));
 
             var fileGroup = new StackPanel();
@@ -1264,7 +1269,8 @@ namespace BIMBotPlugin.UI.Tools
                 ("hideCropBoundary", _pdfHideCrop?.IsChecked == true ? "true" : "false"),
                 ("paperPlacement", _radioCenter?.IsChecked == true ? "center" : "offset"),
                 ("hiddenLineProcessing", _radioVector?.IsChecked == true ? "vector" : "raster"),
-                ("zoom", _radioFit?.IsChecked == true ? "fitToPage" : "zoom")
+                ("zoom", _radioFit?.IsChecked == true ? "fitToPage" : "zoom"),
+                ("exportPointClouds", _dwgExportPointClouds?.IsChecked == true ? "true" : "false")
             );
 
             // Close Export Manager and show Progress Window

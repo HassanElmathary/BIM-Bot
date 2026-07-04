@@ -39,3 +39,11 @@ uninstall.ps1
 deploy.bat
 revit-mcp-plugin-base/
 revit-mcp-server-base/
+
+# Temp directories
+temp_*/
+scratch/
+
+# Standalone DLL/PDB (build artifacts at root)
+*.dll
+*.pdb

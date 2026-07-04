@@ -421,6 +421,45 @@ namespace BIMBotPlugin.Core
             return "General Data";
         }
 
+        // ── Write ──
+
+        /// <summary>Write text content to a file in the project files folder.</summary>
+        public static JToken WriteFile(string projectFilePath, JObject parameters)
+        {
+            var folder = GetProjectFilesFolder(projectFilePath);
+            var fileName = parameters?["fileName"]?.ToString();
+            var content = parameters?["content"]?.ToString();
+            var subfolder = parameters?["subfolder"]?.ToString();
+
+            if (string.IsNullOrEmpty(fileName))
+                return new JObject { ["error"] = "fileName is required." };
+            if (string.IsNullOrEmpty(content))
+                return new JObject { ["error"] = "content is required." };
+
+            // Sanitise file name
+            foreach (var ch in Path.GetInvalidFileNameChars())
+                fileName = fileName.Replace(ch, '_');
+
+            var targetDir = string.IsNullOrEmpty(subfolder)
+                ? folder
+                : Path.Combine(folder, subfolder);
+
+            if (!Directory.Exists(targetDir))
+                Directory.CreateDirectory(targetDir);
+
+            var filePath = Path.Combine(targetDir, fileName);
+            File.WriteAllText(filePath, content, Encoding.UTF8);
+
+            var info = new FileInfo(filePath);
+            return new JObject
+            {
+                ["message"] = $"Written file: {fileName}",
+                ["fileName"] = fileName,
+                ["fullPath"] = filePath,
+                ["size"] = FormatSize(info.Length)
+            };
+        }
+
         private static string FormatSize(long bytes)
         {
             if (bytes < 1024) return $"{bytes} B";

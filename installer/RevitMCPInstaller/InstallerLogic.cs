@@ -101,6 +101,10 @@ namespace RevitMCPInstaller
             // 5. Create launcher
             CreateLauncher();
 
+            // 6. Auto-configure Claude Desktop MCP
+            Report("Configuring Claude Desktop...");
+            ConfigureClaudeMCP();
+
             Report("Installation complete!");
             OnPercentChanged?.Invoke(100);
         }
@@ -114,13 +118,14 @@ namespace RevitMCPInstaller
             var mcpDir = Path.Combine(addinsDir, "BIMBot");
             Directory.CreateDirectory(mcpDir);
 
-            var pluginDir = Path.Combine(InstallDir, "plugin");
+            string fw = "net8";
+            if (year <= 2024) fw = "net48";
+            else if (year >= 2027) fw = "net10";
+
+            var pluginDir = Path.Combine(InstallDir, "plugin", fw);
             if (Directory.Exists(pluginDir))
             {
-                foreach (var file in Directory.GetFiles(pluginDir))
-                {
-                    File.Copy(file, Path.Combine(mcpDir, Path.GetFileName(file)), true);
-                }
+                CopyDirectory(pluginDir, mcpDir);
             }
 
             // Write .addin manifest
@@ -159,6 +164,120 @@ echo.
 ""{nodeExe}"" ""{serverEntry}""
 pause
 ");
+        }
+
+        /// <summary>
+        /// Auto-configure Claude Desktop MCP connection.
+        /// First tries bundled configure-claude.cjs, then falls back to direct JSON editing.
+        /// </summary>
+        private void ConfigureClaudeMCP()
+        {
+            var nodeExe = Path.Combine(InstallDir, "nodejs", "node.exe");
+            var script = Path.Combine(InstallDir, "server", "scripts", "configure-claude.cjs");
+
+            // Try Node.js script first (handles Claude Desktop + Claude Code)
+            if (File.Exists(nodeExe) && File.Exists(script))
+            {
+                try
+                {
+                    var psi = new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = nodeExe,
+                        Arguments = $"\"{script}\"",
+                        UseShellExecute = false,
+                        CreateNoWindow = true,
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true
+                    };
+                    var proc = System.Diagnostics.Process.Start(psi);
+                    if (proc != null)
+                    {
+                        proc.WaitForExit(15000);
+                        if (proc.ExitCode == 0)
+                        {
+                            Report("Claude Desktop configured via script.");
+                            return;
+                        }
+                    }
+                }
+                catch { /* fall through to manual config */ }
+            }
+
+            // Fallback: directly write Claude Desktop config
+            ConfigureClaudeFallback(nodeExe);
+        }
+
+        private void ConfigureClaudeFallback(string nodeExe)
+        {
+            try
+            {
+                var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+                var claudeDir = Path.Combine(appData, "Claude");
+                var configPath = Path.Combine(claudeDir, "claude_desktop_config.json");
+                var serverJs = Path.Combine(InstallDir, "server", "build", "index.js");
+
+                // Check if Claude Desktop is installed
+                var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+                var claudeInstalled = Directory.Exists(claudeDir) ||
+                                      Directory.Exists(Path.Combine(localAppData, "AnthropicClaude"));
+
+                if (!claudeInstalled)
+                {
+                    Report("Claude Desktop not detected — skipped MCP config.");
+                    return;
+                }
+
+                // Read existing config or create new
+                string json = "{}";
+                if (File.Exists(configPath))
+                {
+                    json = File.ReadAllText(configPath);
+                    // Strip BOM
+                    if (json.Length > 0 && json[0] == '\uFEFF')
+                        json = json.Substring(1);
+                }
+
+                // Parse with Newtonsoft.Json (already a dependency)
+                var config = Newtonsoft.Json.Linq.JObject.Parse(json);
+
+                if (config["mcpServers"] == null)
+                    config["mcpServers"] = new Newtonsoft.Json.Linq.JObject();
+
+                var servers = (Newtonsoft.Json.Linq.JObject)config["mcpServers"]!;
+
+                // Check if already configured and valid
+                if (servers["BIM-Bot"] is Newtonsoft.Json.Linq.JObject existing)
+                {
+                    var cmd = existing["command"]?.ToString();
+                    var args = existing["args"]?[0]?.ToString();
+                    if (!string.IsNullOrEmpty(cmd) && File.Exists(cmd) &&
+                        !string.IsNullOrEmpty(args) && File.Exists(args))
+                    {
+                        Report("Claude Desktop already configured.");
+                        return;
+                    }
+                }
+
+                // Add/update BIM-Bot entry
+                servers["BIM-Bot"] = new Newtonsoft.Json.Linq.JObject
+                {
+                    ["command"] = nodeExe,
+                    ["args"] = new Newtonsoft.Json.Linq.JArray { serverJs },
+                    ["env"] = new Newtonsoft.Json.Linq.JObject()
+                };
+
+                // Backup existing config
+                if (File.Exists(configPath))
+                    File.Copy(configPath, configPath + ".bimbot-backup", true);
+
+                Directory.CreateDirectory(claudeDir);
+                File.WriteAllText(configPath, config.ToString(Newtonsoft.Json.Formatting.Indented));
+                Report("Claude Desktop MCP configured successfully.");
+            }
+            catch (Exception ex)
+            {
+                Report($"Claude config: {ex.Message} (non-fatal)");
+            }
         }
 
         /// <summary>

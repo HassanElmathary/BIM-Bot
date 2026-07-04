@@ -313,4 +313,15 @@ namespace BIMBotPlugin.Commands
             catch (System.Exception ex) { message = ex.Message; return Result.Failed; }
         }
     }
+
+    // ===== QA/QC =====
+    [Transaction(TransactionMode.Manual)]
+    public class Tool_ClashDetection : IExternalCommand
+    {
+        public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
+        {
+            try { new ClashDetectionWindow().Show(); return Result.Succeeded; }
+            catch (System.Exception ex) { message = ex.Message; return Result.Failed; }
+        }
+    }
 }

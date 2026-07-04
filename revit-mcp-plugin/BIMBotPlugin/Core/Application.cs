@@ -28,14 +28,30 @@ namespace BIMBotPlugin.Core
         public static SocketService? SocketServiceInstance => _socketService;
         public static ExternalEventManager? EventManagerInstance => _eventManager;
 
-        public static string Version => "2.0.3";
+        public static string Version => "2.1.0";
 
         public Result OnStartup(UIControlledApplication application)
         {
             UiApp = application;
 
+            // ── Diagnostic: write before anything else so we can see where the crash is ──
+            var _diagLog = System.IO.Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "BIMBot", "logs", $"startup-diag-{DateTime.Now:HHmmss}.log");
+            Action<string> _diag = msg =>
+            {
+                try
+                {
+                    System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(_diagLog)!);
+                    System.IO.File.AppendAllText(_diagLog, $"[{DateTime.Now:HH:mm:ss.fff}] {msg}\n");
+                }
+                catch { }
+            };
+            _diag("OnStartup entered");
+
             try
             {
+                _diag("try block entered");
                 var asm = Assembly.GetExecutingAssembly().Location;
 
                 // ========================================
@@ -193,6 +209,21 @@ namespace BIMBotPlugin.Core
                 AddPulldownItem(sheetsPd, "ApplyTemplate", "🎨 Apply View Template", asm,
                     "BIMBotPlugin.Commands.Tool_ApplyViewTemplate", "Apply view template to views");
 
+                // ========================================
+                // QA/QC Pulldown
+                // ========================================
+                var qaqcPd = corePanel.AddItem(
+                    new PulldownButtonData("MCPQaQc", "QA/QC")
+                    {
+                        ToolTip = "Quality assurance tools — clash detection, warnings, model audit",
+                        LargeImage = RibbonIcons.ToolsHub(32),
+                        Image = RibbonIcons.ToolsHub(16)
+                    }) as PulldownButton;
+
+                AddPulldownItem(qaqcPd, "ClashDetection", "⚡ Clash Report Viewer", asm,
+                    "BIMBotPlugin.Commands.Tool_ClashDetection",
+                    "Load a Navisworks clash report HTML and zoom/select clashing elements in Revit");
+
                 corePanel.AddSeparator();
 
                 // ========================================
@@ -224,10 +255,12 @@ namespace BIMBotPlugin.Core
                 application.Idling += OnRevitIdling;
 
                 Logger.Log("BIM-Bot Plugin started successfully — all ribbon buttons registered");
+                _diag("OnStartup succeeded");
                 return Result.Succeeded;
             }
             catch (Exception ex)
             {
+                _diag($"CAUGHT EXCEPTION: {ex.GetType().Name}: {ex.Message}\n{ex.StackTrace}");
                 Logger.LogError("Failed to start BIM-Bot Plugin", ex);
                 return Result.Failed;
             }
@@ -309,62 +342,129 @@ namespace BIMBotPlugin.Core
 
 
         /// <summary>
-        /// One-time Idling handler that checks for updates in the background on Revit startup.
+        /// Idling handler that auto-starts the BIM-Bot service on first Revit idle,
+        /// retries if it fails, and periodically health-checks the service.
         /// </summary>
+        private static int _autoStartAttempts = 0;
+        private const int MaxAutoStartAttempts = 10;
+        private static DateTime _lastHealthCheck = DateTime.MinValue;
+        private const double HealthCheckIntervalSeconds = 30;
+
         private static async void OnRevitIdling(object? sender, IdlingEventArgs e)
         {
-            if (_startupUpdateChecked) return;
-            _startupUpdateChecked = true;
+            if (sender is not UIApplication uiApp) return;
+            ActiveUIApp = uiApp;
 
-            // Unsubscribe immediately — only need this once
-            if (sender is UIApplication uiApp)
+            // ── Phase 1: One-time auto-start with retry ──
+            if (!_startupUpdateChecked)
             {
-                ActiveUIApp = uiApp;
-                uiApp.Idling -= OnRevitIdling;
+                _autoStartAttempts++;
 
-                // Auto-start BIM-Bot service so users don't need to click "Start BIM-Bot" manually
+                if (!IsServiceRunning)
+                {
+                    try
+                    {
+                        StartService(uiApp);
+                        Logger.Log($"BIM-Bot service auto-started on Revit idle (attempt {_autoStartAttempts})");
+                    }
+                    catch (Exception startEx)
+                    {
+                        Logger.LogError($"Auto-start attempt {_autoStartAttempts}/{MaxAutoStartAttempts} failed", startEx);
+
+                        if (_autoStartAttempts < MaxAutoStartAttempts)
+                        {
+                            // Stay subscribed — will retry on next Idling event (~100ms later)
+                            return;
+                        }
+
+                        Logger.LogError("All auto-start attempts exhausted. User can start manually from ribbon.");
+                    }
+                }
+
+                // Mark startup phase complete (whether service started or all retries exhausted)
+                _startupUpdateChecked = true;
+
+                // Don't unsubscribe from Idling — we keep it for the health check below
+
+                // Self-heal Claude configs in the background: repairs stale
+                // BIM-Bot entries (e.g. after the install/repo path moved).
+                // Only writes when an entry is missing or broken.
+                _ = Task.Run(() => ClaudeConfigService.EnsureAllSilent());
+
+                // Background update check (non-blocking)
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        var checker = new UpdateChecker();
+                        var updateInfo = await checker.CheckForUpdateAsync();
+
+                        if (updateInfo.UpdateAvailable)
+                        {
+                            var skippedVersion = UpdateChecker.GetSkippedVersion();
+                            if (skippedVersion == updateInfo.LatestVersion)
+                            {
+                                Logger.Log($"Update {updateInfo.LatestVersion} available but skipped by user.");
+                                return;
+                            }
+
+                            Logger.Log($"Update available: {updateInfo.LatestVersion}");
+                            // Queue UI notification for next idle
+                            _pendingUpdateInfo = updateInfo;
+                        }
+                        else
+                        {
+                            Logger.Log("Plugin is up to date.");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.LogError("Startup update check failed (non-critical)", ex);
+                    }
+                });
+
+                return;
+            }
+
+            // ── Show pending update notification on UI thread ──
+            if (_pendingUpdateInfo != null)
+            {
+                var info = _pendingUpdateInfo;
+                _pendingUpdateInfo = null;
+                try
+                {
+                    var window = new UpdateNotificationWindow(info);
+                    window.ShowDialog();
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogError("Failed to show update notification", ex);
+                }
+                return;
+            }
+
+            // ── Phase 2: Periodic health check (runs every 30s) ──
+            var now = DateTime.Now;
+            if ((now - _lastHealthCheck).TotalSeconds < HealthCheckIntervalSeconds)
+                return;
+            _lastHealthCheck = now;
+
+            if (!IsServiceRunning)
+            {
+                Logger.Log("Health check: service is down — auto-restarting...");
                 try
                 {
                     StartService(uiApp);
-                    Logger.Log("BIM-Bot service auto-started on Revit idle");
+                    Logger.Log("Health check: service restarted successfully");
                 }
-                catch (Exception startEx)
+                catch (Exception ex)
                 {
-                    Logger.LogError("BIM-Bot service auto-start failed (can start manually from ribbon)", startEx);
+                    Logger.LogError("Health check: auto-restart failed", ex);
                 }
-            }
-
-            try
-            {
-                var checker = new UpdateChecker();
-                var updateInfo = await Task.Run(() => checker.CheckForUpdateAsync());
-
-                if (updateInfo.UpdateAvailable)
-                {
-                    // Check if user already skipped this version
-                    var skippedVersion = UpdateChecker.GetSkippedVersion();
-                    if (skippedVersion == updateInfo.LatestVersion)
-                    {
-                        Logger.Log($"Update {updateInfo.LatestVersion} available but skipped by user.");
-                        return;
-                    }
-
-                    Logger.Log($"Update available: {updateInfo.LatestVersion}");
-
-                    // Show notification window on the UI thread
-                    var window = new UpdateNotificationWindow(updateInfo);
-                    window.ShowDialog();
-                }
-                else
-                {
-                    Logger.Log("Plugin is up to date.");
-                }
-            }
-            catch (Exception ex)
-            {
-                Logger.LogError("Startup update check failed (non-critical)", ex);
             }
         }
+
+        private static UpdateInfo? _pendingUpdateInfo;
     }
 }
 
