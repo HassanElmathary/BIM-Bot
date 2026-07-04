@@ -27,7 +27,7 @@
       "Bash(gh release *)",
       "Bash(npm view *)",
       "Bash(node build-lang.js)",
-      "Bash(curl -sI \"https://github.com/HassanElmathary/MIB-Mot/releases/download/v2.1.0/BIMBot-Setup-2.1.0.exe\")",
+      "Bash(curl -sI \"https://github.com/HassanElmathary/BIM-Bot/releases/download/v2.1.0/BIMBot-Setup-2.1.0.exe\")",
       "Bash(firebase login:list)",
       "Bash(gh api *)",
       "Bash(curl -sI http://localhost:3000/BIMBot-Setup-2.1.0.exe)",

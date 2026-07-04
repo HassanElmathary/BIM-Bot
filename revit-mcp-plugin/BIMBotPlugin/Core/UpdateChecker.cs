@@ -13,7 +13,7 @@ namespace BIMBotPlugin.Core
     public class UpdateChecker
     {
         private const string GITHUB_OWNER = "HassanElmathary";
-        private const string GITHUB_REPO = "Revit-MCP";
+        private const string GITHUB_REPO = "BIM-Bot";
 
         private static readonly string API_URL =
             $"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/releases/latest";

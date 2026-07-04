@@ -1,17 +1,17 @@
 # BIM-Bot — AI-Powered Revit Automation
 
 [![npm version](https://img.shields.io/npm/v/revit-mcp-server.svg)](https://www.npmjs.com/package/revit-mcp-server)
-[![GitHub release](https://img.shields.io/github/v/release/HassanElmathary/Revit-MCP)](https://github.com/HassanElmathary/Revit-MCP/releases)
+[![GitHub release](https://img.shields.io/github/v/release/HassanElmathary/BIM-Bot)](https://github.com/HassanElmathary/BIM-Bot/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Revit](https://img.shields.io/badge/Revit-2020--2027-blue.svg)](#)
 
-> BIM-Bot: Model Context Protocol (MCP) server + Revit plugin for AI-driven BIM automation with **179 tools**, built-in Gemini AI chat, and Power BI 3D export.
+> BIM-Bot: Model Context Protocol (MCP) server + Revit plugin for AI-driven BIM automation with **182 tools**, built-in Gemini AI chat, and Power BI 3D export.
 
 ---
 
 ## ⚡ Quick Install
 
-1. Download **`BIMBot-Setup-v2.1.0.exe`** from [GitHub Releases](https://github.com/HassanElmathary/MIB-Mot/releases)
+1. Download **`BIMBot-Setup-2.1.0.exe`** from [GitHub Releases](https://github.com/HassanElmathary/BIM-Bot/releases)
 2. Run the installer as **Administrator**
 3. Follow the wizard — it will:
    - ✅ Auto-detect your Revit versions (2024–2026)
@@ -85,7 +85,7 @@ The uninstaller will automatically:
 
 ## Features
 
-- **179 MCP Tools** across 18 categories:
+- **182 MCP Tools** across 19 categories:
   - 🔍 **Reading** (19): Views, elements, parameters, rooms, levels, sheets, families, schedules, linked models
   - 🏗️ **Creating** (15): Walls, floors, ceilings, roofs, levels, grids, rooms, views, sheets, tags
   - ✏️ **Editing** (12): Modify, move, rotate, copy, delete, mirror, align, group, batch modify
@@ -104,6 +104,7 @@ The uninstaller will automatically:
   - ⚙️ **Settings** (9): Project info, units, shared parameters, global settings
   - ✍️ **Sketch** (3): Model lines, reference planes, sketch-based geometry
   - 🔄 **Transactions** (6): Undo/redo, transaction groups, sub-transactions
+  - 📈 **BIM Dashboard** (3): Dashboard generation, BEP MIDP configuration, compliance validation
 
 - **Antigravity AI Chat** — Built-in Gemini-powered natural language interface inside Revit
 - **Google Gemini 2.5** integration for natural language BIM interaction
@@ -284,6 +285,7 @@ BIM-Bot/
 | Rendering | 3 | Materials, visual styles |
 | Sketch | 3 | Model lines, reference planes |
 | Power BI | 1 | 3D geometry export |
+| BIM Dashboard | 3 | `generate_bim_dashboard`, `configure_bep_midp`, `validate_bep_compliance` |
 
 ## Building the Installer
 
