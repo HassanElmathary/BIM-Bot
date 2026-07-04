@@ -135,7 +135,7 @@ cd "C:\Users\hassa\OneDrive\01-me\Revit MCP"
 git push origin main
 
 # 3. Create a new release
-gh release create v2.1.0 "installer/output/BIMBot-Setup-2.1.0.exe" --title "BIM-Bot v2.1.0" --notes "179 MCP tools, Revit 2024–2026 support, built-in Gemini AI, one-click installer"
+gh release create v2.1.0 "installer/output/BIMBot-Setup-2.1.0.exe" --title "BIM-Bot v2.1.0" --notes "182 MCP tools, Revit 2020–2027 support, built-in Gemini AI, one-click installer"
 ```
 
 ### After GitHub is set up:

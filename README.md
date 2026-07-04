@@ -14,7 +14,7 @@
 1. Download **`BIMBot-Setup-2.1.0.exe`** from [GitHub Releases](https://github.com/HassanElmathary/BIM-Bot/releases)
 2. Run the installer as **Administrator**
 3. Follow the wizard — it will:
-   - ✅ Auto-detect your Revit versions (2024–2026)
+   - ✅ Auto-detect your Revit versions (2020–2027)
    - ✅ Deploy the correct plugin for each version
    - ✅ Bundle a portable Node.js runtime (no separate install needed)
    - ✅ Auto-configure Claude Desktop
@@ -111,7 +111,7 @@ The uninstaller will automatically:
 - **Power BI 3D Visual** — Custom Three.js visual for Revit geometry in Power BI dashboards
 - **Integrations** — Google Sheets, Excel, Notion, SQLite connectors
 - **Local AI Support** — Ollama integration for offline AI capabilities
-- **Revit 2024–2026** support (multi-target plugin: .NET 4.8 for 2024, .NET 8 for 2025/2026)
+- **Revit 2020–2027** support (multi-target plugin: .NET 4.8 for 2020–2024, .NET 8 for 2025–2026, .NET 10 for 2027)
 - **Auto-updater** via GitHub Releases
 - **One-click installer** (.exe) with portable Node.js
 

@@ -3,8 +3,8 @@
 [![npm version](https://img.shields.io/npm/v/revit-mcp-server.svg)](https://www.npmjs.com/package/revit-mcp-server)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-> **MCP Server for Autodesk Revit** — 179 AI-powered tools for BIM automation.  
-> Works with Claude Desktop, Cursor, Windsurf, and any MCP client. Supports **Revit 2024–2026**.
+> **MCP Server for Autodesk Revit** — 182 AI-powered tools for BIM automation.  
+> Works with Claude Desktop, Cursor, Windsurf, and any MCP client. Supports **Revit 2020–2027**.
 
 ## ⚡ Quick Start
 
@@ -42,16 +42,16 @@ Restart Claude Desktop after editing the config.
 For the complete experience (MCP server + Revit plugin), use the one-liner installer:
 
 ```powershell
-irm https://raw.githubusercontent.com/HassanElmathary/Revit-MCP/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/HassanElmathary/BIM-Bot/main/install.ps1 | iex
 ```
 
 This will:
 - ✅ Download & install everything
-- ✅ Auto-detect Revit 2024–2026
+- ✅ Auto-detect Revit 2020–2027
 - ✅ Deploy the correct plugin for each version
 - ✅ Auto-configure Claude Desktop
 
-## 179 MCP Tools
+## 182 MCP Tools
 
 | Category | Count | Key Tools |
 |----------|-------|-----------|
@@ -72,7 +72,8 @@ This will:
 | 📐 Drafting | 3 | Detail lines, components, filled regions |
 | 🎨 Rendering | 3 | Materials, visual styles |
 | ✍️ Sketch | 3 | Model lines, reference planes |
-| 📊 Power BI | 1 | 3D geometry export |
+| 📊 Power BI | 1 | `export_to_powerbi` |
+| 📈 BIM Dashboard | 3 | `generate_bim_dashboard`, `configure_bep_midp`, `validate_bep_compliance` |
 
 ## Architecture
 
@@ -93,13 +94,13 @@ The MCP server communicates with the Revit plugin over TCP on port 8080. The plu
 ## Uninstall
 
 ```powershell
-irm https://raw.githubusercontent.com/HassanElmathary/Revit-MCP/main/uninstall.ps1 | iex
+irm https://raw.githubusercontent.com/HassanElmathary/BIM-Bot/main/uninstall.ps1 | iex
 ```
 
 ## Links
 
-- 📖 [Documentation & Source](https://github.com/HassanElmathary/Revit-MCP)
-- 🐛 [Report Issues](https://github.com/HassanElmathary/Revit-MCP/issues)
+- 📖 [Documentation & Source](https://github.com/HassanElmathary/BIM-Bot)
+- 🐛 [Report Issues](https://github.com/HassanElmathary/BIM-Bot/issues)
 - 👤 [Hassan Ahmed Elmathary](https://www.linkedin.com/in/hassan-elmathary/)
 
 ## License
