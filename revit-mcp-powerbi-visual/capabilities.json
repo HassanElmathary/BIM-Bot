@@ -6,6 +6,11 @@
             "kind": "Grouping"
         },
         {
+            "displayName": "Chunk Index",
+            "name": "chunkIndex",
+            "kind": "Grouping"
+        },
+        {
             "displayName": "Category",
             "name": "category",
             "kind": "Grouping"
@@ -13,7 +18,7 @@
         {
             "displayName": "Mesh JSON",
             "name": "meshJson",
-            "kind": "Measure"
+            "kind": "Grouping"
         },
         {
             "displayName": "Color R",
@@ -37,6 +42,7 @@
                 "rows": {
                     "select": [
                         { "for": { "in": "elementId" } },
+                        { "for": { "in": "chunkIndex" } },
                         { "for": { "in": "category" } },
                         { "for": { "in": "meshJson" } },
                         { "for": { "in": "colorR" } },

@@ -1,0 +1,182 @@
+{
+  "name": "{{MODEL_GUID}}",
+  "compatibilityLevel": 1550,
+  "model": {
+    "culture": "en-US",
+    "dataAccessOptions": {
+      "legacyRedirects": true,
+      "returnErrorValuesAsNull": true
+    },
+    "defaultPowerBIDataSourceVersion": "powerBI_V3",
+    "sourceQueryCulture": "en-US",
+    "tables": [
+      {
+        "name": "Elements",
+        "columns": [
+          { "name": "ElementId", "dataType": "int64", "sourceColumn": "ElementId", "summarizeBy": "none" },
+          { "name": "Category", "dataType": "string", "sourceColumn": "Category", "summarizeBy": "none" },
+          { "name": "FamilyName", "dataType": "string", "sourceColumn": "FamilyName", "summarizeBy": "none" },
+          { "name": "TypeName", "dataType": "string", "sourceColumn": "TypeName", "summarizeBy": "none" },
+          { "name": "LevelName", "dataType": "string", "sourceColumn": "LevelName", "summarizeBy": "none" },
+          { "name": "Mark", "dataType": "string", "sourceColumn": "Mark", "summarizeBy": "none" }
+        ],
+        "measures": [
+          { "name": "Element Count", "expression": "COUNTROWS('Elements')", "formatString": "#,0" },
+          { "name": "Category Count", "expression": "DISTINCTCOUNT('Elements'[Category])", "formatString": "#,0" }
+        ],
+        "partitions": [
+          {
+            "name": "Elements",
+            "mode": "import",
+            "source": {
+              "type": "m",
+              "expression": [
+                "let",
+                "    Source = Csv.Document(File.Contents(\"{{DATA_FOLDER}}\\Elements.csv\"),[Delimiter=\",\", Columns=6, Encoding=65001, QuoteStyle=QuoteStyle.Csv]),",
+                "    #\"Promoted Headers\" = Table.PromoteHeaders(Source, [PromoteAllScalars=true]),",
+                "    #\"Changed Type\" = Table.TransformColumnTypes(#\"Promoted Headers\",{{\"ElementId\", Int64.Type}, {\"Category\", type text}, {\"FamilyName\", type text}, {\"TypeName\", type text}, {\"LevelName\", type text}, {\"Mark\", type text}})",
+                "in",
+                "    #\"Changed Type\""
+              ]
+            }
+          }
+        ],
+        "annotations": [ { "name": "PBI_ResultType", "value": "Table" } ]
+      },
+      {
+        "name": "Parameters",
+        "columns": [
+          { "name": "ElementId", "dataType": "int64", "sourceColumn": "ElementId", "summarizeBy": "none" },
+          { "name": "ParamName", "dataType": "string", "sourceColumn": "ParamName", "summarizeBy": "none" },
+          { "name": "ParamValue", "dataType": "string", "sourceColumn": "ParamValue", "summarizeBy": "none" }
+        ],
+        "partitions": [
+          {
+            "name": "Parameters",
+            "mode": "import",
+            "source": {
+              "type": "m",
+              "expression": [
+                "let",
+                "    Source = Csv.Document(File.Contents(\"{{DATA_FOLDER}}\\Parameters.csv\"),[Delimiter=\",\", Columns=3, Encoding=65001, QuoteStyle=QuoteStyle.Csv]),",
+                "    #\"Promoted Headers\" = Table.PromoteHeaders(Source, [PromoteAllScalars=true]),",
+                "    #\"Changed Type\" = Table.TransformColumnTypes(#\"Promoted Headers\",{{\"ElementId\", Int64.Type}, {\"ParamName\", type text}, {\"ParamValue\", type text}})",
+                "in",
+                "    #\"Changed Type\""
+              ]
+            }
+          }
+        ],
+        "annotations": [ { "name": "PBI_ResultType", "value": "Table" } ]
+      },
+      {
+        "name": "Geometry",
+        "columns": [
+          { "name": "ElementId", "dataType": "int64", "sourceColumn": "ElementId", "summarizeBy": "none" },
+          { "name": "ChunkIndex", "dataType": "int64", "sourceColumn": "ChunkIndex", "summarizeBy": "none" },
+          { "name": "MeshJSON", "dataType": "string", "sourceColumn": "MeshJSON", "summarizeBy": "none" }
+        ],
+        "partitions": [
+          {
+            "name": "Geometry",
+            "mode": "import",
+            "source": {
+              "type": "m",
+              "expression": [
+                "let",
+                "    Source = Csv.Document(File.Contents(\"{{DATA_FOLDER}}\\Geometry.csv\"),[Delimiter=\",\", Columns=3, Encoding=65001, QuoteStyle=QuoteStyle.Csv]),",
+                "    #\"Promoted Headers\" = Table.PromoteHeaders(Source, [PromoteAllScalars=true]),",
+                "    #\"Changed Type\" = Table.TransformColumnTypes(#\"Promoted Headers\",{{\"ElementId\", Int64.Type}, {\"ChunkIndex\", Int64.Type}, {\"MeshJSON\", type text}})",
+                "in",
+                "    #\"Changed Type\""
+              ]
+            }
+          }
+        ],
+        "annotations": [ { "name": "PBI_ResultType", "value": "Table" } ]
+      },
+      {
+        "name": "CategoryColors",
+        "columns": [
+          { "name": "Category", "dataType": "string", "sourceColumn": "Category", "summarizeBy": "none" },
+          { "name": "R", "dataType": "int64", "sourceColumn": "R", "summarizeBy": "none" },
+          { "name": "G", "dataType": "int64", "sourceColumn": "G", "summarizeBy": "none" },
+          { "name": "B", "dataType": "int64", "sourceColumn": "B", "summarizeBy": "none" },
+          { "name": "ColorHex", "dataType": "string", "sourceColumn": "ColorHex", "summarizeBy": "none" }
+        ],
+        "partitions": [
+          {
+            "name": "CategoryColors",
+            "mode": "import",
+            "source": {
+              "type": "m",
+              "expression": [
+                "let",
+                "    Source = Csv.Document(File.Contents(\"{{DATA_FOLDER}}\\CategoryColors.csv\"),[Delimiter=\",\", Columns=5, Encoding=65001, QuoteStyle=QuoteStyle.Csv]),",
+                "    #\"Promoted Headers\" = Table.PromoteHeaders(Source, [PromoteAllScalars=true]),",
+                "    #\"Changed Type\" = Table.TransformColumnTypes(#\"Promoted Headers\",{{\"Category\", type text}, {\"R\", Int64.Type}, {\"G\", Int64.Type}, {\"B\", Int64.Type}, {\"ColorHex\", type text}})",
+                "in",
+                "    #\"Changed Type\""
+              ]
+            }
+          }
+        ],
+        "annotations": [ { "name": "PBI_ResultType", "value": "Table" } ]
+      },
+      {
+        "name": "ModelInfo",
+        "isHidden": true,
+        "columns": [
+          { "name": "Key", "dataType": "string", "sourceColumn": "Key", "summarizeBy": "none" },
+          { "name": "Value", "dataType": "string", "sourceColumn": "Value", "summarizeBy": "none" }
+        ],
+        "partitions": [
+          {
+            "name": "ModelInfo",
+            "mode": "import",
+            "source": {
+              "type": "m",
+              "expression": [
+                "let",
+                "    Source = Csv.Document(File.Contents(\"{{DATA_FOLDER}}\\ModelInfo.csv\"),[Delimiter=\",\", Columns=2, Encoding=65001, QuoteStyle=QuoteStyle.Csv]),",
+                "    #\"Promoted Headers\" = Table.PromoteHeaders(Source, [PromoteAllScalars=true]),",
+                "    #\"Changed Type\" = Table.TransformColumnTypes(#\"Promoted Headers\",{{\"Key\", type text}, {\"Value\", type text}})",
+                "in",
+                "    #\"Changed Type\""
+              ]
+            }
+          }
+        ],
+        "annotations": [ { "name": "PBI_ResultType", "value": "Table" } ]
+      }
+    ],
+    "relationships": [
+      {
+        "name": "geometry-to-elements",
+        "fromTable": "Geometry",
+        "fromColumn": "ElementId",
+        "toTable": "Elements",
+        "toColumn": "ElementId"
+      },
+      {
+        "name": "parameters-to-elements",
+        "fromTable": "Parameters",
+        "fromColumn": "ElementId",
+        "toTable": "Elements",
+        "toColumn": "ElementId",
+        "crossFilteringBehavior": "bothDirections"
+      },
+      {
+        "name": "elements-to-categorycolors",
+        "fromTable": "Elements",
+        "fromColumn": "Category",
+        "toTable": "CategoryColors",
+        "toColumn": "Category"
+      }
+    ],
+    "annotations": [
+      { "name": "PBI_QueryOrder", "value": "[\"Elements\",\"Parameters\",\"Geometry\",\"CategoryColors\",\"ModelInfo\"]" },
+      { "name": "__PBI_TimeIntelligenceEnabled", "value": "0" }
+    ]
+  }
+}

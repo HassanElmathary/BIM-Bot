@@ -147,7 +147,7 @@ namespace BIMBotPlugin.Core
                 AddPulldownItem(exportPd, "ImportParams", "📥 Import Parameters", asm,
                     "BIMBotPlugin.Commands.Tool_ImportParametersFromCsv", "Import parameters from CSV file");
                 AddPulldownItem(exportPd, "ExportPowerBI", "⚡ Export to Power BI", asm,
-                    "BIMBotPlugin.Commands.Tool_ExportToPowerBI", "Export 3D model with geometry to SQLite for Power BI visualization");
+                    "BIMBotPlugin.Commands.Tool_ExportToPowerBI", "Export 3D model + parameters to a ready-to-open Power BI dashboard (.pbit)");
 
                 // ========================================
                 // Families Pulldown

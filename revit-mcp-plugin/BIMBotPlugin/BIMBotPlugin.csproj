@@ -74,5 +74,8 @@
   <ItemGroup>
     <Resource Remove="Resources\Icons\*.png" />
     <EmbeddedResource Include="Resources\Icons\*.png" />
+    <!-- Power BI export: .pbit template parts + the BIM-Bot 3D Viewer custom visual -->
+    <EmbeddedResource Include="PowerBI\Templates\*.json" />
+    <EmbeddedResource Include="PowerBI\Assets\*.pbiviz" />
   </ItemGroup>
 </Project>

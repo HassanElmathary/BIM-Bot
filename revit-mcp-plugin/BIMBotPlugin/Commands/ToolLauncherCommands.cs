@@ -148,26 +148,38 @@ namespace BIMBotPlugin.Commands
                 // Check if active view is 3D
                 var is3D = uidoc.ActiveView is View3D;
 
-                // Build parameters
+                // Build parameters (default format: CSV data + ready-to-open .pbit)
                 var parameters = new Newtonsoft.Json.Linq.JObject
                 {
                     ["exportScope"] = is3D ? "currentView" : "allModel",
-                    ["mode"] = "new"
+                    ["format"] = "pbit"
                 };
 
                 // Execute the export via CommandExecutor
                 var result = CommandExecutor.Execute(uiApp, "export_to_powerbi", parameters);
                 var msg = result?["message"]?.ToString() ?? "Export completed";
-                var dbPath = result?["dbPath"]?.ToString() ?? "";
+                var pbitPath = result?["pbitPath"]?.ToString() ?? "";
                 var elemCount = result?["elementCount"]?.ToString() ?? "0";
+                var paramCount = result?["parameterCount"]?.ToString() ?? "0";
                 var fileSize = result?["fileSize"]?.ToString() ?? "";
 
-                TaskDialog.Show("Power BI Export ✅",
-                    $"{msg}\n\n" +
-                    $"📁 Database: {dbPath}\n" +
-                    $"📊 Elements: {elemCount}\n" +
-                    $"📦 File size: {fileSize}\n\n" +
-                    "Next: Open Power BI Desktop → Get Data → ODBC → connect to this .db file");
+                var dialog = new TaskDialog("Power BI Export ✅")
+                {
+                    MainInstruction = "3D dashboard exported",
+                    MainContent =
+                        $"{msg}\n\n" +
+                        $"📊 Elements: {elemCount}   🔖 Parameters: {paramCount}   📦 Data: {fileSize}\n" +
+                        $"📁 {pbitPath}\n\n" +
+                        "Open the dashboard now? Power BI Desktop will load the 3D model with slicers for every parameter.",
+                    CommonButtons = TaskDialogCommonButtons.Yes | TaskDialogCommonButtons.No,
+                    DefaultButton = TaskDialogResult.Yes
+                };
+
+                if (dialog.Show() == TaskDialogResult.Yes && System.IO.File.Exists(pbitPath))
+                {
+                    System.Diagnostics.Process.Start(
+                        new System.Diagnostics.ProcessStartInfo(pbitPath) { UseShellExecute = true });
+                }
 
                 return Result.Succeeded;
             }

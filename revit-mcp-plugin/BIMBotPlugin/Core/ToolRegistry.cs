@@ -661,11 +661,13 @@ namespace BIMBotPlugin.Core
                 ToolParam.Opt("viewIds", "string", "View IDs (comma-sep)"),
                 ToolParam.Opt("outputFolder", "string", "Output folder"));
 
-            R("export_to_powerbi", "Export 3D model with geometry to SQLite for Power BI visualization", ToolCategory.Export,
-                new[] { "power bi", "powerbi", "3d export", "export to power bi", "sqlite 3d" },
+            R("export_to_powerbi", "Export 3D model + parameters to a ready-to-open Power BI dashboard (.pbit with embedded 3D viewer)", ToolCategory.Export,
+                new[] { "power bi", "powerbi", "3d export", "export to power bi", "pbit", "3d dashboard" },
                 ToolParam.Opt("exportScope", "string", "currentView or allModel (default: currentView)"),
-                ToolParam.Opt("dbPath", "string", "SQLite file path (default: data/BIMBot_PowerBI.db)"),
-                ToolParam.Opt("mode", "string", "new or update (default: new)"),
+                ToolParam.Opt("format", "string", "pbit (default: CSVs + .pbit dashboard) or sqlite (legacy)"),
+                ToolParam.Opt("outputFolder", "string", "Output folder (default: <ProjectName>_PowerBI next to the .rvt)"),
+                ToolParam.Opt("dbPath", "string", "SQLite file path (sqlite format only)"),
+                ToolParam.Opt("mode", "string", "new or update (sqlite format only)"),
                 ToolParam.Opt("categories", "string", "Category filter (comma-sep, default: all 3D)"));
 
             // ===================== QA/QC (13 tools) =====================

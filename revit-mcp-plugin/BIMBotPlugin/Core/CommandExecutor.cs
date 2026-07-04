@@ -5652,15 +5652,11 @@ namespace BIMBotPlugin.Core
         private static JToken ExportToPowerBI(UIDocument uidoc, Document doc, JObject parameters)
         {
             var exportScope = parameters["exportScope"]?.ToString() ?? "currentView";
+            var format = parameters["format"]?.ToString() ?? "pbit";
             var dbPath = parameters["dbPath"]?.ToString();
             var mode = parameters["mode"]?.ToString() ?? "new";
             var categoriesStr = parameters["categories"]?.ToString();
-
-            // Resolve DB path
-            var dataFolder = Path.Combine(
-                Path.GetDirectoryName(doc.PathName) ?? "",
-                "data");
-            dbPath = PowerBISqliteWriter.ResolveDbPath(dbPath, dataFolder);
+            var outputFolder = parameters["outputFolder"]?.ToString();
 
             // Find/validate the 3D view to export from
             View3D exportView = null;
@@ -5726,9 +5722,12 @@ namespace BIMBotPlugin.Core
             var colors = context.GetCategoryColors(categories);
 
             // Step 4: Build metadata
+            var projectName = !string.IsNullOrWhiteSpace(doc.Title)
+                ? doc.Title
+                : (doc.ProjectInformation?.Name ?? "Revit Model");
             var metadata = new Dictionary<string, string>
             {
-                ["projectName"] = doc.ProjectInformation?.Name ?? "Unknown",
+                ["projectName"] = projectName,
                 ["exportDate"] = DateTime.Now.ToString("o"),
                 ["exportScope"] = exportScope,
                 ["exportViewName"] = exportView.Name,
@@ -5738,29 +5737,91 @@ namespace BIMBotPlugin.Core
                 ["filePath"] = doc.PathName
             };
 
-            // Step 5: Write to SQLite
-            var writer = new PowerBISqliteWriter();
-            var result = writer.Write(elements, meshData, colors, metadata, dbPath, mode);
-
-            // Compute total triangles
+            // Compute totals
             int totalTriangles = meshData.Values.Sum(m => m.FaceCount);
             int totalVertices = meshData.Values.Sum(m => m.VertexCount);
 
+            // Step 5: Write output in the requested format
+            if (format == "sqlite")
+            {
+                // Legacy path: single SQLite .db (requires ODBC driver in Power BI)
+                var sqliteFolder = Path.Combine(
+                    Path.GetDirectoryName(doc.PathName) ?? "",
+                    "data");
+                dbPath = PowerBISqliteWriter.ResolveDbPath(dbPath, sqliteFolder);
+
+                var sqliteWriter = new PowerBISqliteWriter();
+                var sqliteResult = sqliteWriter.Write(elements, meshData, colors, metadata, dbPath, mode);
+
+                return new JObject
+                {
+                    ["message"] = $"✅ Exported {sqliteResult.ElementCount} elements with 3D geometry to Power BI SQLite",
+                    ["format"] = "sqlite",
+                    ["dbPath"] = sqliteResult.DbPath,
+                    ["elementCount"] = sqliteResult.ElementCount,
+                    ["geometryCount"] = sqliteResult.GeometryCount,
+                    ["parameterCount"] = sqliteResult.ParameterCount,
+                    ["totalVertices"] = totalVertices,
+                    ["totalTriangles"] = totalTriangles,
+                    ["categories"] = new JArray(colors.Keys.ToArray()),
+                    ["fileSize"] = sqliteResult.FileSizeFormatted,
+                    ["mode"] = sqliteResult.Mode,
+                    ["exportScope"] = exportScope,
+                    ["exportView"] = exportView.Name
+                };
+            }
+
+            // Default path: CSV data + ready-to-open .pbit dashboard
+            var safeName = SanitizeFileName(projectName);
+            if (string.IsNullOrWhiteSpace(outputFolder))
+            {
+                var baseDir = !string.IsNullOrEmpty(doc.PathName)
+                    ? Path.GetDirectoryName(doc.PathName)
+                    : Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+                outputFolder = Path.Combine(baseDir ?? "", safeName + "_PowerBI");
+            }
+
+            var csvFolder = Path.Combine(outputFolder, "data");
+            var csvWriter = new PowerBICsvWriter();
+            var csvResult = csvWriter.Write(elements, meshData, colors, metadata, csvFolder);
+
+            var pbitPath = Path.Combine(outputFolder, safeName + " 3D Dashboard.pbit");
+            new PbitGenerator().Generate(pbitPath, csvFolder, projectName);
+
             return new JObject
             {
-                ["message"] = $"✅ Exported {result.ElementCount} elements with 3D geometry to Power BI SQLite",
-                ["dbPath"] = result.DbPath,
-                ["elementCount"] = result.ElementCount,
-                ["geometryCount"] = result.GeometryCount,
-                ["parameterCount"] = result.ParameterCount,
+                ["message"] = $"✅ Exported {csvResult.ElementCount} elements with 3D geometry to a Power BI dashboard",
+                ["format"] = "pbit",
+                ["pbitPath"] = pbitPath,
+                ["dataFolder"] = csvFolder,
+                ["elementCount"] = csvResult.ElementCount,
+                ["geometryCount"] = csvResult.GeometryCount,
+                ["parameterCount"] = csvResult.ParameterCount,
+                ["chunkCount"] = csvResult.ChunkCount,
                 ["totalVertices"] = totalVertices,
                 ["totalTriangles"] = totalTriangles,
                 ["categories"] = new JArray(colors.Keys.ToArray()),
-                ["fileSize"] = result.FileSizeFormatted,
-                ["mode"] = result.Mode,
+                ["fileSize"] = FormatFileSize(csvResult.TotalBytes),
                 ["exportScope"] = exportScope,
                 ["exportView"] = exportView.Name
             };
+        }
+
+        private static string SanitizeFileName(string name)
+        {
+            var invalid = Path.GetInvalidFileNameChars();
+            var sb = new System.Text.StringBuilder(name.Length);
+            foreach (var c in name)
+                sb.Append(Array.IndexOf(invalid, c) >= 0 ? '_' : c);
+            var result = sb.ToString().Trim();
+            return string.IsNullOrWhiteSpace(result) ? "RevitModel" : result;
+        }
+
+        private static string FormatFileSize(long bytes)
+        {
+            if (bytes < 1024) return $"{bytes} B";
+            if (bytes < 1024 * 1024) return $"{bytes / 1024.0:F1} KB";
+            return $"{bytes / (1024.0 * 1024.0):F1} MB";
         }
 
         // ═══════════════════════════════════════════════════════════════════

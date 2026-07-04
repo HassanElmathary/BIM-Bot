@@ -33,6 +33,18 @@ interface ElementData {
     selectionId: ISelectionId;
 }
 
+// ── Raw row before chunk reassembly ──
+interface RawRow {
+    elementId: number;
+    chunkIndex: number;
+    category: string;
+    meshJson: string;
+    colorR: number;
+    colorG: number;
+    colorB: number;
+    selectionId: ISelectionId;
+}
+
 // ── Three.js mesh with Revit metadata ──
 type RevitUserData = {
     elementId: number;
@@ -264,6 +276,12 @@ export class Visual implements IVisual {
         }
         this.showNoData(false);
 
+        // Large models arrive in segments — keep fetching until Power BI
+        // has delivered every row (rows accumulate in the same dataView).
+        if (dataView.metadata.segment) {
+            this.host.fetchMoreData(true);
+        }
+
         // Resize renderer to fit container
         const width = options.viewport.width;
         const height = options.viewport.height;
@@ -303,6 +321,7 @@ export class Visual implements IVisual {
             const roles = columns[i].roles;
             if (roles) {
                 if (roles["elementId"]) colIdx.elementId = i;
+                if (roles["chunkIndex"]) colIdx.chunkIndex = i;
                 if (roles["category"]) colIdx.category = i;
                 if (roles["meshJson"]) colIdx.meshJson = i;
                 if (roles["colorR"]) colIdx.colorR = i;
@@ -315,7 +334,7 @@ export class Visual implements IVisual {
             return [];
         }
 
-        const elements: ElementData[] = [];
+        const rawRows: RawRow[] = [];
         for (let r = 0; r < rows.length; r++) {
             const row = rows[r];
             const meshJson = String(row[colIdx.meshJson] || "");
@@ -325,14 +344,48 @@ export class Visual implements IVisual {
                 .withTable(table, r)
                 .createSelectionId();
 
-            elements.push({
+            rawRows.push({
                 elementId: Number(row[colIdx.elementId]) || 0,
+                chunkIndex: colIdx.chunkIndex !== undefined
+                    ? Number(row[colIdx.chunkIndex] ?? 0)
+                    : 0,
                 category: String(row[colIdx.category] || "Unknown"),
                 meshJson,
                 colorR: Number(row[colIdx.colorR] ?? 150),
                 colorG: Number(row[colIdx.colorG] ?? 150),
                 colorB: Number(row[colIdx.colorB] ?? 150),
                 selectionId,
+            });
+        }
+
+        return this.assembleChunks(rawRows);
+    }
+
+    /**
+     * Geometry is exported as MeshJSON chunks (Power BI truncates text
+     * columns at 32,766 chars). Group rows by ElementId, order by
+     * ChunkIndex, and concatenate back into complete MeshJSON strings.
+     */
+    private assembleChunks(rawRows: RawRow[]): ElementData[] {
+        const byElement = new Map<number, RawRow[]>();
+        for (const row of rawRows) {
+            const list = byElement.get(row.elementId);
+            if (list) list.push(row);
+            else byElement.set(row.elementId, [row]);
+        }
+
+        const elements: ElementData[] = [];
+        for (const chunks of byElement.values()) {
+            chunks.sort((a, b) => a.chunkIndex - b.chunkIndex);
+            const first = chunks[0];
+            elements.push({
+                elementId: first.elementId,
+                category: first.category,
+                meshJson: chunks.map((c) => c.meshJson).join(""),
+                colorR: first.colorR,
+                colorG: first.colorG,
+                colorB: first.colorB,
+                selectionId: first.selectionId,
             });
         }
 
@@ -592,10 +645,13 @@ export class Visual implements IVisual {
     }
 
     private computeDataHash(elements: ElementData[]): string {
-        // Simple hash based on element IDs + count
+        // Hash on element IDs + total mesh payload size so the scene
+        // rebuilds when additional data segments (fetchMoreData) arrive.
         let hash = elements.length.toString();
         if (elements.length > 0) {
-            hash += `-${elements[0].elementId}-${elements[elements.length - 1].elementId}`;
+            let meshBytes = 0;
+            for (const e of elements) meshBytes += e.meshJson.length;
+            hash += `-${elements[0].elementId}-${elements[elements.length - 1].elementId}-${meshBytes}`;
         }
         return hash;
     }
