@@ -6,7 +6,7 @@
         "visualClassName": "Visual",
         "version": "1.0.0.0",
         "description": "3D Revit model viewer for Power BI with cross-filtering. Part of the BIM-Bot pipeline.",
-        "supportUrl": "https://github.com/HassanElmathary/Revit-MCP",
+        "supportUrl": "https://github.com/HassanElmathary/BIM-Bot",
         "gitHubUrl": ""
     },
     "apiVersion": "5.3.0",

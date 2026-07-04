@@ -1,6 +1,6 @@
 ; ============================================================
 ;  BIM-Bot — Professional Installer (Inno Setup 6)
-;  AI-Powered BIM Automation • 179 MCP Tools • Revit 2020–2027
+;  AI-Powered BIM Automation • 182 MCP Tools • Revit 2020–2027
 ;  by Hassan Ahmed Elmathary
 ; ============================================================
 
@@ -61,7 +61,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Messages]
 WelcomeLabel1=Welcome to {#MyAppName}
-WelcomeLabel2=This will install {#MyAppName} v{#MyAppVersion} on your computer.%n%n{#MyAppName} provides 179 AI-powered MCP tools for Autodesk Revit, enabling intelligent BIM automation through Claude Desktop, Cursor, Windsurf, and any MCP client.%n%nSupports Revit 2020–2027.
+WelcomeLabel2=This will install {#MyAppName} v{#MyAppVersion} on your computer.%n%n{#MyAppName} provides 182 AI-powered MCP tools for Autodesk Revit, enabling intelligent BIM automation through Claude Desktop, Cursor, Windsurf, and any MCP client.%n%nSupports Revit 2020–2027.
 FinishedHeadingLabel=Installation Complete!
 FinishedLabel={#MyAppName} has been successfully installed.%n%nNext Steps:%n  1. Open Revit → look for the "BIM-Bot" tab in the ribbon%n  2. Open Claude Desktop → BIM-Bot tools are ready to use
 
@@ -71,7 +71,7 @@ Name: "server"; Description: "MCP Server only (no Revit plugin)"
 Name: "custom"; Description: "Custom installation"; Flags: iscustom
 
 [Components]
-Name: "server"; Description: "MCP Server (Node.js) — 179 AI tools for BIM automation"; Types: full server custom; Flags: fixed
+Name: "server"; Description: "MCP Server (Node.js) — 182 AI tools for BIM automation"; Types: full server custom; Flags: fixed
 Name: "nodejs"; Description: "Portable Node.js Runtime (v20 LTS)"; Types: full server custom; Flags: fixed
 Name: "plugin"; Description: "Revit Plugin — connects Revit to the MCP Server"; Types: full custom
 Name: "claude"; Description: "Auto-configure Claude Desktop"; Types: full custom
