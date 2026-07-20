@@ -1,0 +1,8 @@
+{
+  "version": "2.1.0",
+  "releaseUrl": "https://github.com/HassanElmathary/BIM-Bot/releases/tag/v2.1.0",
+  "downloadUrl": "https://github.com/HassanElmathary/BIM-Bot/releases/download/v2.1.0/BIMBot-Setup-2.1.0.exe",
+  "assetFileName": "BIMBot-Setup-2.1.0.exe",
+  "changelog": "BIM-Bot v2.1.0 — Full release with 182 MCP tools, Power BI export, Clash Detection, BIM Dashboard, and more.",
+  "minVersion": "1.0.0"
+}

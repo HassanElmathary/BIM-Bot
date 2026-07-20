@@ -8,7 +8,8 @@ using Newtonsoft.Json.Linq;
 namespace BIMBotPlugin.Core
 {
     /// <summary>
-    /// Checks for updates via the GitHub Releases API and supports downloading updates.
+    /// Checks for updates via a lightweight version manifest (website → GitHub raw)
+    /// with fallback to the full GitHub Releases API. Supports downloading updates.
     /// </summary>
     public class UpdateChecker
     {
@@ -17,6 +18,17 @@ namespace BIMBotPlugin.Core
 
         private static readonly string API_URL =
             $"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/releases/latest";
+
+        /// <summary>
+        /// Lightweight version manifest URLs, tried in order.
+        /// 1. Website (fast, no rate limit)
+        /// 2. Raw GitHub (fallback, no API rate limit)
+        /// </summary>
+        private static readonly string[] VERSION_JSON_URLS =
+        {
+            "https://elmthary.space/version.json",
+            $"https://raw.githubusercontent.com/{GITHUB_OWNER}/{GITHUB_REPO}/main/version.json"
+        };
 
         private static readonly string SkipVersionFile =
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -28,15 +40,23 @@ namespace BIMBotPlugin.Core
         {
             _httpClient.DefaultRequestHeaders.Add("User-Agent", "BIMBot-UpdateChecker");
             _httpClient.DefaultRequestHeaders.Add("Accept", "application/vnd.github.v3+json");
+            _httpClient.Timeout = TimeSpan.FromSeconds(15);
         }
 
         /// <summary>
         /// Synchronous update check (used by the ribbon button command).
+        /// Tries the lightweight manifest first, falls back to GitHub Releases API.
         /// </summary>
         public UpdateInfo CheckForUpdate()
         {
             try
             {
+                // Try lightweight manifest first
+                var manifestResult = CheckFromManifestSync();
+                if (manifestResult != null)
+                    return manifestResult;
+
+                // Fall back to full GitHub Releases API
                 var json = _httpClient.GetStringAsync(API_URL).Result;
                 return ParseRelease(json);
             }
@@ -49,11 +69,19 @@ namespace BIMBotPlugin.Core
 
         /// <summary>
         /// Async update check (used by the startup background check).
+        /// Tries the lightweight manifest first, falls back to GitHub Releases API.
         /// </summary>
         public async Task<UpdateInfo> CheckForUpdateAsync()
         {
             try
             {
+                // Try lightweight manifest first
+                var manifestResult = await CheckFromManifestAsync();
+                if (manifestResult != null)
+                    return manifestResult;
+
+                // Fall back to full GitHub Releases API
+                Logger.Log("Manifest check failed, falling back to GitHub Releases API...");
                 var json = await _httpClient.GetStringAsync(API_URL);
                 return ParseRelease(json);
             }
@@ -61,6 +89,96 @@ namespace BIMBotPlugin.Core
             {
                 Logger.LogError("Update check failed", ex);
                 return new UpdateInfo { UpdateAvailable = false };
+            }
+        }
+
+        /// <summary>
+        /// Tries each VERSION_JSON_URL in order (sync). Returns null if all fail.
+        /// </summary>
+        private UpdateInfo CheckFromManifestSync()
+        {
+            foreach (var url in VERSION_JSON_URLS)
+            {
+                try
+                {
+                    Logger.Log($"Checking update manifest: {url}");
+                    var json = _httpClient.GetStringAsync(url).Result;
+                    var result = ParseManifest(json);
+                    if (result != null)
+                    {
+                        Logger.Log($"Update manifest parsed from {url} — latest: {result.LatestVersion}");
+                        return result;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.Log($"Manifest fetch failed ({url}): {ex.Message}");
+                }
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Tries each VERSION_JSON_URL in order (async). Returns null if all fail.
+        /// </summary>
+        private async Task<UpdateInfo> CheckFromManifestAsync()
+        {
+            foreach (var url in VERSION_JSON_URLS)
+            {
+                try
+                {
+                    Logger.Log($"Checking update manifest: {url}");
+                    var json = await _httpClient.GetStringAsync(url);
+                    var result = ParseManifest(json);
+                    if (result != null)
+                    {
+                        Logger.Log($"Update manifest parsed from {url} — latest: {result.LatestVersion}");
+                        return result;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.Log($"Manifest fetch failed ({url}): {ex.Message}");
+                }
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Parses the lightweight version.json manifest.
+        /// </summary>
+        private UpdateInfo ParseManifest(string json)
+        {
+            try
+            {
+                var manifest = JObject.Parse(json);
+
+                var latestTag = manifest["version"]?.ToString()?.TrimStart('v') ?? "";
+                if (string.IsNullOrEmpty(latestTag))
+                    return null;
+
+                var changelog = manifest["changelog"]?.ToString() ?? "No changelog available";
+                var releaseUrl = manifest["releaseUrl"]?.ToString() ?? "";
+                var downloadUrl = manifest["downloadUrl"]?.ToString() ?? releaseUrl;
+                var assetFileName = manifest["assetFileName"]?.ToString() ?? "";
+
+                var currentVersion = new Version(Application.Version);
+                var latestVersion = new Version(latestTag);
+
+                return new UpdateInfo
+                {
+                    UpdateAvailable = latestVersion > currentVersion,
+                    LatestVersion = $"v{latestTag}",
+                    Changelog = changelog.Length > 1000 ? changelog.Substring(0, 1000) + "..." : changelog,
+                    DownloadUrl = downloadUrl,
+                    AssetFileName = assetFileName,
+                    ReleaseUrl = releaseUrl
+                };
+            }
+            catch (Exception ex)
+            {
+                Logger.Log($"Failed to parse manifest JSON: {ex.Message}");
+                return null;
             }
         }
 

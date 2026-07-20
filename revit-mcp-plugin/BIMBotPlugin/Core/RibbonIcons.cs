@@ -423,6 +423,32 @@ namespace BIMBotPlugin.Core
             });
         }
 
+        /// <summary>Overlay an amber update-available badge on the bottom-right of a base icon.</summary>
+        public static BitmapSource WithUpdateBadge(BitmapSource baseIcon, int size)
+        {
+            if (baseIcon == null) return null;
+            return Render(size, (dc, s) =>
+            {
+                dc.DrawImage(baseIcon, new Rect(0, 0, s, s));
+
+                // Amber notification dot
+                double badgeR = s * 0.24;
+                var center = new Point(s - badgeR - s * 0.01, s - badgeR - s * 0.01);
+                dc.DrawEllipse(B(CAmber), P(Colors.White, s * 0.03), center, badgeR, badgeR);
+
+                // "!" exclamation mark in white
+                double bx = center.X, by = center.Y;
+                // Vertical stroke of "!"
+                dc.DrawLine(P(Colors.White, s * 0.06),
+                    new Point(bx, by - badgeR * 0.50),
+                    new Point(bx, by + badgeR * 0.15));
+                // Dot of "!"
+                dc.DrawEllipse(Brushes.White, null,
+                    new Point(bx, by + badgeR * 0.45),
+                    s * 0.03, s * 0.03);
+            });
+        }
+
         // ═══════════════════════════════════════════════════
         // Generic sub-item icons for pulldown menus
         // ═══════════════════════════════════════════════════

@@ -22,6 +22,9 @@ namespace BIMBotPlugin.Core
         private static ExternalEventManager? _eventManager;
         private static bool _startupUpdateChecked = false;
 
+        // Reference for the update check button (for dynamic badge updates)
+        private static PushButton? _updateCheckButton;
+
         // Reference for toggle-state button
         private static PushButton? _toggleServiceButton;
 
@@ -148,6 +151,8 @@ namespace BIMBotPlugin.Core
                     "BIMBotPlugin.Commands.Tool_ImportParametersFromCsv", "Import parameters from CSV file");
                 AddPulldownItem(exportPd, "ExportPowerBI", "⚡ Export to Power BI", asm,
                     "BIMBotPlugin.Commands.Tool_ExportToPowerBI", "Export 3D model + parameters to a ready-to-open Power BI dashboard (.pbit)");
+                AddPulldownItem(exportPd, "ViewPowerBI", "📊 View Power BI Report", asm,
+                    "BIMBotPlugin.Commands.Tool_ViewPowerBIReport", "Open a published Power BI report inside Revit (WebView2)");
 
                 // ========================================
                 // Families Pulldown
@@ -246,7 +251,7 @@ namespace BIMBotPlugin.Core
                 };
 
                 corePanel.AddItem(settingsData);
-                corePanel.AddItem(updateData);
+                _updateCheckButton = corePanel.AddItem(updateData) as PushButton;
 
                 // Initialize the external event manager
                 _eventManager = new ExternalEventManager();
@@ -411,6 +416,8 @@ namespace BIMBotPlugin.Core
                             Logger.Log($"Update available: {updateInfo.LatestVersion}");
                             // Queue UI notification for next idle
                             _pendingUpdateInfo = updateInfo;
+                            // Update the ribbon button badge on the UI thread
+                            _pendingUpdateBadge = true;
                         }
                         else
                         {
@@ -424,6 +431,13 @@ namespace BIMBotPlugin.Core
                 });
 
                 return;
+            }
+
+            // ── Apply pending update badge on UI thread ──
+            if (_pendingUpdateBadge)
+            {
+                _pendingUpdateBadge = false;
+                UpdateCheckButtonState(true);
             }
 
             // ── Show pending update notification on UI thread ──
@@ -465,6 +479,40 @@ namespace BIMBotPlugin.Core
         }
 
         private static UpdateInfo? _pendingUpdateInfo;
+        private static volatile bool _pendingUpdateBadge = false;
+
+        /// <summary>
+        /// Updates the Check Updates ribbon button icon to show/hide
+        /// the amber notification badge based on update availability.
+        /// </summary>
+        public static void UpdateCheckButtonState(bool updateAvailable)
+        {
+            if (_updateCheckButton == null) return;
+            try
+            {
+                var baseIcon32 = RibbonIcons.CheckUpdates(32);
+                var baseIcon16 = RibbonIcons.CheckUpdates(16);
+
+                if (updateAvailable)
+                {
+                    _updateCheckButton.LargeImage = RibbonIcons.WithUpdateBadge(baseIcon32, 32);
+                    _updateCheckButton.Image = RibbonIcons.WithUpdateBadge(baseIcon16, 16);
+                    _updateCheckButton.ItemText = "Update\nAvailable!";
+                    _updateCheckButton.ToolTip = "A new version of BIM-Bot is available — click to update";
+                }
+                else
+                {
+                    _updateCheckButton.LargeImage = baseIcon32;
+                    _updateCheckButton.Image = baseIcon16;
+                    _updateCheckButton.ItemText = "Check\nUpdates";
+                    _updateCheckButton.ToolTip = "Check for plugin updates on GitHub";
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError("Failed to update check-updates button state", ex);
+            }
+        }
     }
 }
 

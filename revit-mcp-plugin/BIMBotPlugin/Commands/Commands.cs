@@ -70,6 +70,9 @@ namespace BIMBotPlugin.Commands
                     TaskDialog.Show("BIM-Bot", $"✅ You're up to date! (v{Application.Version})");
                 }
 
+                // Reset the ribbon button badge back to normal after user has seen the result
+                Application.UpdateCheckButtonState(false);
+
                 return Result.Succeeded;
             }
             catch (System.Exception ex)
