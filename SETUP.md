@@ -135,7 +135,7 @@ cd "%USERPROFILE%\OneDrive\01-me\Revit MCP"   # adjust to wherever you cloned th
 git push origin main
 
 # 3. Create a new release
-gh release create v2.2.0 "installer/output/BIMBot-Setup-2.2.0.exe" --title "BIM-Bot v2.2.0" --notes "Multi-client MCP auto-connect (Claude, Cursor, Windsurf, VS Code), device-agnostic paths, Power BI embed. 182 MCP tools, Revit 2020–2027, one-click installer"
+gh release create v2.2.0 "installer/output/BIMBot-Setup-2.2.0.exe" --title "BIM-Bot v2.2.0" --notes "Multi-client MCP auto-connect (Claude, Cursor, Windsurf, VS Code), device-agnostic paths, Power BI embed. 183 MCP tools, Revit 2020–2027, one-click installer"
 ```
 
 ### After GitHub is set up:

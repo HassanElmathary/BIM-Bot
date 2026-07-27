@@ -1,9 +1,9 @@
-# revit-mcp-server
+﻿# revit-mcp-server
 
 [![npm version](https://img.shields.io/npm/v/revit-mcp-server.svg)](https://www.npmjs.com/package/revit-mcp-server)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-> **MCP Server for Autodesk Revit** — 182 AI-powered tools for BIM automation.  
+> **MCP Server for Autodesk Revit** — 183 AI-powered tools for BIM automation.  
 > Works with Claude Desktop, Cursor, Windsurf, and any MCP client. Supports **Revit 2020–2027**.
 
 ## ⚡ Quick Start
@@ -51,7 +51,7 @@ This will:
 - ✅ Deploy the correct plugin for each version
 - ✅ Auto-configure Claude Desktop
 
-## 182 MCP Tools
+## 183 MCP Tools
 
 | Category | Count | Key Tools |
 |----------|-------|-----------|
