@@ -11,6 +11,8 @@ export interface ExcelExportOptions {
     filePath?: string;
     sheetName?: string;
     autoWidth?: boolean;
+    /** Append a bold TOTAL row summing numeric columns (default: false) */
+    totalsRow?: boolean;
 }
 
 /**
@@ -82,6 +84,25 @@ export async function exportToExcel(
         worksheet.addRow(rowValues);
     }
 
+    // Optional TOTAL row summing numeric columns (skips the Id column)
+    if (options.totalsRow) {
+        const totalValues: Record<string, unknown> = {};
+        headers.forEach((h, i) => {
+            if (i === 0) {
+                totalValues[h] = `TOTAL (${data.length} rows)`;
+                return;
+            }
+            if (h.toLowerCase() === "id") return;
+            const nums = data
+                .map((row) => row[h])
+                .filter((v): v is number => typeof v === "number");
+            if (nums.length > 0) {
+                totalValues[h] = Math.round(nums.reduce((a, b) => a + b, 0) * 1000) / 1000;
+            }
+        });
+        worksheet.addRow(totalValues);
+    }
+
     // Auto-fit column widths based on content (if enabled)
     if (options.autoWidth !== false) {
         for (const col of worksheet.columns) {
@@ -113,6 +134,20 @@ export async function exportToExcel(
             };
         }
     });
+
+    // Style the TOTAL row last so the border/banding pass doesn't override it
+    if (options.totalsRow) {
+        const totalRow = worksheet.getRow(worksheet.rowCount);
+        totalRow.font = { bold: true };
+        totalRow.eachCell((cell) => {
+            cell.border = { ...cell.border, top: { style: "double" } };
+            cell.fill = {
+                type: "pattern",
+                pattern: "solid",
+                fgColor: { argb: "FFE8EDF5" },
+            };
+        });
+    }
 
     // Write to file
     await workbook.xlsx.writeFile(filePath);

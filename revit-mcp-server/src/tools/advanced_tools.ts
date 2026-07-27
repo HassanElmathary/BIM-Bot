@@ -1,6 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { withRevitConnection } from "../utils/ConnectionManager.js";
+import { parseElementQuery } from "../utils/nl-filter.js";
 
 /**
  * Advanced Tools — Code execution, AI filter, and model reset
@@ -27,18 +28,33 @@ export function registerAdvancedTools(server: McpServer) {
         }
     );
 
-    // 2. AI element filter
+    // 2. AI element filter — natural language → structured conditions,
+    // evaluated by the generate_dynamic_schedule command (numeric,
+    // unit-aware, instance+type parameters)
     server.tool(
         "ai_element_filter",
-        "Use AI-powered natural language to filter elements. Describe what you want to find and the system will translate it to Revit filters.",
+        "Use natural language to filter elements. Describe what you want to find and the system will translate it to Revit filters, e.g. 'all doors wider than 900mm in Level 1'. Returns matching elements with their IDs (use select_elements to highlight them).",
         {
-            query: z.string().describe("Natural language description of elements to find, e.g. 'all exterior walls taller than 10 feet'"),
+            query: z.string().describe("Natural language description of elements to find, e.g. 'all walls taller than 3 m'"),
             category: z.string().optional().describe("Optional category hint to narrow the search"),
         },
         async (args) => {
             try {
+                const parsed = parseElementQuery(args.query);
+                const category = args.category ?? parsed.category;
+                if (!category) {
+                    return { content: [{ type: "text", text:
+                        "Could not detect a category in the query. Mention one (doors, walls, rooms, …) or pass the category argument." }] };
+                }
+
                 const response = await withRevitConnection(async (client) =>
-                    client.sendCommand("ai_element_filter", args)
+                    client.sendCommand("generate_dynamic_schedule", {
+                        category,
+                        conditions: parsed.conditions,
+                        level: parsed.level,
+                        fields: [],
+                        limit: 0,
+                    })
                 );
                 return { content: [{ type: "text", text: JSON.stringify(response, null, 2) }] };
             } catch (error) {

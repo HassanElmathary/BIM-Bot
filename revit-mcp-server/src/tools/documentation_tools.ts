@@ -1,11 +1,119 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import path from "path";
+import os from "os";
 import { withRevitConnection } from "../utils/ConnectionManager.js";
+import { parseElementQuery, describeFilter, FilterCondition } from "../utils/nl-filter.js";
+import { exportToExcel } from "../integrations/excel-client.js";
+import { exportToCsv } from "../integrations/csv-client.js";
+
+/** Response shape of the C# generate_dynamic_schedule command */
+interface DynamicScheduleResponse {
+    count: number;
+    totalInCategory: number;
+    category: string;
+    columns: string[];
+    rows: Record<string, unknown>[];
+    matchedIds: number[];
+}
 
 /**
- * Documentation Tools — 8 tools for sheets, views, exports
+ * Documentation Tools — sheets, views, schedules, exports
  */
 export function registerDocumentationTools(server: McpServer) {
+
+    // 0. Dynamic schedule with natural-language filtering + Excel/CSV export
+    server.tool(
+        "generate_dynamic_schedule",
+        "Generate a filtered quantity take-off from natural language and export it to Excel or CSV, " +
+        "e.g. \"all doors wider than 900mm in Level 1\". Filters compare real parameter values in the " +
+        "requested units (mm/cm/m/ft/in, areas, volumes), looking at both instance and type parameters. " +
+        "For precise control pass structured `filters` instead of (or as well as) the query.",
+        {
+            query: z.string().optional().describe(
+                "Natural language filter, e.g. 'doors wider than 900mm in Level 1' or 'rooms with area over 20 m2'"
+            ),
+            category: z.string().optional().describe(
+                "Revit category (Doors, Windows, Walls, Rooms, …). Overrides the category detected in the query."
+            ),
+            filters: z.array(z.object({
+                parameter: z.string().describe("Parameter name, e.g. 'Width', 'Fire Rating'"),
+                operator: z.enum([">", ">=", "<", "<=", "=", "!=", "contains"]).describe("Comparison operator"),
+                value: z.union([z.number(), z.string()]).describe("Value to compare against"),
+                unit: z.string().optional().describe("Unit for numeric values: mm, cm, m, ft, in, m2, ft2, m3, ft3"),
+            })).optional().describe(
+                "Structured filter conditions. If provided, these are used instead of parsing the query."
+            ),
+            level: z.string().optional().describe("Only include elements on this level, e.g. 'Level 1'"),
+            fields: z.array(z.string()).optional().describe(
+                "Extra parameter columns to include, e.g. ['Fire Rating', 'Cost']. Id/Name/Type/Level and filtered parameters are always included."
+            ),
+            exportFormat: z.enum(["xlsx", "csv", "none"]).optional().describe(
+                "Export format (default: xlsx). 'none' returns the data inline without writing a file."
+            ),
+            filePath: z.string().optional().describe(
+                "Output file path. Default: Desktop/schedule-<category>-<timestamp>.<ext>"
+            ),
+            includeTotals: z.boolean().optional().describe(
+                "Append a TOTAL row summing numeric columns (default: true)"
+            ),
+            limit: z.number().optional().describe("Maximum rows (default: unlimited)"),
+        },
+        async (args) => {
+            try {
+                const parsed = args.query ? parseElementQuery(args.query) : { conditions: [] as FilterCondition[] };
+                const category = args.category ?? parsed.category;
+                if (!category) {
+                    return { content: [{ type: "text" as const, text:
+                        "Could not determine a category. Pass `category` explicitly or mention one in the query (e.g. 'all doors …')." }] };
+                }
+                const conditions = args.filters && args.filters.length > 0 ? args.filters : parsed.conditions;
+                const level = args.level ?? parsed.level;
+
+                const response = (await withRevitConnection(async (client) =>
+                    client.sendCommand("generate_dynamic_schedule", {
+                        category,
+                        conditions,
+                        level,
+                        fields: args.fields ?? [],
+                        limit: args.limit ?? 0,
+                    })
+                )) as DynamicScheduleResponse;
+
+                const filterDesc = describeFilter(category, conditions as FilterCondition[], level);
+                const summary = `${response.count} of ${response.totalInCategory} ${category} matched: ${filterDesc}`;
+
+                if (response.count === 0) {
+                    return { content: [{ type: "text" as const, text:
+                        `No matches — ${summary}.\nCheck parameter names/units, or pass structured \`filters\`.` }] };
+                }
+
+                const format = args.exportFormat ?? "xlsx";
+                if (format === "none") {
+                    const preview = response.rows.slice(0, 50);
+                    return { content: [{ type: "text" as const, text:
+                        `✅ ${summary}\n\n${JSON.stringify({ columns: response.columns, rows: preview, matchedIds: response.matchedIds }, null, 2)}` +
+                        (response.rows.length > 50 ? `\n… ${response.rows.length - 50} more rows (use exportFormat xlsx/csv for the full set)` : "") }] };
+                }
+
+                const filePath = args.filePath ?? path.join(
+                    os.homedir(), "Desktop",
+                    `schedule-${category.toLowerCase().replace(/\s+/g, "-")}-${Date.now()}.${format}`
+                );
+                const includeTotals = args.includeTotals !== false;
+                const outputPath = format === "csv"
+                    ? exportToCsv(response.rows, { filePath, totalsRow: includeTotals })
+                    : await exportToExcel(response.rows, { filePath, sheetName: category, totalsRow: includeTotals });
+
+                return { content: [{ type: "text" as const, text:
+                    `✅ ${summary}\n📄 Exported to: ${outputPath}\nColumns: ${response.columns.join(", ")}` +
+                    `\n(matched element IDs available — use select_elements to highlight them in Revit)` }] };
+            } catch (error) {
+                return { content: [{ type: "text" as const, text:
+                    `Failed: ${error instanceof Error ? error.message : String(error)}` }] };
+            }
+        }
+    );
 
     // 1. Place view on sheet
     server.tool(

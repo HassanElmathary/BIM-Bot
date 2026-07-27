@@ -38,6 +38,8 @@ namespace BIMBotPlugin.Core
                     return GetSelectedElements(uidoc!);
                 case "get_elements":
                     return GetElements(doc, parameters);
+                case "generate_dynamic_schedule":
+                    return GenerateDynamicSchedule(doc, parameters);
                 case "get_parameters":
                     return GetParameters(doc, parameters);
                 case "get_project_info":

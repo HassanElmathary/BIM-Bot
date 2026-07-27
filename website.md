@@ -1,4 +1,4 @@
-﻿# Website Update Brief — elmthary.space
+# Website Update Brief — elmthary.space
 **Date:** April 11, 2026  
 **From:** Hassan Elmathary  
 **To:** Web Developer  
@@ -14,7 +14,7 @@
 `179 MCP Tools | 17 Categories | 7 Revit Versions`
 
 **Change to:**
-`183 MCP Tools | 19 Categories | 8 Revit Versions`
+`184 MCP Tools | 19 Categories | 8 Revit Versions`
 
 The correct category count is 19: Reading, Creating, Editing, Documentation, QA/QC, AI, Power Tools, Advanced, Drafting, Export, Extended, File Management, MEP, Power BI, Rendering, Settings, Sketch, Transactions, BIM Dashboard.
 
@@ -26,7 +26,7 @@ The correct category count is 19: Reading, Creating, Editing, Documentation, QA/
 `179 tools across 17 categories`
 
 **Change to:**
-`183 tools across 19 categories`
+`184 tools across 19 categories`
 
 ---
 
