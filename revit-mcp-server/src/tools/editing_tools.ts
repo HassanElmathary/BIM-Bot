@@ -3,7 +3,7 @@ import { z } from "zod";
 import { withRevitConnection } from "../utils/ConnectionManager.js";
 
 /**
- * Editing Tools — 12 tools for modifying existing elements in Revit
+ * Editing Tools — 13 tools for modifying existing elements in Revit
  */
 export function registerEditingTools(server: McpServer) {
 
@@ -255,6 +255,59 @@ export function registerEditingTools(server: McpServer) {
             try {
                 const response = await withRevitConnection(async (client) =>
                     client.sendCommand("batch_modify_parameters", args)
+                );
+                return { content: [{ type: "text", text: JSON.stringify(response, null, 2) }] };
+            } catch (error) {
+                return { content: [{ type: "text", text: `Failed: ${error instanceof Error ? error.message : String(error)}` }] };
+            }
+        }
+    );
+
+    // 13. Conditional bulk parameter editor
+    server.tool(
+        "parameter_batch_editor",
+        "Rule-driven bulk parameter editing. Selects a scope (category, element IDs, current selection), " +
+        "keeps only elements matching 'where' conditions, then applies each 'set' edit — a literal value, " +
+        "a regex find/replace on the existing value, or a copy from another parameter. " +
+        "Example: where Category=Walls and Height > 3 m, set 'Fire Rating' = '2h'. " +
+        "Run with dryRun: true first to preview which elements change.",
+        {
+            category: z.string().optional().describe("Category to scope, e.g. 'Walls'"),
+            categories: z.array(z.string()).optional().describe("Multiple categories to scope"),
+            elementIds: z.array(z.number()).optional().describe("Explicit element IDs instead of a category"),
+            useSelection: z.boolean().optional().describe("Use the current Revit selection as the scope"),
+            activeViewOnly: z.boolean().optional().describe("Limit a category scope to the active view"),
+            where: z.array(z.object({
+                parameterName: z.string().describe("Parameter to test (instance or type parameter)"),
+                operator: z.enum([
+                    "equals", "notEquals", "contains", "notContains", "startsWith", "endsWith",
+                    "matches", "greaterThan", "lessThan", "greaterOrEqual", "lessOrEqual",
+                    "isEmpty", "isNotEmpty", "exists", "notExists"
+                ]).optional().describe("Comparison operator (default: equals). 'matches' is a regex"),
+                value: z.union([z.string(), z.number(), z.boolean()]).optional().describe("Value to compare against"),
+                unit: z.string().optional().describe("Unit for numeric compares: mm, cm, m, ft, in, m2, m3, deg. Defaults to the parameter's display unit"),
+            })).optional().describe("Conditions an element must meet to be edited. Omit to edit the whole scope"),
+            matchMode: z.enum(["all", "any"]).optional().describe("Require all conditions (default) or any"),
+            set: z.array(z.object({
+                parameterName: z.string().describe("Parameter to write"),
+                value: z.union([z.string(), z.number(), z.boolean()]).optional().describe("Literal value to set"),
+                unit: z.string().optional().describe("Unit of value for numeric parameters"),
+                find: z.string().optional().describe("Regex (or literal) to find in the current value — for renaming"),
+                replace: z.string().optional().describe("Replacement for 'find'; supports $1 backreferences"),
+                regex: z.boolean().optional().describe("Treat 'find' as a regex (default: true)"),
+                fromParameter: z.string().optional().describe("Copy the value from this parameter instead"),
+                prefix: z.string().optional().describe("Text prepended to the computed value"),
+                suffix: z.string().optional().describe("Text appended to the computed value"),
+                applyToType: z.boolean().optional().describe("Allow writing the element's type parameter (affects all instances of that type)"),
+            })).describe("Edits applied to every matching element"),
+            dryRun: z.boolean().optional().describe("Preview the changes without modifying the model (default: false)"),
+            limit: z.number().optional().describe("Maximum number of elements to edit"),
+            previewLimit: z.number().optional().describe("Maximum change records returned (default: 25)"),
+        },
+        async (args) => {
+            try {
+                const response = await withRevitConnection(async (client) =>
+                    client.sendCommand("parameter_batch_editor", args)
                 );
                 return { content: [{ type: "text", text: JSON.stringify(response, null, 2) }] };
             } catch (error) {

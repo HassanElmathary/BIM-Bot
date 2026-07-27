@@ -122,6 +122,8 @@ namespace BIMBotPlugin.Core
                     return ColorElements(uidoc!, doc, parameters);
                 case "batch_modify_parameters":
                     return BatchModifyParameters(doc, parameters);
+                case "parameter_batch_editor":
+                    return ParameterBatchEditor(uidoc!, doc, parameters);
 
                 // ===== DOCUMENTATION COMMANDS =====
                 case "place_view_on_sheet":

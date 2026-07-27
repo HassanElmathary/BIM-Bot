@@ -1172,6 +1172,18 @@ Use get_integration_status to check configured integrations (Excel, Notion, Goog
                     PropArrayReq("elementIds", "Element IDs", new JObject { ["type"] = "integer" }),
                     PropReq("parameterName", "string", "Parameter"),
                     PropReq("value", "string", "Value")));
+                d.Add(Fn("parameter_batch_editor", "Conditional bulk parameter edit: filter elements by rules, then set / regex-replace / copy parameter values. Use dryRun first to preview.",
+                    Prop("category", "string", "Category to scope (e.g. Walls)"),
+                    PropArray("categories", "Multiple categories to scope", new JObject { ["type"] = "string" }),
+                    PropArray("elementIds", "Explicit element IDs instead of a category", new JObject { ["type"] = "integer" }),
+                    Prop("useSelection", "boolean", "Use the current Revit selection as scope"),
+                    Prop("activeViewOnly", "boolean", "Limit a category scope to the active view"),
+                    PropArray("where", "Conditions elements must meet", ToolRegistry.PbeConditionSchema()),
+                    Prop("matchMode", "string", "all (default) or any"),
+                    PropArrayReq("set", "Edits to apply to matching elements", ToolRegistry.PbeSetSchema()),
+                    Prop("dryRun", "boolean", "Preview changes without modifying the model"),
+                    Prop("limit", "integer", "Max elements to edit"),
+                    Prop("previewLimit", "integer", "Max change records returned (default 25)")));
                 d.Add(Fn("parameter_case_convert", "Convert parameter text case (UPPER/lower/Title)",
                     PropReq("category", "string", "Category"),
                     PropReq("parameterName", "string", "Parameter"),
@@ -1617,6 +1629,17 @@ Use get_integration_status to check configured integrations (Excel, Notion, Goog
                 ["description"] = desc,
                 ["items"] = items,
                 ["_required"] = true
+            });
+        }
+
+        // Optional array property with items schema
+        private JProperty PropArray(string name, string desc, JObject items)
+        {
+            return new JProperty(name, new JObject
+            {
+                ["type"] = "array",
+                ["description"] = desc,
+                ["items"] = items
             });
         }
     }

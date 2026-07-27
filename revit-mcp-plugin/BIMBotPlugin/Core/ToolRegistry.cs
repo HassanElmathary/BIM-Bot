@@ -44,6 +44,8 @@ namespace BIMBotPlugin.Core
             new ToolParam { Name = name, Type = type, Description = desc, Required = true };
         public static ToolParam Arr(string name, string desc, JObject itemSchema = null) =>
             new ToolParam { Name = name, Type = "array", Description = desc, Required = true, IsArray = true, ArrayItemSchema = itemSchema };
+        public static ToolParam ArrOpt(string name, string desc, JObject itemSchema = null) =>
+            new ToolParam { Name = name, Type = "array", Description = desc, IsArray = true, ArrayItemSchema = itemSchema };
     }
 
     public class ToolDefinition
@@ -581,6 +583,20 @@ namespace BIMBotPlugin.Core
                 ToolParam.Arr("elementIds", "Element IDs", new JObject { ["type"] = "integer" }),
                 ToolParam.Req("parameterName", "string", "Parameter"),
                 ToolParam.Req("value", "string", "Value"));
+
+            R("parameter_batch_editor", "Conditional bulk parameter edit: filter elements by rules, then set/regex-replace/copy parameter values", ToolCategory.Editing,
+                new[] { "bulk edit", "conditional parameter", "batch editor", "rename parameter", "if then parameter" },
+                ToolParam.Opt("category", "string", "Category to scope (e.g. Walls)"),
+                ToolParam.ArrOpt("categories", "Multiple categories to scope", new JObject { ["type"] = "string" }),
+                ToolParam.ArrOpt("elementIds", "Explicit element IDs instead of a category", new JObject { ["type"] = "integer" }),
+                ToolParam.Opt("useSelection", "boolean", "Use the current Revit selection as scope"),
+                ToolParam.Opt("activeViewOnly", "boolean", "Limit a category scope to the active view"),
+                ToolParam.ArrOpt("where", "Conditions elements must meet", PbeConditionSchema()),
+                ToolParam.Opt("matchMode", "string", "all (default) or any"),
+                ToolParam.Arr("set", "Edits to apply to matching elements", PbeSetSchema()),
+                ToolParam.Opt("dryRun", "boolean", "Preview changes without modifying the model"),
+                ToolParam.Opt("limit", "integer", "Max elements to edit"),
+                ToolParam.Opt("previewLimit", "integer", "Max change records returned (default 25)"));
 
             R("parameter_case_convert", "Convert parameter text case (UPPER/lower/Title)", ToolCategory.Editing,
                 new[] { "case convert", "uppercase", "lowercase", "title case" },
@@ -1529,5 +1545,39 @@ namespace BIMBotPlugin.Core
 
         private static void R(string name, string desc, ToolCategory cat, string[] keywords, bool alwaysAvailable, params ToolParam[] parms) =>
             _tools.Add(new ToolDefinition { Name = name, Description = desc, Category = cat, Keywords = keywords, Parameters = parms, AlwaysAvailable = alwaysAvailable });
+
+        // ── Item schemas for parameter_batch_editor ──
+
+        internal static JObject PbeConditionSchema() => new JObject
+        {
+            ["type"] = "object",
+            ["properties"] = new JObject
+            {
+                ["parameterName"] = new JObject { ["type"] = "string", ["description"] = "Parameter to test (instance or type)" },
+                ["operator"] = new JObject { ["type"] = "string", ["description"] = "equals, notEquals, contains, notContains, startsWith, endsWith, matches (regex), greaterThan, lessThan, greaterOrEqual, lessOrEqual, isEmpty, isNotEmpty, exists, notExists" },
+                ["value"] = new JObject { ["type"] = "string", ["description"] = "Value to compare against" },
+                ["unit"] = new JObject { ["type"] = "string", ["description"] = "Unit for numeric compares: mm, cm, m, ft, in, m2, m3, deg. Defaults to the parameter's display unit" }
+            },
+            ["required"] = new JArray { "parameterName" }
+        };
+
+        internal static JObject PbeSetSchema() => new JObject
+        {
+            ["type"] = "object",
+            ["properties"] = new JObject
+            {
+                ["parameterName"] = new JObject { ["type"] = "string", ["description"] = "Parameter to write" },
+                ["value"] = new JObject { ["type"] = "string", ["description"] = "Literal value to set" },
+                ["unit"] = new JObject { ["type"] = "string", ["description"] = "Unit of value for numeric parameters" },
+                ["find"] = new JObject { ["type"] = "string", ["description"] = "Regex (or literal) to find in the current value" },
+                ["replace"] = new JObject { ["type"] = "string", ["description"] = "Replacement for find; supports $1 backreferences" },
+                ["regex"] = new JObject { ["type"] = "boolean", ["description"] = "Treat find as regex (default true)" },
+                ["fromParameter"] = new JObject { ["type"] = "string", ["description"] = "Copy the value from this parameter instead" },
+                ["prefix"] = new JObject { ["type"] = "string", ["description"] = "Text prepended to the computed value" },
+                ["suffix"] = new JObject { ["type"] = "string", ["description"] = "Text appended to the computed value" },
+                ["applyToType"] = new JObject { ["type"] = "boolean", ["description"] = "Allow writing the element's type parameter (affects all instances)" }
+            },
+            ["required"] = new JArray { "parameterName" }
+        };
     }
 }

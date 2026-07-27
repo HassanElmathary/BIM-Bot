@@ -88,8 +88,8 @@ The uninstaller will automatically:
 - **185 MCP Tools** across 19 categories:
   - 🔍 **Reading** (19): Views, elements, parameters, rooms, levels, sheets, families, schedules, linked models
   - 🏗️ **Creating** (15): Walls, floors, ceilings, roofs, levels, grids, rooms, views, sheets, tags
-  - ✏️ **Editing** (12): Modify, move, rotate, copy, delete, mirror, align, group, batch modify
-  - 📄 **Documentation** (8): Sheets, viewports, exports, legends, revisions, tags
+  - ✏️ **Editing** (13): Modify, move, rotate, copy, delete, mirror, align, group, batch modify, conditional bulk parameter edit
+  - 📄 **Documentation** (9): Sheets, viewports, exports, legends, revisions, tags
   - ✅ **QA/QC** (8): Warnings, audits, compliance, naming, duplicates, purge, validation
   - 🤖 **AI** (8): Gemini chat, code generation, model analysis, Google OAuth
   - ⚡ **Power Tools** (29): Batch operations, bulk element processing, advanced queries
@@ -99,7 +99,7 @@ The uninstaller will automatically:
   - 🔌 **Extended** (16): Additional element manipulation and property management
   - 📁 **File Management** (10): Worksharing, links, worksets, file operations
   - 🔥 **MEP** (8): Ducts, pipes, cable trays, fittings, systems
-  - 📊 **Power BI** (1): 3D geometry export for Power BI visualization
+  - 📊 **Power BI** (2): 3D geometry export and embedded report display
   - 🎨 **Rendering** (3): Materials, render settings, visual styles
   - ⚙️ **Settings** (9): Project info, units, shared parameters, global settings
   - ✍️ **Sketch** (3): Model lines, reference planes, sketch-based geometry
