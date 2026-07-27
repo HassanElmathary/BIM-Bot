@@ -31,7 +31,7 @@ namespace BIMBotPlugin.Core
         public static SocketService? SocketServiceInstance => _socketService;
         public static ExternalEventManager? EventManagerInstance => _eventManager;
 
-        public static string Version => "2.1.0";
+        public static string Version => "2.2.0";
 
         public Result OnStartup(UIControlledApplication application)
         {

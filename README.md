@@ -11,7 +11,7 @@
 
 ## ⚡ Quick Install
 
-1. Download **`BIMBot-Setup-2.1.0.exe`** from [GitHub Releases](https://github.com/HassanElmathary/BIM-Bot/releases)
+1. Download **`BIMBot-Setup-2.2.0.exe`** from [GitHub Releases](https://github.com/HassanElmathary/BIM-Bot/releases)
 2. Run the installer as **Administrator**
 3. Follow the wizard — it will:
    - ✅ Auto-detect your Revit versions (2020–2027)
