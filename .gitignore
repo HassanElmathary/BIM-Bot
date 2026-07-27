@@ -29,6 +29,14 @@ installer/nodejs/node.exe
 # Antigravity / agent configs
 .agents/
 .gemini/
+.claude/
+
+# Runtime logs
+logs/
+
+# Generated Revit addin manifests (installer/scripts write these with
+# machine-specific absolute paths — never commit one)
+*.addin
 
 # Power BI visual build artifacts
 revit-mcp-powerbi-visual/.tmp/

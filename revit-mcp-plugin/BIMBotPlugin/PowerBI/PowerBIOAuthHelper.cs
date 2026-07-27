@@ -364,22 +364,27 @@ namespace BIMBotPlugin.AI
 
         private static string FindEnvFile()
         {
-            var candidates = new[]
+            // Walk up from the plugin DLL: covers both the installed layout
+            // ({app}\plugin\<tfm>\BIMBotPlugin.dll → {app}\server\.env) and a
+            // dev clone (…\bin\Release\<tfm>\BIMBotPlugin.dll →
+            // <repo>\revit-mcp-server\.env), wherever the repo or install
+            // dir lives.
+            try
             {
-                Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "revit-mcp-server", ".env"),
-                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-                    "OneDrive", "01-me", "Revit MCP", "revit-mcp-server", ".env"),
-            };
-
-            foreach (var path in candidates)
-            {
-                try
+                var dir = Path.GetDirectoryName(
+                    System.Reflection.Assembly.GetExecutingAssembly().Location);
+                for (var i = 0; !string.IsNullOrEmpty(dir) && i < 7; i++)
                 {
-                    var resolved = Path.GetFullPath(path);
-                    if (File.Exists(resolved)) return resolved;
+                    var installed = Path.Combine(dir, "server", ".env");
+                    if (File.Exists(installed)) return installed;
+
+                    var devClone = Path.Combine(dir, "revit-mcp-server", ".env");
+                    if (File.Exists(devClone)) return devClone;
+
+                    dir = Path.GetDirectoryName(dir);
                 }
-                catch { }
             }
+            catch { }
 
             return "";
         }
