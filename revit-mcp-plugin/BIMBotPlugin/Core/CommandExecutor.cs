@@ -142,15 +142,19 @@ namespace BIMBotPlugin.Core
                     return IsolateWarnings(uidoc!, doc, parameters);
                 case "audit_model":
                     return AuditModel(doc);
+                case "audit_model_standards":
+                    return AuditModelStandards(doc, parameters);
                 case "purge_unused":
                     return DeepPurge(doc);
                 case "purge_cads":
                     return FindCadImports(doc, new JObject { ["delete"] = true });
-                case "check_room_compliance":
                 case "check_naming_conventions":
+                    return CheckNamingConventionsCmd(doc, parameters);
+                case "validate_parameters":
+                    return ValidateParametersCmd(doc, parameters);
+                case "check_room_compliance":
                 case "find_duplicates":
                 case "check_links_status":
-                case "validate_parameters":
                     return ExecuteGenericCommand(doc, command, parameters);
 
                 // ===== ADVANCED COMMANDS =====

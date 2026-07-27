@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Revit](https://img.shields.io/badge/Revit-2020--2027-blue.svg)](#)
 
-> BIM-Bot: Model Context Protocol (MCP) server + Revit plugin for AI-driven BIM automation with **184 tools**, built-in Gemini AI chat, and Power BI 3D export.
+> BIM-Bot: Model Context Protocol (MCP) server + Revit plugin for AI-driven BIM automation with **185 tools**, built-in Gemini AI chat, and Power BI 3D export.
 
 ---
 
@@ -85,7 +85,7 @@ The uninstaller will automatically:
 
 ## Features
 
-- **184 MCP Tools** across 19 categories:
+- **185 MCP Tools** across 19 categories:
   - 🔍 **Reading** (19): Views, elements, parameters, rooms, levels, sheets, families, schedules, linked models
   - 🏗️ **Creating** (15): Walls, floors, ceilings, roofs, levels, grids, rooms, views, sheets, tags
   - ✏️ **Editing** (12): Modify, move, rotate, copy, delete, mirror, align, group, batch modify
@@ -196,7 +196,7 @@ BIM-Bot/
 │       │   ├── excel-client.ts
 │       │   ├── notion-client.ts
 │       │   └── sqlite-client.ts
-│       ├── tools/                  # 184 MCP Tools (19 files)
+│       ├── tools/                  # 185 MCP Tools (19 files)
 │       │   ├── reading_tools.ts
 │       │   ├── creating_tools.ts
 │       │   ├── editing_tools.ts
