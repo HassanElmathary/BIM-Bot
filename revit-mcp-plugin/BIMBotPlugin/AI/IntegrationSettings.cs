@@ -33,6 +33,14 @@ namespace BIMBotPlugin.AI
         public string OllamaUrl { get; set; } = "http://localhost:11434";
         public string OllamaModel { get; set; } = "qwen2.5:7b-instruct-q4_K_M";
 
+        // ── Power BI ──
+        public bool PowerBIEnabled { get; set; } = false;
+        public bool PowerBISignedIn { get; set; } = false;
+        public string PowerBIEmail { get; set; } = "";
+        public string PowerBIWorkspaceId { get; set; } = "";
+        public string PowerBIReportId { get; set; } = "";
+        public string PowerBIPublicUrl { get; set; } = "";
+
         // ── Persistence ──
         private static string SettingsPath => Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
@@ -66,5 +74,8 @@ namespace BIMBotPlugin.AI
 
         public bool IsOllamaConfigured =>
             OllamaEnabled && !string.IsNullOrWhiteSpace(OllamaUrl);
+
+        public bool IsPowerBIConfigured =>
+            PowerBIEnabled && (PowerBISignedIn || !string.IsNullOrWhiteSpace(PowerBIPublicUrl));
     }
 }

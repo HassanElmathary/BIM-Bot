@@ -16,7 +16,7 @@
 **Change to:**
 `182 MCP Tools | 19 Categories | 8 Revit Versions`
 
-The correct category count is 18: Reading, Creating, Editing, Documentation, QA/QC, AI, Power Tools, Advanced, Drafting, Export, Extended, File Management, MEP, Power BI, Rendering, Settings, Sketch, Transactions.
+The correct category count is 19: Reading, Creating, Editing, Documentation, QA/QC, AI, Power Tools, Advanced, Drafting, Export, Extended, File Management, MEP, Power BI, Rendering, Settings, Sketch, Transactions, BIM Dashboard.
 
 ---
 
@@ -159,7 +159,7 @@ Add a note in the Features section highlighting the new **Clash Detection** tool
 
 | File | Changes |
 |---|---|
-| `index.html` | Update stats (17→18), replace install section with .exe download CTA, add uninstall section, add community section, update footer, update nav links, add social proof badges |
+| `index.html` | Update stats (17→19), replace install section with .exe download CTA, add uninstall section, add community section, update footer, update nav links, add social proof badges |
 | `style.css` | Add styles for download button, community section, social proof badges |
 | `script.js` | No major changes needed |
 
@@ -178,7 +178,7 @@ Add a note in the Features section highlighting the new **Clash Detection** tool
 
 ## Priority Order
 
-1. 🔴 **Fix stats** (17 → 18 categories)
+1. 🔴 **Fix stats** (17 → 19 categories)
 2. 🔴 **Install section** (.exe download button)
 3. 🔴 **Add Uninstall section**
 4. 🟡 **Community section**
@@ -193,6 +193,6 @@ Add a note in the Features section highlighting the new **Clash Detection** tool
 - [x] What's the Discord server link? *(Not needed)*
 - [x] What's the new GitHub repo URL? *(Not adding at all)*
 - [x] Want to add a contact email to the footer? *(Yes: hassan.elmathary@gmail.com)*
-- [x] What's the ZIP filename for download? *(BIMBot-v2.1.0.zip)*
+- [x] What's the installer filename for download? *(BIMBot-Setup-2.1.0.exe)*
 - [x] What's the Claude config key? *(`"BIM-Bot"` — capital casing)*
-- [x] What install methods to document? *(PowerShell one-liner, NPX, ZIP manual)*
+- [x] What install methods to document? *(PowerShell one-liner, NPX, EXE Installer)*

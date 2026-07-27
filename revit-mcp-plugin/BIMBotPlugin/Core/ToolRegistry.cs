@@ -738,6 +738,15 @@ namespace BIMBotPlugin.Core
                 new[] { "bim dashboard", "compliance dashboard", "show dashboard", "bep dashboard" },
                 ToolParam.Req("data", "string", "JSON string containing the BimDashboardData payload"));
 
+            R("show_powerbi_report",
+                "Open an interactive Power BI report viewer inside Revit (WebView2). " +
+                "Supports authenticated Azure AD embedding (workspace/report IDs) and public 'Publish to Web' URLs.",
+                ToolCategory.Export,
+                new[] { "power bi viewer", "powerbi viewer", "embed report", "view power bi", "power bi dashboard", "powerbi embedded" },
+                ToolParam.Opt("workspaceId", "string", "Power BI workspace/group ID (for authenticated embedding)"),
+                ToolParam.Opt("reportId", "string", "Power BI report ID (for authenticated embedding)"),
+                ToolParam.Opt("publicUrl", "string", "Public 'Publish to Web' URL (no authentication needed)"));
+
             // ===================== VIEWS (22 tools) =====================
             R("duplicate_sheets", "Duplicate sheet", ToolCategory.Views,
                 new[] { "duplicate sheet", "copy sheet" },

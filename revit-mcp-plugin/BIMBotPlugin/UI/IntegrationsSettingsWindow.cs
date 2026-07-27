@@ -33,6 +33,12 @@ namespace BIMBotPlugin.UI
         private TextBox _ollamaUrlBox;
         private ComboBox _ollamaModelCombo;
 
+        // Power BI config
+        private Border _powerbiToggle;
+        private StackPanel _powerbiConfig;
+        private TextBox _powerbiPublicUrlBox;
+        private TextBlock _powerbiStatus;
+
         // Status dots
         private TextBlock _excelStatus, _notionStatus, _sheetsStatus, _sqliteStatus, _ollamaStatus;
 
@@ -89,6 +95,8 @@ namespace BIMBotPlugin.UI
             content.Children.Add(BuildSqliteCard());
             // 5. Ollama card
             content.Children.Add(BuildOllamaCard());
+            // 6. Power BI card
+            content.Children.Add(BuildPowerBICard());
 
             scroller.Content = content;
             Grid.SetRow(scroller, 1);
@@ -365,6 +373,129 @@ namespace BIMBotPlugin.UI
                 DarkTheme.CatViewSheet, _ollamaToggle, _ollamaStatus, _ollamaConfig);
         }
 
+        private Border BuildPowerBICard()
+        {
+            _powerbiConfig = new StackPanel { Margin = new Thickness(0, 10, 0, 0) };
+            _powerbiConfig.Visibility = ResultSettings.PowerBIEnabled ? Visibility.Visible : Visibility.Collapsed;
+
+            // ── Sign-in section ──
+            var signInRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 10) };
+
+            var signInBtn = new Button
+            {
+                Content = ResultSettings.PowerBISignedIn ? "✅ Signed In" : "🔑 Sign in with Microsoft",
+                Background = ResultSettings.PowerBISignedIn ? DarkTheme.FgGreen : DarkTheme.BgAccent,
+                Foreground = DarkTheme.FgWhite,
+                BorderThickness = new Thickness(0),
+                Padding = new Thickness(16, 8, 16, 8),
+                FontSize = 13,
+                FontWeight = FontWeights.SemiBold,
+                Cursor = Cursors.Hand
+            };
+            var signInBtnRef = signInBtn;
+            signInBtn.MouseEnter += (s, e) => signInBtnRef.Background = ResultSettings.PowerBISignedIn ? DarkTheme.B(0x66, 0xBB, 0x6A) : DarkTheme.BgAccentHover;
+            signInBtn.Click += async (s, e) =>
+            {
+                if (!PowerBIOAuthHelper.HasValidCredentials())
+                {
+                    var result = MessageBox.Show(
+                        "Azure AD credentials are not configured yet.\n\n" +
+                        "You need to:\n" +
+                        "1. Go to portal.azure.com > App Registrations\n" +
+                        "2. Create a new registration (Desktop app)\n" +
+                        "3. Add redirect URI: http://localhost:3848/callback\n" +
+                        "4. Add API permissions: Power BI Service > Report.Read.All\n" +
+                        "5. Copy Application (client) ID to POWERBI_CLIENT_ID in .env\n\n" +
+                        "Open Azure Portal now?",
+                        "Setup Required",
+                        MessageBoxButton.YesNo,
+                        MessageBoxImage.Warning);
+
+                    if (result == MessageBoxResult.Yes)
+                    {
+                        try { Process.Start(new ProcessStartInfo("https://portal.azure.com/#view/Microsoft_AAD_RegisteredApps") { UseShellExecute = true }); }
+                        catch { }
+                    }
+                    return;
+                }
+
+                try
+                {
+                    signInBtnRef.Content = "⏳ Opening browser...";
+                    signInBtnRef.IsEnabled = false;
+
+                    var email = await PowerBIOAuthHelper.SignInAsync();
+
+                    signInBtnRef.Content = $"✅ {email}";
+                    signInBtnRef.Background = DarkTheme.FgGreen;
+                    signInBtnRef.IsEnabled = true;
+
+                    ResultSettings.PowerBISignedIn = true;
+                    ResultSettings.PowerBIEmail = email ?? "";
+                    ResultSettings.PowerBIEnabled = true;
+
+                    UpdatePowerBIStatus();
+                }
+                catch (Exception ex)
+                {
+                    signInBtnRef.Content = "🔑 Sign in with Microsoft";
+                    signInBtnRef.Background = DarkTheme.BgAccent;
+                    signInBtnRef.IsEnabled = true;
+
+                    MessageBox.Show($"Sign-in failed:\n\n{ex.Message}", "Power BI Sign-In Error",
+                        MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+            };
+            signInRow.Children.Add(signInBtn);
+
+            if (ResultSettings.PowerBISignedIn && !string.IsNullOrEmpty(ResultSettings.PowerBIEmail))
+            {
+                signInRow.Children.Add(new TextBlock
+                {
+                    Text = $"  {ResultSettings.PowerBIEmail}",
+                    FontSize = 12,
+                    Foreground = DarkTheme.FgDim,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Margin = new Thickness(8, 0, 0, 0)
+                });
+            }
+
+            _powerbiConfig.Children.Add(signInRow);
+
+            // ── Separator ──
+            _powerbiConfig.Children.Add(new Border
+            {
+                Height = 1,
+                Background = DarkTheme.BorderDim,
+                Margin = new Thickness(0, 2, 0, 10)
+            });
+
+            // ── Public URL fallback ──
+            var urlLabel = DarkTheme.MakeLabel("Or paste a 'Publish to Web' URL (no sign-in needed)");
+            urlLabel.Foreground = DarkTheme.FgDim;
+            urlLabel.FontSize = 11;
+            _powerbiConfig.Children.Add(urlLabel);
+
+            _powerbiPublicUrlBox = DarkTheme.MakeTextBox(ResultSettings.PowerBIPublicUrl, "https://app.powerbi.com/view?r=...");
+            _powerbiPublicUrlBox.FontFamily = new FontFamily("Consolas");
+            _powerbiPublicUrlBox.Margin = new Thickness(0, 4, 0, 8);
+            _powerbiConfig.Children.Add(_powerbiPublicUrlBox);
+
+            // ── Help links ──
+            _powerbiConfig.Children.Add(MakeHelpLink("📘 Azure AD App Registration →", "https://portal.azure.com/#view/Microsoft_AAD_RegisteredApps"));
+            _powerbiConfig.Children.Add(MakeHelpLink("📘 Publish to Web guide →", "https://learn.microsoft.com/power-bi/collaborate-share/service-publish-to-web"));
+
+            _powerbiStatus = MakeStatusDot(ResultSettings.PowerBIEnabled, ResultSettings.IsPowerBIConfigured);
+            _powerbiToggle = DarkTheme.MakeToggleSwitch(ResultSettings.PowerBIEnabled, on =>
+            {
+                _powerbiConfig.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
+                UpdatePowerBIStatus();
+            });
+
+            return BuildIntegrationCard("📊", "Power BI", "View published Power BI reports inside Revit",
+                DarkTheme.B(0xF2, 0xC8, 0x11), _powerbiToggle, _powerbiStatus, _powerbiConfig);
+        }
+
         // ════════════════════════════════════════════
         // Shared card builder
         // ════════════════════════════════════════════
@@ -534,6 +665,14 @@ namespace BIMBotPlugin.UI
             UpdateStatusDot(_ollamaStatus, on, configured);
         }
 
+        private void UpdatePowerBIStatus()
+        {
+            var on = (bool)_powerbiToggle.Tag;
+            var url = GetTextBoxValue(_powerbiPublicUrlBox);
+            var configured = on && (ResultSettings.PowerBISignedIn || !string.IsNullOrWhiteSpace(url));
+            UpdateStatusDot(_powerbiStatus, on, configured);
+        }
+
         private TextBlock MakeHelpLink(string text, string url)
         {
             var link = new TextBlock
@@ -605,6 +744,14 @@ namespace BIMBotPlugin.UI
                 OllamaEnabled = (bool)_ollamaToggle.Tag,
                 OllamaUrl = GetTextBoxValue(_ollamaUrlBox),
                 OllamaModel = GetComboText(_ollamaModelCombo),
+
+                // Power BI
+                PowerBIEnabled = (bool)_powerbiToggle.Tag,
+                PowerBISignedIn = ResultSettings.PowerBISignedIn,
+                PowerBIEmail = ResultSettings.PowerBIEmail,
+                PowerBIWorkspaceId = ResultSettings.PowerBIWorkspaceId,
+                PowerBIReportId = ResultSettings.PowerBIReportId,
+                PowerBIPublicUrl = GetTextBoxValue(_powerbiPublicUrlBox),
             };
 
             ResultSettings.Save();

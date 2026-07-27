@@ -131,7 +131,7 @@ Run these commands to create and push the repo:
 gh auth login --web --git-protocol https
 
 # 2. Push to existing repo
-cd "C:\Users\hassa\OneDrive\01-me\Revit MCP"
+cd "%USERPROFILE%\OneDrive\01-me\Revit MCP"   # adjust to wherever you cloned the repo
 git push origin main
 
 # 3. Create a new release

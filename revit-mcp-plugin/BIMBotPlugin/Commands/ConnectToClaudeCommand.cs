@@ -39,9 +39,9 @@ namespace BIMBotPlugin.Commands
                     if (anyChanged)
                     {
                         sb.AppendLine("To apply the changes:");
-                        sb.AppendLine("1. Fully restart Claude (File → Exit, then reopen)");
+                        sb.AppendLine("1. Fully restart the configured client (Claude/Cursor/Windsurf/VS Code — File → Exit, then reopen)");
                         sb.AppendLine("2. Keep Revit open — the BIM-Bot service starts automatically");
-                        sb.AppendLine("3. Ask Claude: \"Use BIM-Bot to list the walls in the model\"");
+                        sb.AppendLine("3. Ask it: \"Use BIM-Bot to list the walls in the model\"");
                     }
                     else
                     {

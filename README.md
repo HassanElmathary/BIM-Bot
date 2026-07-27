@@ -196,13 +196,14 @@ BIM-Bot/
 │       │   ├── excel-client.ts
 │       │   ├── notion-client.ts
 │       │   └── sqlite-client.ts
-│       ├── tools/                  # 179 MCP tools (18 files)
+│       ├── tools/                  # 182 MCP tools (19 files)
 │       │   ├── reading_tools.ts
 │       │   ├── creating_tools.ts
 │       │   ├── editing_tools.ts
 │       │   ├── documentation_tools.ts
 │       │   ├── qaqc_tools.ts
 │       │   ├── ai_tools.ts
+│       │   ├── bim_dashboard_tools.ts
 │       │   ├── advanced_tools.ts
 │       │   ├── power_tools.ts
 │       │   ├── drafting_tools.ts

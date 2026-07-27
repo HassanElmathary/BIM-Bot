@@ -192,6 +192,31 @@ namespace BIMBotPlugin.Commands
         }
     }
 
+    // ===== POWER BI VIEWER =====
+    [Transaction(TransactionMode.Manual)]
+    public class Tool_ViewPowerBIReport : IExternalCommand
+    {
+        public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
+        {
+            try
+            {
+                var settings = AI.IntegrationSettings.Load();
+                var window = new UI.PowerBIViewerWindow(
+                    settings.PowerBIWorkspaceId,
+                    settings.PowerBIReportId,
+                    settings.PowerBIPublicUrl);
+                window.Show();
+                return Result.Succeeded;
+            }
+            catch (System.Exception ex)
+            {
+                TaskDialog.Show("Power BI Viewer", $"Failed to open viewer:\n{ex.Message}");
+                message = ex.Message;
+                return Result.Failed;
+            }
+        }
+    }
+
     // ===== FAMILY & PARAMETER TOOLS =====
     [Transaction(TransactionMode.Manual)]
     public class Tool_ManageFamilies : IExternalCommand

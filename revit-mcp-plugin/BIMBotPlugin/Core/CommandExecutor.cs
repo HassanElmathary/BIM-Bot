@@ -627,6 +627,10 @@ namespace BIMBotPlugin.Core
                 case "show_bim_dashboard":
                     return ShowBimDashboard(parameters);
 
+                // ===== POWER BI VIEWER =====
+                case "show_powerbi_report":
+                    return ShowPowerBIReport(parameters);
+
                 default:
                     throw new InvalidOperationException($"Unknown command: {command}");
             }
@@ -6056,6 +6060,46 @@ namespace BIMBotPlugin.Core
             }
         }
 
+        // ===== POWER BI VIEWER =====
+
+        private static JToken ShowPowerBIReport(JObject parameters)
+        {
+            try
+            {
+                var workspaceId = parameters["workspaceId"]?.ToString();
+                var reportId = parameters["reportId"]?.ToString();
+                var publicUrl = parameters["publicUrl"]?.ToString();
+
+                // Fall back to saved settings if not provided
+                if (string.IsNullOrEmpty(workspaceId) && string.IsNullOrEmpty(publicUrl))
+                {
+                    var settings = AI.IntegrationSettings.Load();
+                    if (!settings.PowerBIEnabled)
+                        return new JObject { ["error"] = "Power BI integration is not enabled. Enable it in Integrations Settings." };
+
+                    workspaceId = settings.PowerBIWorkspaceId;
+                    reportId = settings.PowerBIReportId;
+                    publicUrl = settings.PowerBIPublicUrl;
+                }
+
+                var window = new PowerBIViewerWindow(workspaceId, reportId, publicUrl);
+                window.Show();
+
+                return new JObject
+                {
+                    ["message"] = "✅ Power BI report viewer opened.",
+                    ["mode"] = string.IsNullOrEmpty(publicUrl) ? "authenticated" : "publicUrl"
+                };
+            }
+            catch (Exception ex)
+            {
+                return new JObject
+                {
+                    ["error"] = $"Failed to open Power BI viewer: {ex.Message}",
+                    ["details"] = ex.ToString()
+                };
+            }
+        }
+
     }
 }
-

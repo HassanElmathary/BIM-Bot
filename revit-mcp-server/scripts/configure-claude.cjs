@@ -63,7 +63,10 @@ function isEntryValid(entry) {
 /**
  * Ensure the BIM-Bot entry in one config file. Returns a status string.
  */
-function ensureConfig(label, configPath, nodeExe, indexJs, createIfMissing) {
+function ensureConfig(label, configPath, nodeExe, indexJs, createIfMissing, opts = {}) {
+    const serversKey = opts.serversKey || "mcpServers";
+    const stdioType = !!opts.stdioType;
+
     let config = {};
     let hadBom = false;
     if (fs.existsSync(configPath)) {
@@ -79,20 +82,23 @@ function ensureConfig(label, configPath, nodeExe, indexJs, createIfMissing) {
         return `${label}: not installed (no config file) — skipped`;
     }
 
-    if (!config.mcpServers || typeof config.mcpServers !== "object") {
-        config.mcpServers = {};
+    if (!config[serversKey] || typeof config[serversKey] !== "object") {
+        config[serversKey] = {};
     }
 
-    if (isEntryValid(config.mcpServers[SERVER_KEY]) && !hadBom) {
+    if (isEntryValid(config[serversKey][SERVER_KEY]) && !hadBom) {
         return `${label}: already configured correctly`;
     }
 
-    const wasStale = !!config.mcpServers[SERVER_KEY];
-    config.mcpServers[SERVER_KEY] = {
+    const wasStale = !!config[serversKey][SERVER_KEY];
+    const entry = {
         command: nodeExe,
         args: [indexJs],
         env: {},
     };
+    // VS Code requires an explicit transport type on each server entry.
+    if (stdioType) entry.type = "stdio";
+    config[serversKey][SERVER_KEY] = entry;
 
     if (fs.existsSync(configPath)) {
         fs.copyFileSync(configPath, configPath + ".bimbot-backup");
@@ -123,7 +129,24 @@ function main() {
     const claudeCodeConfig = path.join(home, ".claude.json");
     console.log(ensureConfig("Claude Code", claudeCodeConfig, nodeExe, indexJs, false));
 
-    console.log("\nDone. Restart Claude for changes to take effect.");
+    // Cursor — same "mcpServers" schema as Claude. Create when ~/.cursor exists.
+    const cursorDir = path.join(home, ".cursor");
+    console.log(ensureConfig("Cursor", path.join(cursorDir, "mcp.json"),
+        nodeExe, indexJs, fs.existsSync(cursorDir)));
+
+    // Windsurf (Codeium) — also "mcpServers" schema.
+    const codeiumDir = path.join(home, ".codeium");
+    console.log(ensureConfig("Windsurf", path.join(codeiumDir, "windsurf", "mcp_config.json"),
+        nodeExe, indexJs, fs.existsSync(codeiumDir)));
+
+    // VS Code / Insiders — top-level "servers" key, each entry needs type "stdio".
+    for (const [label, dirName] of [["VS Code", "Code"], ["VS Code Insiders", "Code - Insiders"]]) {
+        const codeRoot = path.join(appData, dirName);
+        console.log(ensureConfig(label, path.join(codeRoot, "User", "mcp.json"),
+            nodeExe, indexJs, fs.existsSync(codeRoot), { serversKey: "servers", stdioType: true }));
+    }
+
+    console.log("\nDone. Restart your MCP client (Claude, Cursor, Windsurf, VS Code) for changes to take effect.");
 }
 
 main();

@@ -3,8 +3,6 @@
 #
 # Output: installer\output\BIMBot-Setup-<version>.exe  (full Inno Setup installer:
 #         Revit plugin + MCP server + portable Node.js + Claude auto-config)
-#         installer\output\BIMBot-v<version>.zip       (the exe zipped, for hosting
-#         on Firebase Spark which forbids raw .exe files)
 
 Write-Host "============================================"
 Write-Host "  BIM-Bot Installer - Build Script"
@@ -21,7 +19,7 @@ $version = (Select-String -Path $issPath -Pattern '#define\s+MyAppVersion\s+"([^
 Write-Host "Version: $version"
 Write-Host ""
 
-# 1. Build plugin — both frameworks the installer bundles (net48 for Revit
+# 1. Build plugin - both frameworks the installer bundles (net48 for Revit
 #    2020-2024, net8.0-windows for 2025+)
 Write-Host "[1/4] Building Revit Plugin (net48 + net8.0-windows)..."
 Push-Location "$root\revit-mcp-plugin\BIMBotPlugin"
@@ -44,7 +42,7 @@ Write-Host "  [OK] MCP server built"
 Write-Host "[3/4] Compiling Inno Setup installer..."
 $iscc = "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe"
 if (-not (Test-Path $iscc)) { $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" }
-if (-not (Test-Path $iscc)) { Write-Host "FAILED: ISCC.exe not found — install Inno Setup 6"; exit 1 }
+if (-not (Test-Path $iscc)) { Write-Host "FAILED: ISCC.exe not found - install Inno Setup 6"; exit 1 }
 & $iscc $issPath /Q
 if ($LASTEXITCODE -ne 0) { Write-Host "FAILED to compile installer!"; exit 1 }
 $setupExe = "$root\installer\output\BIMBot-Setup-$version.exe"
@@ -52,25 +50,9 @@ if (-not (Test-Path $setupExe)) { Write-Host "FAILED: $setupExe was not produced
 $exeSizeMB = [math]::Round((Get-Item $setupExe).Length / 1048576, 1)
 Write-Host "  [OK] BIMBot-Setup-$version.exe compiled ($exeSizeMB MB)"
 
-# 4. Zip the installer exe for distribution
-Write-Host "[4/4] Creating ZIP archive..."
-$zipPath = "$root\installer\output\BIMBot-v$version.zip"
-if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
-Compress-Archive -Path $setupExe, "$root\LICENSE" -DestinationPath $zipPath -CompressionLevel Optimal
-$zipSizeMB = [math]::Round((Get-Item $zipPath).Length / 1048576, 1)
-Write-Host "  [OK] ZIP created: $zipSizeMB MB"
-
-# Verify the zip actually contains the setup exe
-Add-Type -AssemblyName System.IO.Compression.FileSystem
-$zip = [System.IO.Compression.ZipFile]::OpenRead($zipPath)
-$hasExe = $zip.Entries | Where-Object { $_.Name -eq "BIMBot-Setup-$version.exe" }
-$zip.Dispose()
-if (-not $hasExe) { Write-Host "FAILED: ZIP does not contain BIMBot-Setup-$version.exe!"; exit 1 }
-Write-Host "  [OK] Verified: ZIP contains BIMBot-Setup-$version.exe"
-
+# 4. Done
 Write-Host ""
 Write-Host "============================================"
 Write-Host "  BUILD COMPLETE!"
 Write-Host "  Installer: $setupExe"
-Write-Host "  ZIP:       $zipPath"
 Write-Host "============================================"

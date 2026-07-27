@@ -37,7 +37,9 @@
       "Bash(curl -sI https://revit-mcp10.web.app/BIMBot-Setup-2.1.0.zip)",
       "Bash(curl -sI https://elmthary.space/)",
       "Bash(curl -s https://elmthary.space/)",
-      "Bash(curl -sI https://elmthary.space/BIMBot-Setup-2.1.0.zip)"
+      "Bash(curl -sI https://elmthary.space/BIMBot-Setup-2.1.0.zip)",
+      "Bash(xargs grep -l \"PowerBI\\\\|export_to_powerbi\")",
+      "mcp__mcp-registry__search_mcp_registry"
     ]
   }
 }

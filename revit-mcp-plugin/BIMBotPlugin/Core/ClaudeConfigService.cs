@@ -126,14 +126,17 @@ namespace BIMBotPlugin.Core
             return true;
         }
 
-        private static JObject BuildEntry(string nodeExe, string indexJs)
+        private static JObject BuildEntry(string nodeExe, string indexJs, bool stdioType)
         {
-            return new JObject
+            var entry = new JObject
             {
                 ["command"] = nodeExe,
                 ["args"] = new JArray { indexJs },
                 ["env"] = new JObject()
             };
+            // VS Code requires an explicit transport type on each server entry.
+            if (stdioType) entry["type"] = "stdio";
+            return entry;
         }
 
         /// <summary>
@@ -143,7 +146,8 @@ namespace BIMBotPlugin.Core
         /// backup is written before any modification.
         /// </summary>
         private static ConfigureResult EnsureConfigFile(
-            string target, string configPath, string nodeExe, string indexJs, bool createIfMissing)
+            string target, string configPath, string nodeExe, string indexJs, bool createIfMissing,
+            string serversKey = "mcpServers", bool stdioType = false)
         {
             var result = new ConfigureResult { Target = target };
 
@@ -171,10 +175,10 @@ namespace BIMBotPlugin.Core
                 return result;
             }
 
-            if (config["mcpServers"] is not JObject mcpServers)
+            if (config[serversKey] is not JObject mcpServers)
             {
                 mcpServers = new JObject();
-                config["mcpServers"] = mcpServers;
+                config[serversKey] = mcpServers;
             }
 
             var existing = mcpServers[ServerKey] as JObject;
@@ -194,7 +198,7 @@ namespace BIMBotPlugin.Core
                 var dir = Path.GetDirectoryName(configPath);
                 if (dir != null) Directory.CreateDirectory(dir);
 
-                mcpServers[ServerKey] = BuildEntry(nodeExe, indexJs);
+                mcpServers[ServerKey] = BuildEntry(nodeExe, indexJs, stdioType);
                 File.WriteAllText(configPath, config.ToString(Formatting.Indented));
 
                 result.Configured = true;
@@ -252,6 +256,35 @@ namespace BIMBotPlugin.Core
             var claudeCodeConfig = Path.Combine(userProfile, ".claude.json");
             results.Add(EnsureConfigFile("Claude Code", claudeCodeConfig, nodeExe, indexJs,
                 createIfMissing: false));
+
+            // Cursor — same schema as Claude ("mcpServers"). Create the config
+            // when the app has been run (its ~/.cursor folder exists).
+            var cursorDir = Path.Combine(userProfile, ".cursor");
+            var cursorConfig = Path.Combine(cursorDir, "mcp.json");
+            results.Add(EnsureConfigFile("Cursor", cursorConfig, nodeExe, indexJs,
+                createIfMissing: Directory.Exists(cursorDir)));
+
+            // Windsurf (Codeium) — also uses the "mcpServers" schema.
+            var windsurfDir = Path.Combine(userProfile, ".codeium", "windsurf");
+            var windsurfConfig = Path.Combine(windsurfDir, "mcp_config.json");
+            results.Add(EnsureConfigFile("Windsurf", windsurfConfig, nodeExe, indexJs,
+                createIfMissing: Directory.Exists(Path.Combine(userProfile, ".codeium"))));
+
+            // VS Code (and Insiders) — different schema: top-level "servers" key
+            // and each entry needs "type": "stdio". User-level mcp.json lives in
+            // %APPDATA%\Code\User\mcp.json.
+            foreach (var (label, codeDirName) in new[]
+                     {
+                         ("VS Code", "Code"),
+                         ("VS Code Insiders", "Code - Insiders"),
+                     })
+            {
+                var codeRoot = Path.Combine(appData, codeDirName);
+                var codeConfig = Path.Combine(codeRoot, "User", "mcp.json");
+                results.Add(EnsureConfigFile(label, codeConfig, nodeExe, indexJs,
+                    createIfMissing: Directory.Exists(codeRoot),
+                    serversKey: "servers", stdioType: true));
+            }
 
             return results;
         }
