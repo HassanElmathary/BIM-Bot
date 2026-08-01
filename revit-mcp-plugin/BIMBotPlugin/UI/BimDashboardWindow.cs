@@ -64,6 +64,7 @@ namespace BIMBotPlugin.UI
             _data = data ?? new BimDashboardData();
             _filteredElements = new List<ElementRowModel>(_data.Elements ?? new List<ElementRowModel>());
 
+            _isDarkMode = ThemeManager.IsDarkMode;
             ApplyThemeBrushes();
             InitializeWindow();
             BuildUI();
@@ -98,27 +99,28 @@ namespace BIMBotPlugin.UI
                 _bgCard = DarkTheme.BgCard;
                 _bgCardHover = DarkTheme.BgCardHover;
                 _bgInput = DarkTheme.BgInput;
-                _fgPrimary = Brushes.White;
+                _fgPrimary = DarkTheme.FgWhite;
                 _fgSecondary = DarkTheme.FgLight;
                 _fgDim = DarkTheme.FgDim;
                 _borderBrush = DarkTheme.BorderDim;
             }
             else
             {
-                _bgCanvas = B(0xF8, 0xFA, 0xFC);
-                _bgCard = Brushes.White;
-                _bgCardHover = B(0xF1, 0xF5, 0xF9);
-                _bgInput = B(0xF1, 0xF5, 0xF9);
-                _fgPrimary = B(0x1E, 0x29, 0x3B);
-                _fgSecondary = B(0x47, 0x55, 0x69);
-                _fgDim = B(0x64, 0x74, 0x8B);
-                _borderBrush = B(0xE2, 0xE8, 0xF0);
+                _bgCanvas = LightTheme.BgDark;
+                _bgCard = LightTheme.BgCard;
+                _bgCardHover = LightTheme.BgCardHover;
+                _bgInput = LightTheme.BgInput;
+                _fgPrimary = LightTheme.FgWhite;
+                _fgSecondary = LightTheme.FgLight;
+                _fgDim = LightTheme.FgDim;
+                _borderBrush = LightTheme.BorderDim;
             }
         }
 
         private void ToggleTheme()
         {
             _isDarkMode = !_isDarkMode;
+            ThemeManager.SetTheme(_isDarkMode ? ThemeMode.Dark : ThemeMode.Light);
             ApplyThemeBrushes();
             // Rebuild entire UI (simplest approach for full theme swap)
             _tabButtons.Clear();

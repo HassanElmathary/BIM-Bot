@@ -39,6 +39,7 @@ namespace BIMBotPlugin.UI
             WindowStyle = WindowStyle.None;
             AllowsTransparency = true;
             Background = Brushes.Transparent;
+            ThemeManager.ApplyTheme(this);
         }
 
         private void BuildUI()
@@ -47,7 +48,7 @@ namespace BIMBotPlugin.UI
             var mainBorder = new Border
             {
                 CornerRadius = new CornerRadius(16),
-                Background = DarkTheme.BgDark,
+                Background = ThemeManager.BgCanvas,
                 Margin = new Thickness(16),
                 Effect = new DropShadowEffect
                 {

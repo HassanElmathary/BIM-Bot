@@ -49,10 +49,10 @@ namespace BIMBotPlugin.UI
 
             Title = "AI Settings";
             Width = 440;
-            Height = 440;
+            Height = 500;
             WindowStartupLocation = WindowStartupLocation.CenterOwner;
             ResizeMode = ResizeMode.NoResize;
-            DarkTheme.Apply(this);
+            ThemeManager.ApplyTheme(this);
 
             var stack = new StackPanel { Margin = new Thickness(24) };
 
@@ -64,6 +64,21 @@ namespace BIMBotPlugin.UI
                 Foreground = DarkTheme.FgLight,
                 Margin = new Thickness(0, 0, 0, 16)
             });
+
+            // --- Theme Selection ---
+            stack.Children.Add(DarkTheme.MakeLabel("Theme Appearance"));
+            var themeCombo = DarkTheme.MakeComboBox(
+                new[] { "Dark", "Light" },
+                ThemeManager.IsDarkMode ? "Dark" : "Light"
+            );
+            themeCombo.Margin = new Thickness(0, 0, 0, 16);
+            themeCombo.SelectionChanged += (s, e) =>
+            {
+                var selected = (themeCombo.SelectedItem as ComboBoxItem)?.Content as string;
+                ThemeManager.SetTheme(selected == "Light" ? ThemeMode.Light : ThemeMode.Dark);
+                ThemeManager.ApplyTheme(this);
+            };
+            stack.Children.Add(themeCombo);
 
             // --- Provider selector ---
             stack.Children.Add(DarkTheme.MakeLabel("Provider"));

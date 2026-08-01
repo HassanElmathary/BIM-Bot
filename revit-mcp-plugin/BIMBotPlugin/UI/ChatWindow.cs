@@ -73,9 +73,8 @@ namespace BIMBotPlugin.UI
             MinWidth = 420;
             MinHeight = 560;
             WindowStartupLocation = WindowStartupLocation.CenterScreen;
-            Background = BgCanvas;
-            Foreground = FgPrimary;
-            FontFamily = new FontFamily("Segoe UI");
+            ThemeManager.ApplyTheme(this);
+            ThemeManager.ThemeChanged += (s, m) => ThemeManager.ApplyTheme(this);
 
             // Orchestrators
             _orchestrator = new ChatOrchestrator();
