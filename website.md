@@ -1,5 +1,5 @@
 # Website Update Brief — elmthary.space
-**Date:** April 11, 2026  
+**Date:** August 5, 2026  
 **From:** Hassan Elmathary  
 **To:** Web Developer  
 **Scope:** Update the BIM-Bot website with new sections, installation methods, content fixes, and improvements
@@ -14,7 +14,7 @@
 `179 MCP Tools | 17 Categories | 7 Revit Versions`
 
 **Change to:**
-`185 MCP Tools | 19 Categories | 8 Revit Versions`
+`187 MCP Tools | 19 Categories | 8 Revit Versions`
 
 The correct category count is 19: Reading, Creating, Editing, Documentation, QA/QC, AI, Power Tools, Advanced, Drafting, Export, Extended, File Management, MEP, Power BI, Rendering, Settings, Sketch, Transactions, BIM Dashboard.
 
@@ -26,7 +26,7 @@ The correct category count is 19: Reading, Creating, Editing, Documentation, QA/
 `179 tools across 17 categories`
 
 **Change to:**
-`185 tools across 19 categories`
+`187 tools across 19 categories`
 
 ---
 
@@ -155,11 +155,29 @@ Add a note in the Features section highlighting the new **Clash Detection** tool
 
 ---
 
+### 12. 🆕 UPDATE: Enhanced QA/QC Audit & Coordination Tools (Aug 2026)
+
+Update the QA/QC feature description to highlight the enhanced `audit_model_standards` tool:
+- **Workset assignment validation** — verify elements are on the correct workset per BEP standard
+- **Phase compliance checking** — ensure views use the required phase filter
+- **Shared parameter validation** — check that required shared parameters exist in families
+- **BEP clause references** — violations now link back to specific BEP/EIR clauses
+- **Baseline export** — export the current model's config as a reusable JSON standard
+- **URL-based standards** — load standards from any URL (e.g., raw GitHub)
+- **Audit history tracking** — tracks compliance scores over time with delta reporting
+
+Also add the new `validate_shared_coordinates` tool:
+- Validates shared coordinate alignment across all linked models
+- Reports per-link offsets and rotation angles
+- Optional auto-fix to acquire coordinates from a master link
+
+---
+
 ## File Checklist
 
 | File | Changes |
 |---|---|
-| `index.html` | Update stats (17→19), replace install section with .exe download CTA, add uninstall section, add community section, update footer, update nav links, add social proof badges |
+| `index.html` | Update stats (185→187 tools), replace install section with .exe download CTA, add uninstall section, add community section, update footer, update nav links, add social proof badges, add enhanced QA/QC audit features |
 | `style.css` | Add styles for download button, community section, social proof badges |
 | `script.js` | No major changes needed |
 
