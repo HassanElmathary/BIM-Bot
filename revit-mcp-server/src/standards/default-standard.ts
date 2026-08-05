@@ -36,6 +36,35 @@ export interface AuditStandards {
             allowCadImports?: boolean;
             allowInPlaceFamilies?: boolean;
         };
+        worksetAssignments?: Array<{
+            category: string;
+            worksetName: string;
+            severity?: "error" | "warning";
+            bepReference?: string;
+        }>;
+        phaseCompliance?: {
+            requireViewPhaseFilter?: string;
+            defaultElementPhase?: string;
+            severity?: "error" | "warning";
+            bepReference?: string;
+        };
+        sharedParameters?: Array<{
+            paramName: string;
+            guid?: string;
+            boundCategories: string[];
+            severity?: "error" | "warning";
+            bepReference?: string;
+        }>;
+    };
+    scoringWeights?: {
+        naming?: number;
+        requiredParameters?: number;
+        lineWeights?: number;
+        views?: number;
+        health?: number;
+        worksetAssignments?: number;
+        phaseCompliance?: number;
+        sharedParameters?: number;
     };
 }
 

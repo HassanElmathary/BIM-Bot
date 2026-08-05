@@ -154,6 +154,8 @@ namespace BIMBotPlugin.Core
                     return CheckNamingConventionsCmd(doc, parameters);
                 case "validate_parameters":
                     return ValidateParametersCmd(doc, parameters);
+                case "validate_shared_coordinates":
+                    return ValidateSharedCoordinates(doc, parameters);
                 case "check_room_compliance":
                 case "find_duplicates":
                 case "check_links_status":

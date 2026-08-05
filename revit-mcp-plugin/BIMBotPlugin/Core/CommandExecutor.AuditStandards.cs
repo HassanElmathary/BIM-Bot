@@ -22,9 +22,9 @@ namespace BIMBotPlugin.Core
         private static JObject Violation(
             string ruleId, string ruleType, string severity, string message,
             long elementId = 0, string elementName = "", string category = "",
-            bool fixable = false)
+            bool fixable = false, string bepReference = null)
         {
-            return new JObject
+            var obj = new JObject
             {
                 ["ruleId"] = ruleId,
                 ["ruleType"] = ruleType,
@@ -36,6 +36,8 @@ namespace BIMBotPlugin.Core
                 ["fixable"] = fixable,
                 ["fixed"] = false
             };
+            if (bepReference != null) obj["bepReference"] = bepReference;
+            return obj;
         }
 
         private static IEnumerable<(long Id, string Name, Element Elem)> CollectNamedTargets(Document doc, string target)
@@ -269,13 +271,204 @@ namespace BIMBotPlugin.Core
             }
         }
 
+        private static int CheckWorksetRule(Document doc, JObject rule, JArray violations, string ruleId, bool fix)
+        {
+            var evaluations = 0;
+            var categoryName = rule["category"]?.ToString() ?? "";
+            var worksetName = rule["worksetName"]?.ToString() ?? "";
+            var severity = rule["severity"]?.ToString() ?? "error";
+            var bepRef = rule["bepReference"]?.ToString();
+
+            if (!doc.IsWorkshared || string.IsNullOrEmpty(worksetName)) return evaluations;
+
+            var builtInCat = GetBuiltInCategory(categoryName);
+            if (builtInCat == BuiltInCategory.INVALID) return evaluations;
+
+            // Find target workset
+            var targetWorkset = new FilteredWorksetCollector(doc)
+                .OfKind(WorksetKind.UserWorkset)
+                .FirstOrDefault(w => string.Equals(w.Name, worksetName, StringComparison.OrdinalIgnoreCase));
+            if (targetWorkset == null)
+            {
+                violations.Add(Violation(ruleId, "workset", severity,
+                    $"Target workset '{worksetName}' does not exist in the model.",
+                    bepReference: bepRef));
+                return evaluations;
+            }
+
+            var elements = new FilteredElementCollector(doc)
+                .OfCategory(builtInCat).WhereElementIsNotElementType().ToElements();
+
+            foreach (var elem in elements)
+            {
+                evaluations++;
+                var elemWorksetId = elem.WorksetId;
+                if (elemWorksetId.IntegerValue == targetWorkset.Id.IntegerValue) continue;
+
+                var currentWorkset = doc.GetWorksetTable().GetWorkset(elemWorksetId);
+                var currentName = currentWorkset?.Name ?? "Unknown";
+                var v = Violation(ruleId, "workset", severity,
+                    $"Element is on workset '{currentName}', standard requires '{worksetName}'",
+                    elem.Id.Value, elem.Name, categoryName, fixable: true, bepReference: bepRef);
+
+                if (fix)
+                {
+                    try
+                    {
+                        var wsParam = elem.get_Parameter(BuiltInParameter.ELEM_PARTITION_PARAM);
+                        if (wsParam != null && !wsParam.IsReadOnly)
+                        {
+                            wsParam.Set(targetWorkset.Id.IntegerValue);
+                            v["fixed"] = true;
+                        }
+                    }
+                    catch { /* Element may be locked/borrowed by another user */ }
+                }
+                violations.Add(v);
+            }
+            return evaluations;
+        }
+
+        private static int CheckPhaseRule(Document doc, JObject phaseRules, JArray violations, bool fix)
+        {
+            var evaluations = 0;
+            if (phaseRules == null) return evaluations;
+
+            var severity = phaseRules["severity"]?.ToString() ?? "warning";
+            var bepRef = phaseRules["bepReference"]?.ToString();
+            var requiredFilterName = phaseRules["requireViewPhaseFilter"]?.ToString();
+
+            if (string.IsNullOrEmpty(requiredFilterName)) return evaluations;
+
+            // Find the target phase filter
+            var targetFilter = new FilteredElementCollector(doc)
+                .OfClass(typeof(PhaseFilter))
+                .Cast<PhaseFilter>()
+                .FirstOrDefault(pf => string.Equals(pf.Name, requiredFilterName, StringComparison.OrdinalIgnoreCase));
+
+            if (targetFilter == null)
+            {
+                violations.Add(Violation("phaseCompliance", "phase", severity,
+                    $"Required phase filter '{requiredFilterName}' not found in the model.",
+                    bepReference: bepRef));
+                return evaluations;
+            }
+
+            var checkedTypes = new[]
+            {
+                ViewType.FloorPlan, ViewType.CeilingPlan, ViewType.Section,
+                ViewType.Elevation, ViewType.ThreeD, ViewType.AreaPlan
+            };
+
+            var views = new FilteredElementCollector(doc).OfClass(typeof(View)).Cast<View>()
+                .Where(v => !v.IsTemplate && checkedTypes.Contains(v.ViewType));
+
+            foreach (var view in views)
+            {
+                evaluations++;
+                var viewPhaseFilter = view.get_Parameter(BuiltInParameter.VIEW_PHASE_FILTER);
+                if (viewPhaseFilter == null) continue;
+
+                var currentFilterId = viewPhaseFilter.AsElementId();
+                if (currentFilterId == targetFilter.Id) continue;
+
+                var currentFilter = doc.GetElement(currentFilterId);
+                var currentName = currentFilter?.Name ?? "None";
+                var v = Violation("phaseCompliance", "phase", severity,
+                    $"View phase filter is '{currentName}', standard requires '{requiredFilterName}'",
+                    view.Id.Value, view.Name, view.ViewType.ToString(), fixable: true, bepReference: bepRef);
+
+                if (fix)
+                {
+                    try
+                    {
+                        if (!viewPhaseFilter.IsReadOnly)
+                        {
+                            viewPhaseFilter.Set(targetFilter.Id);
+                            v["fixed"] = true;
+                        }
+                    }
+                    catch { }
+                }
+                violations.Add(v);
+            }
+            return evaluations;
+        }
+
+        private static int CheckSharedParameterRule(Document doc, JObject rule, JArray violations, string ruleId)
+        {
+            var evaluations = 0;
+            var paramName = rule["paramName"]?.ToString() ?? "";
+            var guidStr = rule["guid"]?.ToString();
+            var boundCategories = (rule["boundCategories"] as JArray)?.Select(c => c.ToString()).ToList() ?? new List<string>();
+            var severity = rule["severity"]?.ToString() ?? "error";
+            var bepRef = rule["bepReference"]?.ToString();
+
+            if (string.IsNullOrEmpty(paramName) || boundCategories.Count == 0) return evaluations;
+
+            // Find the parameter definition in the bindings
+            Definition foundDef = null;
+            ElementBinding foundBinding = null;
+            var bindingMap = doc.ParameterBindings;
+            var iter = bindingMap.ForwardIterator();
+            while (iter.MoveNext())
+            {
+                var def = iter.Key;
+                if (!string.Equals(def.Name, paramName, StringComparison.OrdinalIgnoreCase)) continue;
+
+                // If GUID specified, verify it matches (only for ExternalDefinition)
+                if (!string.IsNullOrEmpty(guidStr) && def is ExternalDefinition extDef)
+                {
+                    if (!string.Equals(extDef.GUID.ToString(), guidStr, StringComparison.OrdinalIgnoreCase))
+                        continue;
+                }
+
+                foundDef = def;
+                foundBinding = iter.Current as ElementBinding;
+                break;
+            }
+
+            if (foundDef == null)
+            {
+                evaluations += boundCategories.Count;
+                violations.Add(Violation(ruleId, "sharedParameter", severity,
+                    $"Shared parameter '{paramName}' is not bound to any category in this model.",
+                    bepReference: bepRef));
+                return evaluations;
+            }
+
+            // Check each required category
+            var boundCatNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (foundBinding != null)
+            {
+                foreach (Category cat in foundBinding.Categories)
+                    boundCatNames.Add(cat.Name);
+            }
+
+            foreach (var reqCat in boundCategories)
+            {
+                evaluations++;
+                if (boundCatNames.Contains(reqCat)) continue;
+
+                violations.Add(Violation(ruleId, "sharedParameter", severity,
+                    $"Shared parameter '{paramName}' is not bound to category '{reqCat}'",
+                    category: reqCat, bepReference: bepRef));
+            }
+            return evaluations;
+        }
+
         private static JToken AuditModelStandards(Document doc, JObject parameters)
         {
             var standards = parameters["standards"] as JObject
                 ?? throw new InvalidOperationException("'standards' object is required (the MCP server supplies a default set).");
             var fix = parameters["fix"]?.Value<bool>() ?? false;
+            var exportBaseline = parameters["exportBaseline"]?.Value<bool>() ?? false;
+            if (exportBaseline)
+                return ExportBaseline(doc);
+
             var rules = standards["rules"] as JObject ?? new JObject();
             var violations = new JArray();
+            int totalEvaluations = 0;
 
             void RunChecks()
             {
@@ -304,35 +497,158 @@ namespace BIMBotPlugin.Core
                 CheckHealthRules(doc, rules["health"] as JObject, violations);
             }
 
+            void RunNewChecks()
+            {
+                var worksetRules = rules["worksetAssignments"] as JArray ?? new JArray();
+                for (var i = 0; i < worksetRules.Count; i++)
+                {
+                    if (worksetRules[i] is JObject rule)
+                        totalEvaluations += CheckWorksetRule(doc, rule, violations, $"worksetAssignments[{i}]:{rule["category"]}", fix);
+                }
+
+                totalEvaluations += CheckPhaseRule(doc, rules["phaseCompliance"] as JObject, violations, fix);
+
+                var sharedParamRules = rules["sharedParameters"] as JArray ?? new JArray();
+                for (var i = 0; i < sharedParamRules.Count; i++)
+                {
+                    if (sharedParamRules[i] is JObject rule)
+                        totalEvaluations += CheckSharedParameterRule(doc, rule, violations, $"sharedParameters[{i}]:{rule["paramName"]}");
+                }
+            }
+
             if (fix)
             {
                 using (var tx = new Transaction(doc, "BIM-Bot Audit Fixes"))
                 {
                     tx.Start();
-                    try { RunChecks(); tx.Commit(); }
+                    try { RunChecks(); RunNewChecks(); tx.Commit(); }
                     catch { if (tx.HasStarted() && !tx.HasEnded()) tx.RollBack(); throw; }
                 }
             }
             else
             {
                 RunChecks();
+                RunNewChecks();
             }
+
+            // Estimate evaluations for existing rule types
+            int existingEvals = 0;
+            var namingRules = rules["naming"] as JArray ?? new JArray();
+            foreach (JObject nr in namingRules)
+            {
+                var target = nr["target"]?.ToString() ?? "views";
+                existingEvals += CollectNamedTargets(doc, target).Count();
+            }
+            var reqParamRules = rules["requiredParameters"] as JArray ?? new JArray();
+            foreach (JObject rpr in reqParamRules)
+            {
+                var cat = rpr["category"]?.ToString() ?? "";
+                var pCount = (rpr["parameters"] as JArray)?.Count ?? 0;
+                var bic = GetBuiltInCategory(cat);
+                if (bic != BuiltInCategory.INVALID)
+                    existingEvals += new FilteredElementCollector(doc).OfCategory(bic).WhereElementIsNotElementType().GetElementCount() * pCount;
+            }
+            // lineWeights: 1 eval per rule
+            existingEvals += (rules["lineWeights"] as JArray)?.Count ?? 0;
+            // views: count checked views
+            if (rules["views"]?["requireViewTemplate"]?.Value<bool>() == true)
+                existingEvals += new FilteredElementCollector(doc).OfClass(typeof(View)).Cast<View>().Count(v => !v.IsTemplate);
+            // health: 3 checks
+            if (rules["health"] != null) existingEvals += 3;
+            totalEvaluations += existingEvals;
 
             var errors = violations.Count(v => v["severity"]?.ToString() == "error");
             var warnings = violations.Count - errors;
             var fixedCount = violations.Count(v => v["fixed"]?.Value<bool>() == true);
+
+            var complianceScore = totalEvaluations == 0 ? 100.0 
+                : Math.Round(Math.Max(0, (1.0 - (double)violations.Count / totalEvaluations) * 100), 1);
 
             return new JObject
             {
                 ["standardName"] = standards["name"]?.ToString() ?? "BIM-Bot Standard",
                 ["projectName"] = doc.Title,
                 ["auditDate"] = DateTime.Now.ToString("o"),
+                ["complianceScore"] = complianceScore,
+                ["totalEvaluations"] = totalEvaluations,
                 ["totalViolations"] = violations.Count,
                 ["errors"] = errors,
                 ["warnings"] = warnings,
                 ["fixedCount"] = fixedCount,
                 ["fixApplied"] = fix,
                 ["violations"] = violations
+            };
+        }
+
+        private static JToken ExportBaseline(Document doc)
+        {
+            var rules = new JObject();
+
+            // Export view templates
+            var templates = new FilteredElementCollector(doc).OfClass(typeof(View)).Cast<View>()
+                .Where(v => v.IsTemplate).Select(v => v.Name).ToList();
+            if (templates.Count > 0)
+            {
+                rules["views"] = new JObject
+                {
+                    ["requireViewTemplate"] = true,
+                    ["defaultTemplate"] = templates.FirstOrDefault(),
+                    ["exemptPrefixes"] = new JArray("WIP", "EXPORT", "TEMP")
+                };
+            }
+
+            // Export line weights for common categories
+            var lineWeights = new JArray();
+            var categoriesToExport = new[] { "Walls", "Doors", "Windows", "Floors", "Roofs", "Columns", "Structural Framing" };
+            foreach (var catName in categoriesToExport)
+            {
+                Category cat = null;
+                foreach (Category c in doc.Settings.Categories)
+                {
+                    if (string.Equals(c.Name, catName, StringComparison.OrdinalIgnoreCase)) { cat = c; break; }
+                }
+                if (cat == null) continue;
+                var proj = cat.GetLineWeight(GraphicsStyleType.Projection);
+                var cut = cat.IsCuttable ? cat.GetLineWeight(GraphicsStyleType.Cut) : (int?)null;
+                if (proj.HasValue || cut.HasValue)
+                {
+                    var lw = new JObject { ["category"] = catName };
+                    if (proj.HasValue) lw["projectionWeight"] = proj.Value;
+                    if (cut.HasValue) lw["cutWeight"] = cut.Value;
+                    lineWeights.Add(lw);
+                }
+            }
+            if (lineWeights.Count > 0) rules["lineWeights"] = lineWeights;
+
+            // Export workset names if workshared
+            if (doc.IsWorkshared)
+            {
+                var worksets = new FilteredWorksetCollector(doc).OfKind(WorksetKind.UserWorkset)
+                    .Select(w => w.Name).ToList();
+                if (worksets.Count > 0)
+                {
+                    rules["naming"] = new JArray(new JObject { ["target"] = "worksets", ["severity"] = "warning" });
+                }
+            }
+
+            // Health defaults
+            rules["health"] = new JObject
+            {
+                ["maxWarnings"] = 100,
+                ["allowCadImports"] = false,
+                ["allowInPlaceFamilies"] = false
+            };
+
+            return new JObject
+            {
+                ["message"] = $"Baseline standard exported from '{doc.Title}'",
+                ["standard"] = new JObject
+                {
+                    ["name"] = $"{doc.Title} — Exported Standard",
+                    ["rules"] = rules
+                },
+                ["viewTemplates"] = new JArray(templates),
+                ["tip"] = "Save the 'standard' object as a JSON file and use it with standardsPath in future audits."
             };
         }
 

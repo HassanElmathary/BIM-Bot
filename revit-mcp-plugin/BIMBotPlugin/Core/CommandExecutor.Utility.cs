@@ -1272,6 +1272,212 @@ namespace BIMBotPlugin.Core
                 ["action"] = action
             };
         }
+
+        // ===== SHARED COORDINATE VALIDATION =====
+
+        private static JToken ValidateSharedCoordinates(Document doc, JObject parameters)
+        {
+            var masterName = parameters["masterLinkName"]?.ToString();
+            var toleranceMm = parameters["tolerance"]?.Value<double>() ?? 1.0;
+            var toleranceFt = toleranceMm / 304.8;
+            var autoFix = parameters["autoFix"]?.Value<bool>() ?? false;
+
+            var warnings = new JArray();
+
+            // Collect all link instances
+            var allInstances = new FilteredElementCollector(doc)
+                .OfClass(typeof(RevitLinkInstance))
+                .Cast<RevitLinkInstance>()
+                .ToList();
+
+            if (allInstances.Count == 0)
+            {
+                return new JObject
+                {
+                    ["message"] = "No linked models found in the current document.",
+                    ["results"] = new JArray(),
+                    ["warnings"] = new JArray()
+                };
+            }
+
+            // Resolve master link
+            RevitLinkInstance masterLink = null;
+            if (!string.IsNullOrEmpty(masterName))
+            {
+                var masterCandidates = allInstances
+                    .Where(l => l.Name.IndexOf(masterName, StringComparison.OrdinalIgnoreCase) >= 0)
+                    .ToList();
+
+                if (masterCandidates.Count == 0)
+                {
+                    return new JObject
+                    {
+                        ["error"] = $"Master link '{masterName}' not found among {allInstances.Count} linked model(s).",
+                        ["availableLinks"] = new JArray(allInstances.Select(l => l.Name))
+                    };
+                }
+
+                masterLink = masterCandidates.First();
+                if (masterCandidates.Count > 1)
+                    warnings.Add($"Multiple instances match '{masterName}'. Using first: '{masterLink.Name}'.");
+            }
+
+            // Determine reference transform
+            Transform refTransform = masterLink != null
+                ? masterLink.GetTotalTransform()
+                : Transform.Identity;
+
+            // Auto-fix: acquire coordinates from master link
+            bool acquireSucceeded = false;
+            if (autoFix)
+            {
+                if (masterLink == null)
+                {
+                    warnings.Add("autoFix requires masterLinkName to be specified. Skipping coordinate acquisition.");
+                }
+                else
+                {
+                    using (var tx = new Transaction(doc, "BIM-Bot: Acquire Shared Coordinates"))
+                    {
+                        tx.Start();
+                        try
+                        {
+                            doc.AcquireCoordinates(masterLink.Id);
+                            tx.Commit();
+                            acquireSucceeded = true;
+                        }
+                        catch (Exception ex)
+                        {
+                            tx.RollBack();
+                            warnings.Add($"Failed to acquire coordinates from '{masterLink.Name}': {ex.Message}");
+                        }
+                    }
+
+                    // After acquiring, re-read transforms (they may have changed)
+                    if (acquireSucceeded)
+                    {
+                        allInstances = new FilteredElementCollector(doc)
+                            .OfClass(typeof(RevitLinkInstance))
+                            .Cast<RevitLinkInstance>()
+                            .ToList();
+
+                        // Re-resolve master link after re-collecting
+                        masterLink = allInstances
+                            .FirstOrDefault(l => l.Name.IndexOf(masterName, StringComparison.OrdinalIgnoreCase) >= 0);
+
+                        refTransform = masterLink != null
+                            ? masterLink.GetTotalTransform()
+                            : Transform.Identity;
+                    }
+                }
+            }
+
+            // Evaluate each link
+            var results = new JArray();
+
+            foreach (var link in allInstances)
+            {
+                var linkType = doc.GetElement(link.GetTypeId()) as RevitLinkType;
+                if (linkType == null)
+                {
+                    warnings.Add($"Could not resolve type for link '{link.Name}'. Skipping.");
+                    continue;
+                }
+
+                // Skip nested links
+                if (linkType.IsNestedLink)
+                {
+                    warnings.Add($"Link '{link.Name}' is nested and cannot be directly validated.");
+                    results.Add(new JObject
+                    {
+                        ["linkName"] = link.Name,
+                        ["elementId"] = link.Id.Value,
+                        ["status"] = "Skipped (Nested)"
+                    });
+                    continue;
+                }
+
+                // Skip unloaded links
+                if (!RevitLinkType.IsLoaded(doc, linkType.Id))
+                {
+                    warnings.Add($"Link '{link.Name}' is unloaded.");
+                    results.Add(new JObject
+                    {
+                        ["linkName"] = link.Name,
+                        ["elementId"] = link.Id.Value,
+                        ["status"] = "Skipped (Unloaded)"
+                    });
+                    continue;
+                }
+
+                // Calculate transform offsets relative to reference
+                var linkTransform = link.GetTotalTransform();
+                var deltaOrigin = linkTransform.Origin - refTransform.Origin;
+
+                // Convert offsets from internal feet to mm
+                double offsetXMm = Math.Round(deltaOrigin.X * 304.8, 2);
+                double offsetYMm = Math.Round(deltaOrigin.Y * 304.8, 2);
+                double offsetZMm = Math.Round(deltaOrigin.Z * 304.8, 2);
+
+                // Calculate rotation angle between BasisX vectors (in the XY plane)
+                double dotX = linkTransform.BasisX.DotProduct(refTransform.BasisX);
+                double dotY = linkTransform.BasisX.DotProduct(refTransform.BasisY);
+                double angleDeg = Math.Round(Math.Atan2(dotY, dotX) * 180.0 / Math.PI, 4);
+
+                // Determine alignment
+                double totalLinearOffset = Math.Sqrt(
+                    deltaOrigin.X * deltaOrigin.X +
+                    deltaOrigin.Y * deltaOrigin.Y +
+                    deltaOrigin.Z * deltaOrigin.Z);
+
+                bool isMisaligned = totalLinearOffset > toleranceFt || Math.Abs(angleDeg) > 0.01;
+
+                string status;
+                if (acquireSucceeded && link.Id == masterLink?.Id)
+                    status = "Master (Reference)";
+                else if (isMisaligned)
+                    status = "Misaligned";
+                else
+                    status = acquireSucceeded ? "Acquired" : "Aligned";
+
+                if (isMisaligned)
+                {
+                    var parts = new List<string>();
+                    if (Math.Abs(offsetXMm) > toleranceMm) parts.Add($"{offsetXMm} mm in X");
+                    if (Math.Abs(offsetYMm) > toleranceMm) parts.Add($"{offsetYMm} mm in Y");
+                    if (Math.Abs(offsetZMm) > toleranceMm) parts.Add($"{offsetZMm} mm in Z");
+                    if (Math.Abs(angleDeg) > 0.01) parts.Add($"{angleDeg}° rotation");
+
+                    if (parts.Count > 0)
+                        warnings.Add($"Link '{link.Name}' is misaligned by {string.Join(", ", parts)}.");
+                }
+
+                results.Add(new JObject
+                {
+                    ["linkName"] = link.Name,
+                    ["elementId"] = link.Id.Value,
+                    ["status"] = status,
+                    ["offsetX_mm"] = offsetXMm,
+                    ["offsetY_mm"] = offsetYMm,
+                    ["offsetZ_mm"] = offsetZMm,
+                    ["angleDeg"] = angleDeg
+                });
+            }
+
+            var msg = acquireSucceeded
+                ? $"Coordinates acquired from '{masterLink?.Name}'. Validation complete — {results.Count} link(s) checked."
+                : $"Coordinates validation complete — {results.Count} link(s) checked.";
+
+            return new JObject
+            {
+                ["message"] = msg,
+                ["masterLink"] = masterLink?.Name,
+                ["toleranceMm"] = toleranceMm,
+                ["autoFixApplied"] = acquireSucceeded,
+                ["results"] = results,
+                ["warnings"] = warnings
+            };
+        }
     }
 }
 

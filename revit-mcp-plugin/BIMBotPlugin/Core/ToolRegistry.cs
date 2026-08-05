@@ -693,6 +693,12 @@ namespace BIMBotPlugin.Core
             R("audit_model", "Audit model", ToolCategory.QAQC,
                 new[] { "audit", "audit model" });
 
+            R("audit_model_standards", "Audit the model against a JSON standard (naming, parameters, line weights, view templates, health, workset assignments, phase compliance, shared parameters). Returns a compliance score (0-100%) and violation list. Use fix=true to auto-apply fixes. Use exportBaseline=true to export the current model's config as a reusable standard.", ToolCategory.QAQC,
+                new[] { "audit standards", "model standards", "bep audit" },
+                ToolParam.Opt("standardsUrl", "string", "URL to load standards JSON from"),
+                ToolParam.Opt("exportBaseline", "boolean", "Export current model config as a standard instead of auditing"),
+                ToolParam.Opt("fix", "boolean", "Auto-apply fixes"));
+
             R("get_model_statistics", "Model statistics", ToolCategory.QAQC,
                 new[] { "statistics", "stats", "model statistics", "model stats" });
 
@@ -1173,6 +1179,12 @@ namespace BIMBotPlugin.Core
 
             R("check_links_status", "Check status of all linked models", ToolCategory.QAQC,
                 new[] { "check links", "links status" });
+
+            R("validate_shared_coordinates", "Check if all linked models share the same shared coordinate system as the host or a master link. Reports per-link offsets and rotation angle, with optional auto-fix.", ToolCategory.QAQC,
+                new[] { "validate coordinates", "shared coordinates", "coordinate check" },
+                ToolParam.Opt("masterLinkName", "string", "Link name to use as master coordinate reference (omit for host)"),
+                ToolParam.Opt("tolerance", "number", "Mismatch threshold in mm (default: 1.0)"),
+                ToolParam.Opt("autoFix", "boolean", "If true, acquires coordinates from the master link"));
 
             R("validate_parameters", "Validate required parameters are filled in", ToolCategory.QAQC,
                 new[] { "validate parameters", "check parameters" },

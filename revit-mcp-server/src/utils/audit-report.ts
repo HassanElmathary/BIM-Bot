@@ -16,12 +16,16 @@ export interface AuditViolation {
     category: string;
     fixable: boolean;
     fixed: boolean;
+    bepReference?: string;
 }
 
 export interface AuditResult {
     standardName: string;
     projectName: string;
     auditDate: string;
+    complianceScore?: number;
+    totalEvaluations?: number;
+    scoreDelta?: number | null;
     totalViolations: number;
     errors: number;
     warnings: number;
@@ -47,7 +51,32 @@ const FIX_PROMPTS: Record<string, (ruleId: string) => string> = {
         "Run audit_model_standards with fix=true to assign the default view template to the flagged views (set views.defaultTemplate in the standard).",
     health: () =>
         "Ask BIM-Bot: review the model-health violations in my audit report (check_warnings, find_cad_imports).",
+    workset: () =>
+        "Run audit_model_standards with fix=true to move elements to their correct worksets.",
+    phase: () =>
+        "Run audit_model_standards with fix=true to apply the required phase filter to non-compliant views.",
+    sharedParameter: () =>
+        "Use the Revit Shared Parameter file and Manage → Project Parameters to bind the missing parameters.",
 };
+
+function renderScoreBadge(score: number | undefined, delta: number | null | undefined): string {
+    if (score == null) return "";
+    const color = score >= 80 ? "#17643a" : score >= 50 ? "#8a5300" : "#b3261e";
+    const bg = score >= 80 ? "#e6f4ea" : score >= 50 ? "#fff4e0" : "#fdecea";
+    const border = score >= 80 ? "#b7dfc4" : score >= 50 ? "#ffe0a3" : "#f4c3bd";
+    const deltaStr = delta != null
+        ? ` <span style="font-size:14px;color:${delta >= 0 ? "#17643a" : "#b3261e"}">${delta >= 0 ? "▲" : "▼"} ${Math.abs(delta).toFixed(1)}% vs last run</span>`
+        : "";
+    return `
+  <div style="text-align:center;margin:20px 0;">
+    <div style="display:inline-block;width:120px;height:120px;border-radius:50%;border:6px solid ${border};background:${bg};
+                line-height:120px;font-size:32px;font-weight:700;color:${color};">
+      ${score.toFixed(1)}%
+    </div>
+    <div style="margin-top:8px;font-size:14px;color:#667;">Compliance Score</div>
+    ${deltaStr}
+  </div>`;
+}
 
 export function renderAuditReportHtml(result: AuditResult): string {
     const byRule = new Map<string, AuditViolation[]>();
@@ -59,18 +88,21 @@ export function renderAuditReportHtml(result: AuditResult): string {
 
     const date = new Date(result.auditDate);
     const compliant = result.totalViolations === 0;
+    const hasBep = result.violations.some(v => v.bepReference);
 
     const sections = Array.from(byRule.entries()).map(([ruleId, list]) => {
         const first = list[0];
         const sev = first.severity === "error" ? "error" : "warning";
         const fixable = list.some((v) => v.fixable && !v.fixed);
         const prompt = FIX_PROMPTS[first.ruleType]?.(ruleId) ?? "";
+        const bepCol = hasBep ? `<th>BEP Ref</th>` : "";
         const rows = list.map((v) => `
         <tr>
           <td class="mono">${v.elementId || ""}</td>
           <td>${esc(v.elementName)}</td>
           <td>${esc(v.category)}</td>
           <td>${esc(v.message)}</td>
+          ${hasBep ? `<td>${esc(v.bepReference ?? "")}</td>` : ""}
           <td>${v.fixed ? "✅ fixed" : v.fixable ? "fixable" : "manual"}</td>
         </tr>`).join("");
 
@@ -83,11 +115,15 @@ export function renderAuditReportHtml(result: AuditResult): string {
         ${fixable && prompt ? `<button class="fix" data-prompt="${esc(prompt)}">🔧 Copy fix prompt</button>` : ""}
       </h2>
       <table>
-        <thead><tr><th>Element ID</th><th>Name</th><th>Category</th><th>Issue</th><th>Fix</th></tr></thead>
+        <thead><tr><th>Element ID</th><th>Name</th><th>Category</th><th>Issue</th>${bepCol}<th>Fix</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
     </section>`;
     }).join("\n");
+
+    const evalInfo = result.totalEvaluations != null
+        ? `<span class="meta">${result.totalEvaluations.toLocaleString()} checks performed</span>`
+        : "";
 
     return `<!DOCTYPE html>
 <html lang="en">
@@ -152,7 +188,10 @@ export function renderAuditReportHtml(result: AuditResult): string {
     Standard: ${esc(result.standardName)} ·
     ${date.toLocaleString()}
   </div>
+  ${evalInfo}
 </header>
+
+${renderScoreBadge(result.complianceScore, result.scoreDelta)}
 
 <div class="verdict ${compliant ? "pass" : "fail"}">
   ${compliant
