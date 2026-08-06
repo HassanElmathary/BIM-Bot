@@ -1,8 +1,8 @@
 {
-  "version": "2.2.0",
-  "releaseUrl": "https://github.com/HassanElmathary/BIM-Bot/releases/tag/v2.2.0",
-  "downloadUrl": "https://github.com/HassanElmathary/BIM-Bot/releases/download/v2.2.0/BIMBot-Setup-2.2.0.exe",
-  "assetFileName": "BIMBot-Setup-2.2.0.exe",
-  "changelog": "BIM-Bot v2.2.0 — Multi-client MCP auto-connect (Claude, Cursor, Windsurf, VS Code), device-agnostic install paths, and Power BI embed. Includes 183 MCP tools, Power BI export, Clash Detection, and BIM Dashboard.",
+  "version": "2.3.0",
+  "releaseUrl": "https://github.com/HassanElmathary/BIM-Bot/releases/tag/v2.3.0",
+  "downloadUrl": "https://github.com/HassanElmathary/BIM-Bot/releases/download/v2.3.0/BIMBot-Setup-2.3.0.exe",
+  "assetFileName": "BIMBot-Setup-2.3.0.exe",
+  "changelog": "BIM-Bot v2.3.0 — Fixes MCP auto-connect on standard-user installs: the installer now configures the profile of the person installing, not the admin account that answered the UAC prompt. Adds 187 MCP tools including audit_model_standards, parameter_batch_editor, generate_dynamic_schedule and validate_shared_coordinates, plus a centralized Light/Dark theme system.",
   "minVersion": "1.0.0"
 }

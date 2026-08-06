@@ -17,7 +17,7 @@ node build/tests/test-startup.js
 ```
 
 ### 3. Install Plugin to Revit
-Download **`BIMBot-Setup-2.2.0.exe`** from [GitHub Releases](https://github.com/HassanElmathary/BIM-Bot/releases) and run as Administrator.
+Download **`BIMBot-Setup-2.3.0.exe`** from [GitHub Releases](https://github.com/HassanElmathary/BIM-Bot/releases) and run as Administrator.
 
 Or build from source: compile `installer/setup.iss` with [Inno Setup](https://jrsoftware.org/isinfo.php).
 
@@ -25,7 +25,7 @@ Or build from source: compile `installer/setup.iss` with [Inno Setup](https://jr
 
 Claude setup is automatic, in three layers:
 
-1. **Installer** — registers BIM-Bot in Claude Desktop and Claude Code (real JSON merge via `configure-claude.cjs`, repairs stale entries from previous installs).
+1. **Installer** — registers BIM-Bot in Claude Desktop, Claude Code, Cursor, Windsurf and VS Code (real JSON merge via `configure-claude.cjs`, repairs stale entries from previous installs). When the installer is elevated it passes `--all-users`, because the elevated process runs as whichever account answered the UAC prompt — configuring only that profile would miss the person actually installing. Profiles with no MCP client are left untouched.
 2. **Revit plugin self-heal** — every time Revit starts, the plugin silently validates the Claude configs and repairs any entry whose paths no longer exist (e.g. the install folder moved). A `.bimbot-backup` copy is written before any change.
 3. **"Connect Claude" ribbon button** — runs the same validate/repair on demand and reports per-client status.
 
@@ -35,6 +35,8 @@ node "C:\Program Files\BIMBot\server\scripts\configure-claude.cjs"
 # or from the repo (dev):
 node revit-mcp-server/scripts/configure-claude.cjs
 ```
+
+Run it **as the signed-in user, not elevated** — it configures the profile of whoever runs it. Useful flags: `--all-users` scans every profile on the machine, `--home <profile-dir>` targets one.
 
 After any config change, fully restart Claude (File → Exit, then reopen). For other clients, use the configurations below.
 
@@ -135,7 +137,7 @@ cd "path\to\BIM-Bot"   # wherever you cloned the repo
 git push origin main
 
 # 3. Create a new release
-gh release create v2.2.0 "installer/output/BIMBot-Setup-2.2.0.exe" --title "BIM-Bot v2.2.0" --notes "Multi-client MCP auto-connect (Claude, Cursor, Windsurf, VS Code), device-agnostic paths, Power BI embed. 183 MCP tools, Revit 2020–2027, one-click installer"
+gh release create v2.3.0 "installer/output/BIMBot-Setup-2.3.0.exe" --title "BIM-Bot v2.3.0" --notes "Multi-client MCP auto-connect (Claude, Cursor, Windsurf, VS Code), device-agnostic paths, Power BI embed. 187 MCP tools, Revit 2020–2027, one-click installer"
 ```
 
 ### After GitHub is set up:

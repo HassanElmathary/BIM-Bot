@@ -5,13 +5,13 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Revit](https://img.shields.io/badge/Revit-2020--2027-blue.svg)](#)
 
-> BIM-Bot: Model Context Protocol (MCP) server + Revit plugin for AI-driven BIM automation with **185 tools**, built-in Gemini AI chat, and Power BI 3D export.
+> BIM-Bot: Model Context Protocol (MCP) server + Revit plugin for AI-driven BIM automation with **187 tools**, built-in Gemini AI chat, and Power BI 3D export.
 
 ---
 
 ## ⚡ Quick Install
 
-1. Download **`BIMBot-Setup-2.2.0.exe`** from [GitHub Releases](https://github.com/HassanElmathary/BIM-Bot/releases)
+1. Download **`BIMBot-Setup-2.3.0.exe`** from [GitHub Releases](https://github.com/HassanElmathary/BIM-Bot/releases)
 2. Run the installer as **Administrator**
 3. Follow the wizard — it will:
    - ✅ Auto-detect your Revit versions (2020–2027)
@@ -85,7 +85,7 @@ The uninstaller will automatically:
 
 ## Features
 
-- **185 MCP Tools** across 19 categories:
+- **187 MCP Tools** across 19 categories:
   - 🔍 **Reading** (19): Views, elements, parameters, rooms, levels, sheets, families, schedules, linked models
   - 🏗️ **Creating** (15): Walls, floors, ceilings, roofs, levels, grids, rooms, views, sheets, tags
   - ✏️ **Editing** (13): Modify, move, rotate, copy, delete, mirror, align, group, batch modify, conditional bulk parameter edit
@@ -196,7 +196,7 @@ BIM-Bot/
 │       │   ├── excel-client.ts
 │       │   ├── notion-client.ts
 │       │   └── sqlite-client.ts
-│       ├── tools/                  # 185 MCP Tools (19 files)
+│       ├── tools/                  # 187 MCP Tools (19 files)
 │       │   ├── reading_tools.ts
 │       │   ├── creating_tools.ts
 │       │   ├── editing_tools.ts

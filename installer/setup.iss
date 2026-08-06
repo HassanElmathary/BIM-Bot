@@ -1,11 +1,11 @@
 ; ============================================================
 ;  BIM-Bot — Professional Installer (Inno Setup 6)
-;  AI-Powered BIM Automation • 185 MCP Tools • Revit 2020–2027
+;  AI-Powered BIM Automation • 187 MCP Tools • Revit 2020–2027
 ;  by Hassan Ahmed Elmathary
 ; ============================================================
 
 #define MyAppName      "BIM-Bot"
-#define MyAppVersion   "2.2.0"
+#define MyAppVersion   "2.3.0"
 #define MyAppPublisher "Hassan Ahmed Elmathary"
 #define MyAppURL       "https://github.com/HassanElmathary/BIM-Bot"
 #define MyAppExeName   "Start MCP Server.bat"
@@ -61,7 +61,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Messages]
 WelcomeLabel1=Welcome to {#MyAppName}
-WelcomeLabel2=This will install {#MyAppName} v{#MyAppVersion} on your computer.%n%n{#MyAppName} provides 185 AI-powered MCP tools for Autodesk Revit, enabling intelligent BIM automation through Claude Desktop, Cursor, Windsurf, and any MCP client.%n%nSupports Revit 2020–2027.
+WelcomeLabel2=This will install {#MyAppName} v{#MyAppVersion} on your computer.%n%n{#MyAppName} provides 187 AI-powered MCP tools for Autodesk Revit, enabling intelligent BIM automation through Claude Desktop, Cursor, Windsurf, and any MCP client.%n%nSupports Revit 2020–2027.
 FinishedHeadingLabel=Installation Complete!
 FinishedLabel={#MyAppName} has been successfully installed.%n%nNext Steps:%n  1. Open Revit → look for the "BIM-Bot" tab in the ribbon%n  2. Open Claude Desktop → BIM-Bot tools are ready to use
 
@@ -71,7 +71,7 @@ Name: "server"; Description: "MCP Server only (no Revit plugin)"
 Name: "custom"; Description: "Custom installation"; Flags: iscustom
 
 [Components]
-Name: "server"; Description: "MCP Server (Node.js) — 185 AI tools for BIM automation"; Types: full server custom; Flags: fixed
+Name: "server"; Description: "MCP Server (Node.js) — 187 AI tools for BIM automation"; Types: full server custom; Flags: fixed
 Name: "nodejs"; Description: "Portable Node.js Runtime (v20 LTS)"; Types: full server custom; Flags: fixed
 Name: "plugin"; Description: "Revit Plugin — connects Revit to the MCP Server"; Types: full custom
 Name: "claude"; Description: "Auto-configure Claude Desktop"; Types: full custom
@@ -291,14 +291,24 @@ procedure ConfigureClaudeDesktop();
 var
   NodeExe: string;
   Script: string;
+  Params: string;
   ResultCode: Integer;
 begin
   NodeExe := ExpandConstant('{app}\nodejs\node.exe');
   Script := ExpandConstant('{app}\server\scripts\configure-claude.cjs');
+  Params := '"' + Script + '"';
+
+  // In an elevated (admin) install, this process runs as whichever account
+  // answered the UAC prompt — which is NOT necessarily the person installing.
+  // Configuring only that profile is why a standard-user install could finish
+  // "successfully" with no MCP client connected. Scan every real profile
+  // instead; the script only touches profiles that already have a client.
+  if IsAdminInstallMode then
+    Params := Params + ' --all-users';
 
   if FileExists(NodeExe) and FileExists(Script) then
   begin
-    if Exec(NodeExe, '"' + Script + '"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+    if Exec(NodeExe, Params, '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
     begin
       if ResultCode = 0 then
       begin
