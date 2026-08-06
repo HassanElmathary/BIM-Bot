@@ -48,7 +48,7 @@ The correct category count is 19: Reading, Creating, Editing, Documentation, QA/
 #### Download BIM-Bot Installer
 
 Large CTA button:
-> **Download BIM-Bot v2.2.0** — `BIMBot-Setup-2.2.0.exe` (Windows)
+> **Download BIM-Bot v2.3.0** — `BIMBot-Setup-2.3.0.exe` (Windows)
 
 Link to: `https://github.com/HassanElmathary/BIM-Bot/releases/latest`
 
@@ -211,6 +211,6 @@ Also add the new `validate_shared_coordinates` tool:
 - [x] What's the Discord server link? *(Not needed)*
 - [x] What's the new GitHub repo URL? *(Not adding at all)*
 - [x] Want to add a contact email to the footer? *(Yes: hassan.elmathary@gmail.com)*
-- [x] What's the installer filename for download? *(BIMBot-Setup-2.2.0.exe)*
+- [x] What's the installer filename for download? *(BIMBot-Setup-2.3.0.exe)*
 - [x] What's the Claude config key? *(`"BIM-Bot"` — capital casing)*
 - [x] What install methods to document? *(PowerShell one-liner, NPX, EXE Installer)*
