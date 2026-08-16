@@ -1355,6 +1355,12 @@ namespace BIMBotPlugin.Core
                 ToolParam.Req("elementId1", "integer", "First element ID"),
                 ToolParam.Req("elementId2", "integer", "Second element ID"));
 
+            R("create_electrical_circuit", "Create an electrical circuit from a panel and connected devices", ToolCategory.MEP,
+                new[] { "create electrical circuit", "create circuit", "electrical circuit" },
+                ToolParam.Req("panelId", "integer", "Panel element ID"),
+                ToolParam.Req("deviceIds", "array", "Device element IDs"),
+                ToolParam.Opt("circuitType", "string", "Circuit type (Power/Data/FireAlarm/Communication)"));
+
             // ===================== STRUCTURAL (6 tools) =====================
             R("create_structural_beam", "Place a structural beam between two points", ToolCategory.Structural,
                 new[] { "create beam", "add beam", "place beam", "structural beam" },

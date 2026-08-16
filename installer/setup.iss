@@ -158,6 +158,40 @@ end;
 
 // ── Addin File Management ───────────────────────────────────
 
+procedure RemoveAddinAt(Dir: string);
+begin
+  if FileExists(Dir + '\BIMBot.addin') then
+    DeleteFile(Dir + '\BIMBot.addin');
+  if DirExists(Dir + '\BIMBotPlugin') then
+    DelTree(Dir + '\BIMBotPlugin', True, True, True);
+end;
+
+// A manifest left behind in the other install scope shadows the one we are
+// about to write — same ClientId, but pointing at an older BIMBotPlugin.dll.
+procedure RemoveShadowAddins(Year: string);
+var
+  UsersRoot: string;
+  FR: TFindRec;
+begin
+  if IsAdminInstallMode then
+  begin
+    UsersRoot := ExpandConstant('{sd}\Users');
+    if FindFirst(UsersRoot + '\*', FR) then
+    try
+      repeat
+        if (FR.Attributes and FILE_ATTRIBUTE_DIRECTORY <> 0)
+           and (FR.Name <> '.') and (FR.Name <> '..') then
+          RemoveAddinAt(UsersRoot + '\' + FR.Name +
+            '\AppData\Roaming\Autodesk\Revit\Addins\' + Year);
+      until not FindNext(FR);
+    finally
+      FindClose(FR);
+    end;
+  end
+  else
+    RemoveAddinAt(ExpandConstant('{commonappdata}\Autodesk\Revit\Addins\' + Year));
+end;
+
 procedure InstallAddinForRevit(Year: string);
 var
   AddInDir: string;
@@ -167,6 +201,7 @@ var
 begin
   AddInDir := GetRevitAddInsDir(Year);
   ForceDirectories(AddInDir);
+  RemoveShadowAddins(Year);
 
   // Legacy cleanup: remove old RevitMCP files
   if FileExists(AddInDir + '\RevitMCP.addin') then

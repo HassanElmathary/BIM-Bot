@@ -464,6 +464,8 @@ namespace BIMBotPlugin.Core
                     return DuctSizing(doc, parameters);
                 case "connect_mep_elements":
                     return ConnectMepElements(doc, parameters);
+                case "create_electrical_circuit":
+                    return CreateElectricalCircuit(doc, parameters);
 
                 // ===== STRUCTURAL TOOLS =====
                 case "create_structural_beam":

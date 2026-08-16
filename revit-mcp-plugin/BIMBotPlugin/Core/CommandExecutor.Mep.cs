@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using Autodesk.Revit.DB;
+using Autodesk.Revit.DB.Electrical;
 using Autodesk.Revit.DB.Mechanical;
 using Autodesk.Revit.DB.Plumbing;
 using Newtonsoft.Json.Linq;
@@ -124,6 +126,60 @@ namespace BIMBotPlugin.Core
             if (best1 == null) return new JObject { ["error"] = "No unconnected connectors" };
             using (var tx = new Transaction(doc, "Connect MEP")) { tx.Start(); best1.ConnectTo(best2); tx.Commit(); }
             return new JObject { ["message"] = $"🔗 Connected elements (distance: {Math.Round(minDist, 2)}ft)" };
+        }
+
+        private static JToken CreateElectricalCircuit(Document doc, JObject parameters)
+        {
+            var panelIdVal = parameters["panelId"]?.Value<int>() ?? 0;
+            var deviceIdsArr = parameters["deviceIds"] as JArray;
+            var circuitTypeStr = parameters["circuitType"]?.ToString() ?? "Power";
+
+            if (deviceIdsArr == null || deviceIdsArr.Count == 0)
+                return new JObject { ["error"] = "At least one device ID is required." };
+
+            var deviceIds = deviceIdsArr
+                .Select(id => new ElementId(id.Value<int>()))
+                .Where(id => doc.GetElement(id) != null)
+                .ToList();
+
+            if (deviceIds.Count == 0)
+                return new JObject { ["error"] = "No valid device elements found." };
+
+            ElectricalSystemType sysType = ElectricalSystemType.PowerCircuit;
+            if (Enum.TryParse<ElectricalSystemType>(circuitTypeStr, true, out var parsedType))
+            {
+                sysType = parsedType;
+            }
+
+            using (var tx = new Transaction(doc, "Create Electrical Circuit"))
+            {
+                tx.Start();
+                try
+                {
+                    var circuit = ElectricalSystem.Create(doc, (IList<ElementId>)deviceIds, sysType);
+                    if (panelIdVal > 0)
+                    {
+                        var panelElem = doc.GetElement(new ElementId(panelIdVal)) as FamilyInstance;
+                        if (panelElem != null)
+                        {
+                            circuit.SelectPanel(panelElem);
+                        }
+                    }
+                    tx.Commit();
+                    return new JObject
+                    {
+                        ["message"] = $"⚡ Created electrical circuit (ID: {circuit.Id.Value})",
+                        ["circuitId"] = circuit.Id.Value,
+                        ["circuitNumber"] = circuit.CircuitNumber ?? "",
+                        ["systemType"] = circuit.SystemType.ToString()
+                    };
+                }
+                catch (Exception ex)
+                {
+                    tx.RollBack();
+                    return new JObject { ["error"] = $"Failed to create electrical circuit: {ex.Message}" };
+                }
+            }
         }
     }
 }
