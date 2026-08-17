@@ -32,7 +32,7 @@ namespace BIMBotPlugin.Core
                 foreach (var e in new FilteredElementCollector(doc, elementIds)) { e.Pinned = pin; count++; }
                 tx.Commit();
             }
-            return new JObject { ["message"] = $"ðŸ“Œ {(pin ? "Pinned" : "Unpinned")} {count} elements" };
+            return new JObject { ["message"] = $"📌 {(pin ? "Pinned" : "Unpinned")} {count} elements" };
         }
 
         private static JToken CreateWorkset(Document doc, JObject parameters)
@@ -43,7 +43,7 @@ namespace BIMBotPlugin.Core
             using (var tx = new Transaction(doc, "Create Workset"))
             {
                 tx.Start(); var ws = Workset.Create(doc, name); tx.Commit();
-                return new JObject { ["message"] = $"ðŸ“ Created workset '{name}'", ["worksetId"] = ws.Id.IntegerValue };
+                return new JObject { ["message"] = $"📁 Created workset '{name}'", ["worksetId"] = ws.Id.IntegerValue };
             }
         }
 
@@ -60,7 +60,7 @@ namespace BIMBotPlugin.Core
                 var ph = elem.get_Parameter(BuiltInParameter.PHASE_CREATED); if (ph != null) { var phase = doc.GetElement(ph.AsElementId()); item["phaseCreated"] = phase?.Name; }
                 items.Add(item);
             }
-            return new JObject { ["message"] = $"ðŸ“‹ History for {items.Count} elements", ["elements"] = items };
+            return new JObject { ["message"] = $"📋 History for {items.Count} elements", ["elements"] = items };
         }
 
         private static JToken CreateAssembly(Document doc, JObject parameters)
@@ -77,7 +77,7 @@ namespace BIMBotPlugin.Core
                 var name = parameters["assemblyName"]?.ToString();
                 if (!string.IsNullOrEmpty(name)) assembly.AssemblyTypeName = name;
                 tx.Commit();
-                return new JObject { ["message"] = $"ðŸ“¦ Created assembly (ID: {assembly.Id.Value})", ["elementId"] = assembly.Id.Value };
+                return new JObject { ["message"] = $"📦 Created assembly (ID: {assembly.Id.Value})", ["elementId"] = assembly.Id.Value };
             }
         }
 
@@ -91,7 +91,7 @@ namespace BIMBotPlugin.Core
             using (var tx = new Transaction(doc, "Create Fill Pattern"))
             {
                 tx.Start(); var elem = FillPatternElement.Create(doc, pattern); tx.Commit();
-                return new JObject { ["message"] = $"ðŸŽ¨ Created fill pattern '{name}' (ID: {elem.Id.Value})", ["elementId"] = elem.Id.Value };
+                return new JObject { ["message"] = $"🎨 Created fill pattern '{name}' (ID: {elem.Id.Value})", ["elementId"] = elem.Id.Value };
             }
         }
 
@@ -109,7 +109,7 @@ namespace BIMBotPlugin.Core
             }
             var vol = elem.get_Parameter(BuiltInParameter.HOST_VOLUME_COMPUTED); if (vol != null) result["volume_cuft"] = Math.Round(vol.AsDouble(), 4);
             var area = elem.get_Parameter(BuiltInParameter.HOST_AREA_COMPUTED); if (area != null) result["area_sqft"] = Math.Round(area.AsDouble(), 4);
-            return new JObject { ["message"] = $"ðŸ“ Geometry for '{elem.Name}'", ["geometry"] = result };
+            return new JObject { ["message"] = $"📐 Geometry for '{elem.Name}'", ["geometry"] = result };
         }
 
         private static JToken CompareModels(Document doc, JObject parameters)
@@ -119,14 +119,14 @@ namespace BIMBotPlugin.Core
             foreach (var cat in cats) snapshot[cat.ToString().Replace("OST_", "")] = new FilteredElementCollector(doc).OfCategory(cat).WhereElementIsNotElementType().Count();
             snapshot["totalFamilies"] = new FilteredElementCollector(doc).OfClass(typeof(Family)).Count();
             snapshot["totalSheets"] = new FilteredElementCollector(doc).OfClass(typeof(ViewSheet)).Count();
-            return new JObject { ["message"] = "ðŸ“Š Current model snapshot", ["snapshot"] = snapshot };
+            return new JObject { ["message"] = "📊 Current model snapshot", ["snapshot"] = snapshot };
         }
 
         private static JToken LinkRevitModel(Document doc, UIApplication uiApp, JObject parameters)
         {
             var filePath = parameters["filePath"]?.ToString();
             if (string.IsNullOrEmpty(filePath)) return new JObject { ["error"] = "File path required" };
-            return new JObject { ["message"] = $"ðŸ”— Link model: {System.IO.Path.GetFileName(filePath)}", ["hint"] = "Use execute_code: RevitLinkType.Create(doc, modelPath, false) then RevitLinkInstance.Create(doc, linkTypeId)" };
+            return new JObject { ["message"] = $"🔗 Link model: {System.IO.Path.GetFileName(filePath)}", ["hint"] = "Use execute_code: RevitLinkType.Create(doc, modelPath, false) then RevitLinkInstance.Create(doc, linkTypeId)" };
         }
 
         private static JToken ReloadLinks(Document doc, JObject parameters)
@@ -143,7 +143,7 @@ namespace BIMBotPlugin.Core
             }
             var result = new JObject
             {
-                ["message"] = $"ðŸ”„ Reloaded {reloaded}/{links.Count} links",
+                ["message"] = $"🔄 Reloaded {reloaded}/{links.Count} links",
                 ["links"] = JArray.FromObject(links.Select(l => new { l.Name, id = l.Id.Value }))
             };
             if (errors.Count > 0) result["errors"] = errors;
@@ -162,7 +162,7 @@ namespace BIMBotPlugin.Core
             }
             return new JObject
             {
-                ["message"] = $"ðŸ“¤ Unloaded {unloaded}/{links.Count} links",
+                ["message"] = $"📤 Unloaded {unloaded}/{links.Count} links",
                 ["links"] = JArray.FromObject(links.Select(l => new { l.Name, id = l.Id.Value }))
             };
         }
@@ -206,7 +206,7 @@ namespace BIMBotPlugin.Core
 
             return new JObject
             {
-                ["message"] = $"ðŸ”— {result.Count} linked model(s) found",
+                ["message"] = $"🔗 {result.Count} linked model(s) found",
                 ["links"] = result,
                 ["count"] = result.Count
             };
@@ -219,7 +219,7 @@ namespace BIMBotPlugin.Core
             if (string.IsNullOrEmpty(doc.PathName))
                 throw new InvalidOperationException("Document has never been saved. Use save_as_document with a file path first.");
             doc.Save();
-            return new JObject { ["message"] = $"ðŸ’¾ Document saved: {System.IO.Path.GetFileName(doc.PathName)}", ["filePath"] = doc.PathName };
+            return new JObject { ["message"] = $"💾 Document saved: {System.IO.Path.GetFileName(doc.PathName)}", ["filePath"] = doc.PathName };
         }
 
         private static JToken SaveAsDocument(Document doc, JObject parameters)
@@ -232,7 +232,7 @@ namespace BIMBotPlugin.Core
                 throw new InvalidOperationException($"File already exists: {filePath}. Set overwrite=true to replace.");
             var opts = new SaveAsOptions { OverwriteExistingFile = overwrite };
             doc.SaveAs(filePath, opts);
-            return new JObject { ["message"] = $"ðŸ’¾ Saved as: {System.IO.Path.GetFileName(filePath)}", ["filePath"] = filePath };
+            return new JObject { ["message"] = $"💾 Saved as: {System.IO.Path.GetFileName(filePath)}", ["filePath"] = filePath };
         }
 
         private static JToken CloseDocument(Document doc, JObject parameters)
@@ -242,7 +242,7 @@ namespace BIMBotPlugin.Core
             if (save && !string.IsNullOrEmpty(doc.PathName))
                 doc.Save();
             doc.Close(save);
-            return new JObject { ["message"] = $"ðŸ“ Closed document: {fileName}", ["saved"] = save };
+            return new JObject { ["message"] = $"📁 Closed document: {fileName}", ["saved"] = save };
         }
 
         // ===== PHASE 2: FAMILY EDITOR =====
@@ -272,7 +272,7 @@ namespace BIMBotPlugin.Core
 
             return new JObject
             {
-                ["message"] = $"âœï¸ Opened family '{family.Name}' for editing",
+                ["message"] = $"✏️ Opened family '{family.Name}' for editing",
                 ["familyName"] = family.Name,
                 ["familyCategory"] = family.FamilyCategory?.Name ?? "Unknown"
             };
@@ -321,7 +321,7 @@ namespace BIMBotPlugin.Core
 
                 return new JObject
                 {
-                    ["message"] = $"ðŸ§± Created {(isSolid ? "solid" : "void")} extrusion with {points.Count} vertices, depth={depth}ft",
+                    ["message"] = $"🧱 Created {(isSolid ? "solid" : "void")} extrusion with {points.Count} vertices, depth={depth}ft",
                     ["elementId"] = extrusion.Id.Value,
                     ["vertexCount"] = points.Count,
                     ["depth"] = depth
@@ -361,7 +361,7 @@ namespace BIMBotPlugin.Core
 
             return new JObject
             {
-                ["message"] = $"ðŸ’¾ Family '{familyName}' saved{(loadIntoProject ? " and loaded into project" : "")}",
+                ["message"] = $"💾 Family '{familyName}' saved{(loadIntoProject ? " and loaded into project" : "")}",
                 ["familyName"] = familyName
             };
         }
@@ -384,7 +384,7 @@ namespace BIMBotPlugin.Core
 
                 return new JObject
                 {
-                    ["message"] = $"ðŸ“¦ Loaded family '{family.Name}' from {System.IO.Path.GetFileName(filePath)}",
+                    ["message"] = $"📦 Loaded family '{family.Name}' from {System.IO.Path.GetFileName(filePath)}",
                     ["familyName"] = family.Name,
                     ["familyId"] = family.Id.Value
                 };
@@ -433,7 +433,7 @@ namespace BIMBotPlugin.Core
 
             return new JObject
             {
-                ["message"] = $"ðŸ“ Sketch profile for '{elem.Name}' â€” {curveLoops.Count} loop(s)",
+                ["message"] = $"📐 Sketch profile for '{elem.Name}' — {curveLoops.Count} loop(s)",
                 ["elementId"] = elementId,
                 ["loops"] = loops
             };
@@ -449,7 +449,7 @@ namespace BIMBotPlugin.Core
             // Use send_code_to_revit for complex sketch editing via SketchEditScope
             return new JObject
             {
-                ["message"] = $"âœï¸ Use send_code_to_revit with SketchEditScope for '{action}' on element {elementId}",
+                ["message"] = $"✏️ Use send_code_to_revit with SketchEditScope for '{action}' on element {elementId}",
                 ["hint"] = "var scope = new SketchEditScope(doc, \"Edit Sketch\"); scope.Start(new ElementId(" + elementId + ")); // modify sketch curves... scope.Commit(new FailuresPreprocessor());",
                 ["action"] = action,
                 ["elementId"] = elementId
@@ -472,7 +472,7 @@ namespace BIMBotPlugin.Core
 
             return new JObject
             {
-                ["message"] = $"âœï¸ To replace sketch profile, use send_code_to_revit with SketchEditScope",
+                ["message"] = $"✏️ To replace sketch profile, use send_code_to_revit with SketchEditScope",
                 ["hint"] = $"// Delete existing sketch lines, then create new ones with:\n" +
                           $"var pts = new[] {{ {ptsStr} }};\n" +
                           $"for(int i=0; i<pts.Length; i++) doc.Create.NewModelCurve(Line.CreateBound(pts[i], pts[(i+1)%pts.Length]), sketchPlane);",
@@ -516,7 +516,7 @@ namespace BIMBotPlugin.Core
 
             return new JObject
             {
-                ["message"] = $"âœï¸ Created {created} detail lines in view '{view.Name}'",
+                ["message"] = $"✏️ Created {created} detail lines in view '{view.Name}'",
                 ["linesCreated"] = created,
                 ["viewName"] = view.Name
             };
@@ -558,7 +558,7 @@ namespace BIMBotPlugin.Core
 
             return new JObject
             {
-                ["message"] = $"âœï¸ Created {created} model lines",
+                ["message"] = $"✏️ Created {created} model lines",
                 ["linesCreated"] = created
             };
         }
@@ -583,7 +583,7 @@ namespace BIMBotPlugin.Core
                 Arc arc;
                 if (Math.Abs(endAngle - startAngle - 2 * Math.PI) < 0.001)
                 {
-                    // Full circle â€” create two semicircles
+                    // Full circle — create two semicircles
                     var arc1 = Arc.Create(center, radius, 0, Math.PI, XYZ.BasisX, XYZ.BasisY);
                     var arc2 = Arc.Create(center, radius, Math.PI, 2 * Math.PI, XYZ.BasisX, XYZ.BasisY);
                     doc.Create.NewDetailCurve(view, arc1);
@@ -599,7 +599,7 @@ namespace BIMBotPlugin.Core
 
             return new JObject
             {
-                ["message"] = $"â­• Created detail arc at ({cx}, {cy}), radius={radius}ft",
+                ["message"] = $"⭕ Created detail arc at ({cx}, {cy}), radius={radius}ft",
                 ["center"] = new JObject { ["x"] = cx, ["y"] = cy },
                 ["radius"] = radius
             };
@@ -643,7 +643,7 @@ namespace BIMBotPlugin.Core
 
             return new JObject
             {
-                ["message"] = $"â˜€ï¸ Sun settings updated for view '{view.Name}'",
+                ["message"] = $"☀️ Sun settings updated for view '{view.Name}'",
                 ["hint"] = "For full sun study control, use send_code_to_revit with SunAndShadowSettings API.",
                 ["viewName"] = view.Name
             };
@@ -679,7 +679,7 @@ namespace BIMBotPlugin.Core
 
             return new JObject
             {
-                ["message"] = $"ðŸŽ¨ Set visual style to '{styleName}' on view '{view.Name}'",
+                ["message"] = $"🎨 Set visual style to '{styleName}' on view '{view.Name}'",
                 ["style"] = styleName,
                 ["viewName"] = view.Name
             };
@@ -720,7 +720,7 @@ namespace BIMBotPlugin.Core
 
             return new JObject
             {
-                ["message"] = $"ðŸ“¸ Exported view image to '{filePath}'",
+                ["message"] = $"📸 Exported view image to '{filePath}'",
                 ["filePath"] = filePath,
                 ["format"] = format,
                 ["resolution"] = $"{pixelWidth}x{pixelHeight}"
@@ -760,7 +760,7 @@ namespace BIMBotPlugin.Core
 
             return new JObject
             {
-                ["message"] = $"ðŸ”„ Synchronized with Central â€” comment: '{comment}'",
+                ["message"] = $"🔄 Synchronized with Central — comment: '{comment}'",
                 ["comment"] = comment,
                 ["relinquishedAll"] = relinquishAll
             };
@@ -783,7 +783,7 @@ namespace BIMBotPlugin.Core
             var transactOpts = new TransactWithCentralOptions();
             WorksharingUtils.RelinquishOwnership(doc, relinquishOpts, transactOpts);
 
-            return new JObject { ["message"] = "ðŸ”“ Relinquished all borrowed elements and worksets" };
+            return new JObject { ["message"] = "🔓 Relinquished all borrowed elements and worksets" };
         }
 
         private static JToken GetWorksharingInfo(Document doc)
@@ -809,7 +809,7 @@ namespace BIMBotPlugin.Core
 
             return new JObject
             {
-                ["message"] = $"ðŸ“‹ Worksharing info for '{System.IO.Path.GetFileName(doc.PathName)}'",
+                ["message"] = $"📋 Worksharing info for '{System.IO.Path.GetFileName(doc.PathName)}'",
                 ["isWorkshared"] = true,
                 ["centralModelPath"] = centralPathStr,
                 ["localPath"] = doc.PathName,
@@ -830,11 +830,11 @@ namespace BIMBotPlugin.Core
             {
                 var cmdId = RevitCommandId.LookupPostableCommandId(PostableCommand.Undo);
                 uiApp.PostCommand(cmdId);
-                return new JObject { ["message"] = "â†©ï¸ Undo command posted. The last operation will be undone." };
+                return new JObject { ["message"] = "↩️ Undo command posted. The last operation will be undone." };
             }
             catch (Exception ex)
             {
-                return new JObject { ["message"] = $"âš ï¸ Undo failed: {ex.Message}", ["hint"] = "Undo can only be triggered outside of an active API transaction context." };
+                return new JObject { ["message"] = $"⚠️ Undo failed: {ex.Message}", ["hint"] = "Undo can only be triggered outside of an active API transaction context." };
             }
         }
 
@@ -851,7 +851,7 @@ namespace BIMBotPlugin.Core
 
             return new JObject
             {
-                ["message"] = $"ðŸ“Œ Checkpoint '{name}' created. All subsequent changes can be rolled back to this point.",
+                ["message"] = $"📌 Checkpoint '{name}' created. All subsequent changes can be rolled back to this point.",
                 ["checkpointName"] = name,
                 ["activeCheckpoints"] = JArray.FromObject(_checkpoints.Keys.ToList())
             };
@@ -869,7 +869,7 @@ namespace BIMBotPlugin.Core
 
             return new JObject
             {
-                ["message"] = $"âª Rolled back to checkpoint '{name}'. All changes since the checkpoint have been undone.",
+                ["message"] = $"⏪ Rolled back to checkpoint '{name}'. All changes since the checkpoint have been undone.",
                 ["checkpointName"] = name,
                 ["remainingCheckpoints"] = JArray.FromObject(_checkpoints.Keys.ToList())
             };
@@ -892,7 +892,7 @@ namespace BIMBotPlugin.Core
 
             return new JObject
             {
-                ["message"] = $"â–¶ï¸ Posted command: {commandName}",
+                ["message"] = $"▶️ Posted command: {commandName}",
                 ["commandName"] = commandName
             };
         }
@@ -902,7 +902,7 @@ namespace BIMBotPlugin.Core
             var commands = Enum.GetNames(typeof(PostableCommand)).OrderBy(n => n).ToList();
             return new JObject
             {
-                ["message"] = $"ðŸ“‹ {commands.Count} available PostableCommands",
+                ["message"] = $"📋 {commands.Count} available PostableCommands",
                 ["count"] = commands.Count,
                 ["commands"] = JArray.FromObject(commands)
             };
@@ -926,7 +926,7 @@ namespace BIMBotPlugin.Core
 
             return new JObject
             {
-                ["message"] = $"ðŸ“‚ Opened document: {System.IO.Path.GetFileName(filePath)}",
+                ["message"] = $"📂 Opened document: {System.IO.Path.GetFileName(filePath)}",
                 ["filePath"] = filePath,
                 ["detached"] = detach
             };
@@ -949,7 +949,7 @@ namespace BIMBotPlugin.Core
 
             return new JObject
             {
-                ["message"] = $"ðŸ“„ Created new project{(string.IsNullOrEmpty(templatePath) ? "" : $" from template: {System.IO.Path.GetFileName(templatePath)}")}",
+                ["message"] = $"📄 Created new project{(string.IsNullOrEmpty(templatePath) ? "" : $" from template: {System.IO.Path.GetFileName(templatePath)}")}",
                 ["documentTitle"] = newDoc.Title
             };
         }
@@ -974,7 +974,7 @@ namespace BIMBotPlugin.Core
 
             return new JObject
             {
-                ["message"] = $"ðŸ“¦ Created new family from template: {System.IO.Path.GetFileName(templatePath)}",
+                ["message"] = $"📦 Created new family from template: {System.IO.Path.GetFileName(templatePath)}",
                 ["template"] = System.IO.Path.GetFileName(templatePath),
                 ["documentTitle"] = famDoc.Title
             };
@@ -996,7 +996,7 @@ namespace BIMBotPlugin.Core
 
             return new JObject
             {
-                ["message"] = $"ðŸ”“ Detached from Central: {System.IO.Path.GetFileName(filePath)}",
+                ["message"] = $"🔓 Detached from Central: {System.IO.Path.GetFileName(filePath)}",
                 ["filePath"] = filePath
             };
         }
@@ -1029,7 +1029,7 @@ namespace BIMBotPlugin.Core
 
             return new JObject
             {
-                ["message"] = $"ðŸ”— Updated link '{link.Name}' path to: {System.IO.Path.GetFileName(newPath)}",
+                ["message"] = $"🔗 Updated link '{link.Name}' path to: {System.IO.Path.GetFileName(newPath)}",
                 ["linkName"] = link.Name,
                 ["newPath"] = newPath
             };
@@ -1071,7 +1071,7 @@ namespace BIMBotPlugin.Core
 
             return new JObject
             {
-                ["message"] = $"ðŸ“ Moved link '{instance.Name}' by ({moveX}, {moveY}, {moveZ})ft, rotated {rotationDeg}Â°",
+                ["message"] = $"📍 Moved link '{instance.Name}' by ({moveX}, {moveY}, {moveZ})ft, rotated {rotationDeg}°",
                 ["linkName"] = instance.Name,
                 ["elementId"] = instance.Id.Value
             };
@@ -1086,7 +1086,7 @@ namespace BIMBotPlugin.Core
 
             return new JObject
             {
-                ["message"] = $"ðŸ” Zoomed to fit view '{uidoc.ActiveView.Name}'",
+                ["message"] = $"🔍 Zoomed to fit view '{uidoc.ActiveView.Name}'",
                 ["viewName"] = uidoc.ActiveView.Name
             };
         }
@@ -1251,7 +1251,7 @@ namespace BIMBotPlugin.Core
 
                         return new JObject
                         {
-                            ["message"] = $"ðŸ“Š Schedule '{schedule.Name}' info",
+                            ["message"] = $"📊 Schedule '{schedule.Name}' info",
                             ["scheduleName"] = schedule.Name,
                             ["fields"] = fields,
                             ["fieldCount"] = fields.Count,
@@ -1267,7 +1267,7 @@ namespace BIMBotPlugin.Core
 
             return new JObject
             {
-                ["message"] = $"ðŸ“Š Schedule '{schedule.Name}' updated (action: {action})",
+                ["message"] = $"📊 Schedule '{schedule.Name}' updated (action: {action})",
                 ["scheduleName"] = schedule.Name,
                 ["action"] = action
             };

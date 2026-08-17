@@ -23,7 +23,7 @@ namespace BIMBotPlugin.Core
                 outputFolder = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "RevitExport");
             System.IO.Directory.CreateDirectory(outputFolder);
 
-            // Collect views/sheets to export â€” respect selection from Export Manager
+            // Collect views/sheets to export — respect selection from Export Manager
             var viewIds = new List<ElementId>();
 
             var sheetIdStr = parameters?["sheetIds"]?.ToString();
@@ -126,7 +126,7 @@ namespace BIMBotPlugin.Core
 
                 return new JObject
                 {
-                    ["message"] = $"âœ… Exported {viewIds.Count} view/sheet(s) to PDF.\nOutput folder: {outputFolder}",
+                    ["message"] = $"✅ Exported {viewIds.Count} view/sheet(s) to PDF.\nOutput folder: {outputFolder}",
                     ["count"] = viewIds.Count,
                     ["outputFolder"] = outputFolder
                 };
@@ -205,7 +205,7 @@ namespace BIMBotPlugin.Core
 
             return new JObject
             {
-                ["message"] = $"âœ… Exported {exported} view(s) as images.\nOutput folder: {outputFolder}",
+                ["message"] = $"✅ Exported {exported} view(s) as images.\nOutput folder: {outputFolder}",
                 ["count"] = exported,
                 ["outputFolder"] = outputFolder
             };
@@ -246,7 +246,7 @@ namespace BIMBotPlugin.Core
                 }
                 return new JObject
                 {
-                    ["message"] = $"âœ… Exported IFC to: {System.IO.Path.Combine(outputFolder, fileName)}",
+                    ["message"] = $"✅ Exported IFC to: {System.IO.Path.Combine(outputFolder, fileName)}",
                     ["outputFolder"] = outputFolder
                 };
             }
@@ -305,7 +305,7 @@ namespace BIMBotPlugin.Core
 
                 return new JObject
                 {
-                    ["message"] = $"âœ… Exported {viewIds.Count} view(s) to DGN.\nOutput folder: {outputFolder}",
+                    ["message"] = $"✅ Exported {viewIds.Count} view(s) to DGN.\nOutput folder: {outputFolder}",
                     ["count"] = viewIds.Count
                 };
             }
@@ -528,7 +528,7 @@ namespace BIMBotPlugin.Core
                             result = ExportToImages(doc, parameters);
                             break;
                         default:
-                            results.Add($"âš ï¸ Unknown format: {fmt}");
+                            results.Add($"⚠️ Unknown format: {fmt}");
                             continue;
                     }
                     var msg = result?["message"]?.ToString() ?? $"Exported {fmt}";
@@ -536,7 +536,7 @@ namespace BIMBotPlugin.Core
                 }
                 catch (Exception ex)
                 {
-                    results.Add($"âŒ {fmt} error: {ex.Message}");
+                    results.Add($"❌ {fmt} error: {ex.Message}");
                 }
             }
 
@@ -609,7 +609,7 @@ namespace BIMBotPlugin.Core
 
                 return new JObject
                 {
-                    ["message"] = $"âœ… Exported {exported} view(s) to DWF.\nOutput folder: {outputFolder}",
+                    ["message"] = $"✅ Exported {exported} view(s) to DWF.\nOutput folder: {outputFolder}",
                     ["count"] = exported
                 };
             }
@@ -659,7 +659,7 @@ namespace BIMBotPlugin.Core
 
                 return new JObject
                 {
-                    ["message"] = $"âœ… Exported NWC to: {System.IO.Path.Combine(outputFolder, fileName + ".nwc")}",
+                    ["message"] = $"✅ Exported NWC to: {System.IO.Path.Combine(outputFolder, fileName + ".nwc")}",
                     ["outputFolder"] = outputFolder
                 };
             }
@@ -722,7 +722,7 @@ namespace BIMBotPlugin.Core
 
                 return new JObject
                 {
-                    ["message"] = $"âœ… Imported CSV: {updated} parameter(s) updated, {skipped} skipped.\nFile: {filePath}",
+                    ["message"] = $"✅ Imported CSV: {updated} parameter(s) updated, {skipped} skipped.\nFile: {filePath}",
                     ["updated"] = updated,
                     ["skipped"] = skipped
                 };

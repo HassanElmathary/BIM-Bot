@@ -41,7 +41,7 @@ namespace BIMBotPlugin.Core
 
             if (method == "rooms")
             {
-                // Cut floors by room boundaries â€” find rooms overlapping each floor
+                // Cut floors by room boundaries — find rooms overlapping each floor
                 var rooms = new FilteredElementCollector(doc)
                     .OfCategory(BuiltInCategory.OST_Rooms)
                     .WhereElementIsNotElementType()
@@ -51,16 +51,16 @@ namespace BIMBotPlugin.Core
 
                 return new JObject
                 {
-                    ["message"] = $"ðŸ”ª Found {floors.Count} floors and {rooms.Count} rooms. Use execute_code with floor splitting logic for complex geometry operations.",
+                    ["message"] = $"🔪 Found {floors.Count} floors and {rooms.Count} rooms. Use execute_code with floor splitting logic for complex geometry operations.",
                     ["floors"] = floors.Count,
                     ["rooms"] = rooms.Count,
-                    ["hint"] = "Floor cutting by room boundaries requires geometry intersection. Use execute_code with: foreach room â†’ get boundary â†’ create new floor from boundary â†’ delete original."
+                    ["hint"] = "Floor cutting by room boundaries requires geometry intersection. Use execute_code with: foreach room → get boundary → create new floor from boundary → delete original."
                 };
             }
 
             return new JObject
             {
-                ["message"] = $"ðŸ”ª Found {floors.Count} floors to process with method: {method}",
+                ["message"] = $"🔪 Found {floors.Count} floors to process with method: {method}",
                 ["floorsFound"] = floors.Count,
                 ["method"] = method,
                 ["hint"] = $"Use execute_code for {method}-based floor splitting."
@@ -113,12 +113,12 @@ namespace BIMBotPlugin.Core
 
             return new JObject
             {
-                ["message"] = $"ðŸ“ Found {elements.Count} {category} elements, {split} span multiple levels and can be split.",
+                ["message"] = $"📐 Found {elements.Count} {category} elements, {split} span multiple levels and can be split.",
                 ["totalElements"] = elements.Count,
                 ["splittable"] = split,
                 ["levels"] = JArray.FromObject(levels.Select(l => new { l.Name, l.Elevation })),
                 ["gap"] = gap,
-                ["hint"] = "Use execute_code for actual splitting. Pattern: for each wall â†’ get base/top constraints â†’ create new walls at each level segment."
+                ["hint"] = "Use execute_code for actual splitting. Pattern: for each wall → get base/top constraints → create new walls at each level segment."
             };
         }
 
@@ -170,7 +170,7 @@ namespace BIMBotPlugin.Core
 
             return new JObject
             {
-                ["message"] = $"ðŸ•³ï¸ Found {intersections} potential intersections between {hosts.Count} {hostCat} and {cutElements.Count} {cutCat}.",
+                ["message"] = $"🕳️ Found {intersections} potential intersections between {hosts.Count} {hostCat} and {cutElements.Count} {cutCat}.",
                 ["hosts"] = hosts.Count,
                 ["cutElements"] = cutElements.Count,
                 ["intersections"] = intersections,
@@ -212,7 +212,7 @@ namespace BIMBotPlugin.Core
                         ["maxX"] = bb?.Max.X, ["maxY"] = bb?.Max.Y, ["maxZ"] = bb?.Max.Z
                     });
                 }
-                return new JObject { ["message"] = $"ðŸ“¦ Found {scopeBoxes.Count} scope boxes", ["scopeBoxes"] = items };
+                return new JObject { ["message"] = $"📦 Found {scopeBoxes.Count} scope boxes", ["scopeBoxes"] = items };
             }
             else if (action == "delete_unused")
             {
@@ -236,7 +236,7 @@ namespace BIMBotPlugin.Core
 
                 return new JObject
                 {
-                    ["message"] = $"ðŸ—‘ï¸ Deleted {unused.Count} unused scope boxes (of {scopeBoxes.Count} total)",
+                    ["message"] = $"🗑️ Deleted {unused.Count} unused scope boxes (of {scopeBoxes.Count} total)",
                     ["deleted"] = unused.Count
                 };
             }
@@ -272,7 +272,7 @@ namespace BIMBotPlugin.Core
                 }
                 return new JObject
                 {
-                    ["message"] = $"ðŸ—‘ï¸ Deleted {emptySheets.Count} empty sheets",
+                    ["message"] = $"🗑️ Deleted {emptySheets.Count} empty sheets",
                     ["deleted"] = emptySheets.Count
                 };
             }
@@ -290,7 +290,7 @@ namespace BIMBotPlugin.Core
 
             return new JObject
             {
-                ["message"] = $"ðŸ“„ Found {emptySheets.Count} empty sheets (no viewports) out of {sheets.Count} total",
+                ["message"] = $"📄 Found {emptySheets.Count} empty sheets (no viewports) out of {sheets.Count} total",
                 ["emptySheets"] = items,
                 ["hint"] = "Set delete=true to remove them"
             };
@@ -381,7 +381,7 @@ namespace BIMBotPlugin.Core
                 tx.Commit();
             }
 
-            result["message"] = $"ðŸ§¹ Cleaned {totalCleaned} unused items (scope: {scope})";
+            result["message"] = $"🧹 Cleaned {totalCleaned} unused items (scope: {scope})";
             return result;
         }
 
@@ -437,14 +437,14 @@ namespace BIMBotPlugin.Core
 
                 return new JObject
                 {
-                    ["message"] = $"ðŸ—‘ï¸ Deleted {unplaced.Count} unplaced views/schedules/legends",
+                    ["message"] = $"🗑️ Deleted {unplaced.Count} unplaced views/schedules/legends",
                     ["deleted"] = unplaced.Count
                 };
             }
 
             return new JObject
             {
-                ["message"] = $"ðŸ“‹ Found {unplaced.Count} views not placed on any sheet (dry run)",
+                ["message"] = $"📋 Found {unplaced.Count} views not placed on any sheet (dry run)",
                 ["unplacedViews"] = items,
                 ["hint"] = "Set dryRun=false to delete them"
             };
@@ -501,11 +501,11 @@ namespace BIMBotPlugin.Core
 
             return new JObject
             {
-                ["message"] = $"ðŸ” Scanned {families.Count} editable families, {purgedCount} have unused assets",
+                ["message"] = $"🔍 Scanned {families.Count} editable families, {purgedCount} have unused assets",
                 ["familiesScanned"] = families.Count,
                 ["familiesWithUnused"] = purgedCount,
                 ["details"] = details,
-                ["hint"] = "Use execute_code for deep purge: open each family doc â†’ purge â†’ save back."
+                ["hint"] = "Use execute_code for deep purge: open each family doc → purge → save back."
             };
         }
 
@@ -584,7 +584,7 @@ namespace BIMBotPlugin.Core
                     tx.Commit();
                     return new JObject
                     {
-                        ["message"] = $"ðŸ—‘ï¸ Deleted {deleted} unused families",
+                        ["message"] = $"🗑️ Deleted {deleted} unused families",
                         ["deleted"] = deleted
                     };
                 }
@@ -592,7 +592,7 @@ namespace BIMBotPlugin.Core
 
             return new JObject
             {
-                ["message"] = $"ðŸ“Š Found {candidates.Count} unused families (0 instances) out of {families.Count} total",
+                ["message"] = $"📊 Found {candidates.Count} unused families (0 instances) out of {families.Count} total",
                 ["unusedFamilies"] = items,
                 ["hint"] = "Set dryRun=false to delete them"
             };
@@ -641,7 +641,7 @@ namespace BIMBotPlugin.Core
 
                 return new JObject
                 {
-                    ["message"] = $"ðŸ’¥ Created exploded 3D view '{view3d.Name}' with {levels.Count} levels, spacing={spacing}ft",
+                    ["message"] = $"💥 Created exploded 3D view '{view3d.Name}' with {levels.Count} levels, spacing={spacing}ft",
                     ["viewId"] = view3d.Id.Value,
                     ["viewName"] = view3d.Name,
                     ["levels"] = levels.Count,
@@ -691,7 +691,7 @@ namespace BIMBotPlugin.Core
 
                 return new JObject
                 {
-                    ["message"] = $"ðŸ”„ Rotated section box by {angle}Â° in '{view.Name}'",
+                    ["message"] = $"🔄 Rotated section box by {angle}° in '{view.Name}'",
                     ["angle"] = angle
                 };
             }
@@ -794,7 +794,7 @@ namespace BIMBotPlugin.Core
                 tx.Commit();
                 return new JObject
                 {
-                    ["message"] = $"âœ… Super Align: moved {moved} elements (mode={mode}, direction={direction})",
+                    ["message"] = $"✅ Super Align: moved {moved} elements (mode={mode}, direction={direction})",
                     ["moved"] = moved
                 };
             }
@@ -859,7 +859,7 @@ namespace BIMBotPlugin.Core
 
             return new JObject
             {
-                ["message"] = $"ðŸ”— Joined {joined} element pairs ({cat1Str} â†” {cat2Str}) in '{view.Name}'",
+                ["message"] = $"🔗 Joined {joined} element pairs ({cat1Str} ↔ {cat2Str}) in '{view.Name}'",
                 ["joined"] = joined,
                 ["category1Count"] = elements1.Count,
                 ["category2Count"] = elements2.Count
@@ -925,7 +925,7 @@ namespace BIMBotPlugin.Core
 
             return new JObject
             {
-                ["message"] = $"ðŸ“‹ Copied {ids.Count} {category} elements from '{doc.Title}' â†’ '{targetDoc.Title}'",
+                ["message"] = $"📋 Copied {ids.Count} {category} elements from '{doc.Title}' → '{targetDoc.Title}'",
                 ["copied"] = ids.Count
             };
         }
@@ -1019,7 +1019,7 @@ namespace BIMBotPlugin.Core
 
             var response = new JObject
             {
-                ["message"] = $"ðŸ“ Measured {elements.Count} elements",
+                ["message"] = $"📏 Measured {elements.Count} elements",
                 ["totalLength_ft"] = Math.Round(totalLength, 4),
                 ["totalLength_m"] = Math.Round(totalLength * 0.3048, 4),
                 ["totalArea_sqft"] = Math.Round(totalArea, 4),

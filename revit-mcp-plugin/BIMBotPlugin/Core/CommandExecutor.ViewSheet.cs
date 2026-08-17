@@ -87,7 +87,7 @@ namespace BIMBotPlugin.Core
 
             return new JObject
             {
-                ["message"] = $"âœ… Created {created} elevation view(s) for {rooms.Count} room(s):\n" +
+                ["message"] = $"✅ Created {created} elevation view(s) for {rooms.Count} room(s):\n" +
                     string.Join("\n", names.Take(20)) +
                     (names.Count > 20 ? $"\n... and {names.Count - 20} more" : ""),
                 ["count"] = created
@@ -171,7 +171,7 @@ namespace BIMBotPlugin.Core
 
             return new JObject
             {
-                ["message"] = $"âœ… Created {created} section view(s):\n" + string.Join("\n", names.Take(20)),
+                ["message"] = $"✅ Created {created} section view(s):\n" + string.Join("\n", names.Take(20)),
                 ["count"] = created
             };
         }
@@ -258,7 +258,7 @@ namespace BIMBotPlugin.Core
 
             return new JObject
             {
-                ["message"] = $"âœ… Created {created} callout view(s):\n" + string.Join("\n", names.Take(20)),
+                ["message"] = $"✅ Created {created} callout view(s):\n" + string.Join("\n", names.Take(20)),
                 ["count"] = created
             };
         }
@@ -329,7 +329,7 @@ namespace BIMBotPlugin.Core
 
             return new JObject
             {
-                ["message"] = $"âœ… Aligned {aligned} viewport(s) across {targetIds.Count} target sheet(s) to match reference sheet.",
+                ["message"] = $"✅ Aligned {aligned} viewport(s) across {targetIds.Count} target sheet(s) to match reference sheet.",
                 ["aligned"] = aligned
             };
         }
@@ -366,7 +366,7 @@ namespace BIMBotPlugin.Core
 
             return new JObject
             {
-                ["message"] = $"âœ… Exported {exported} schedule(s) to CSV.\nOutput folder: {outputFolder}",
+                ["message"] = $"✅ Exported {exported} schedule(s) to CSV.\nOutput folder: {outputFolder}",
                 ["count"] = exported
             };
         }
@@ -417,7 +417,7 @@ namespace BIMBotPlugin.Core
 
             return new JObject
             {
-                ["message"] = $"âœ… Exported {elements.Count} {catName} elements with {paramList.Count} parameters.\nSaved to: {filePath}",
+                ["message"] = $"✅ Exported {elements.Count} {catName} elements with {paramList.Count} parameters.\nSaved to: {filePath}",
                 ["count"] = elements.Count,
                 ["file"] = filePath
             };
@@ -465,7 +465,7 @@ namespace BIMBotPlugin.Core
 
             return new JObject
             {
-                ["message"] = $"âœ… Created {created.Count} sheet(s):\n" + string.Join("\n", created),
+                ["message"] = $"✅ Created {created.Count} sheet(s):\n" + string.Join("\n", created),
                 ["count"] = created.Count
             };
         }
@@ -516,7 +516,7 @@ namespace BIMBotPlugin.Core
 
             return new JObject
             {
-                ["message"] = $"âœ… Duplicated {created.Count} view(s):\n" + string.Join("\n", created),
+                ["message"] = $"✅ Duplicated {created.Count} view(s):\n" + string.Join("\n", created),
                 ["count"] = created.Count
             };
         }
@@ -543,7 +543,7 @@ namespace BIMBotPlugin.Core
                 return new JObject
                 {
                     ["message"] = $"Template '{templateName}' not found.\nAvailable templates:\n" +
-                        string.Join("\n", templates.Select(t => $"  â€¢ {t.Name}"))
+                        string.Join("\n", templates.Select(t => $"  • {t.Name}"))
                 };
 
             // Parse view IDs
@@ -576,7 +576,7 @@ namespace BIMBotPlugin.Core
 
             return new JObject
             {
-                ["message"] = $"âœ… Applied template '{template.Name}' to {applied} view(s).",
+                ["message"] = $"✅ Applied template '{template.Name}' to {applied} view(s).",
                 ["count"] = applied
             };
         }
@@ -617,7 +617,7 @@ namespace BIMBotPlugin.Core
                         if (viewId == 0) throw new InvalidOperationException("viewId or viewIds required");
                         var vp = Viewport.Create(doc, new ElementId(sheetId), new ElementId(viewId), new XYZ(x, y, 0));
                         tx.Commit();
-                        return new JObject { ["message"] = $"âœ… Placed view on sheet (Viewport ID: {vp.Id.Value})", ["viewportId"] = vp.Id.Value };
+                        return new JObject { ["message"] = $"✅ Placed view on sheet (Viewport ID: {vp.Id.Value})", ["viewportId"] = vp.Id.Value };
                     }
      
                     // Multiple views
@@ -636,7 +636,7 @@ namespace BIMBotPlugin.Core
                     }
 
                     tx.Commit();
-                    return new JObject { ["message"] = $"âœ… Placed {placed} view(s) on sheet", ["viewports"] = results };
+                    return new JObject { ["message"] = $"✅ Placed {placed} view(s) on sheet", ["viewports"] = results };
                 }
                 catch { if (tx.HasStarted() && !tx.HasEnded()) tx.RollBack(); throw; }
             }
@@ -677,7 +677,7 @@ namespace BIMBotPlugin.Core
 
             return new JObject
             {
-                ["message"] = $"âœ… Found {warningDescriptions.Count} warning(s), selected {elementIds.Count} element(s)",
+                ["message"] = $"✅ Found {warningDescriptions.Count} warning(s), selected {elementIds.Count} element(s)",
                 ["warnings"] = warningDescriptions,
                 ["selectedCount"] = elementIds.Count
             };
@@ -737,7 +737,7 @@ namespace BIMBotPlugin.Core
                     }
 
                     tx.Commit();
-                    return new JObject { ["message"] = $"âœ… Replaced '{find}' â†’ '{replace}' in {renamed} name(s)", ["count"] = renamed };
+                    return new JObject { ["message"] = $"✅ Replaced '{find}' → '{replace}' in {renamed} name(s)", ["count"] = renamed };
                 }
                 catch { if (tx.HasStarted() && !tx.HasEnded()) tx.RollBack(); throw; }
             }
@@ -796,7 +796,7 @@ namespace BIMBotPlugin.Core
                         }
 
                         tx.Commit();
-                        return new JObject { ["message"] = $"âœ… Copied '{sourceParam}' value to {transferred} element(s)" };
+                        return new JObject { ["message"] = $"✅ Copied '{sourceParam}' value to {transferred} element(s)" };
                     }
                     else
                     {
@@ -826,7 +826,7 @@ namespace BIMBotPlugin.Core
                         }
 
                         tx.Commit();
-                        return new JObject { ["message"] = $"âœ… Transferred '{sourceParam}' â†’ '{targetParam}' on {transferred} element(s)" };
+                        return new JObject { ["message"] = $"✅ Transferred '{sourceParam}' → '{targetParam}' on {transferred} element(s)" };
                     }
                 }
                 catch { if (tx.HasStarted() && !tx.HasEnded()) tx.RollBack(); throw; }
@@ -888,7 +888,7 @@ namespace BIMBotPlugin.Core
             uidoc.Selection.SetElementIds(matching);
             return new JObject
             {
-                ["message"] = $"âœ… Selected {matching.Count} element(s)",
+                ["message"] = $"✅ Selected {matching.Count} element(s)",
                 ["count"] = matching.Count,
                 ["elementIds"] = new JArray(matching.Select(id => id.Value))
             };
@@ -927,7 +927,7 @@ namespace BIMBotPlugin.Core
                     }
 
                     tx.Commit();
-                    return new JObject { ["message"] = $"âœ… Created {count} sheet copy(ies)", ["sheets"] = created };
+                    return new JObject { ["message"] = $"✅ Created {count} sheet copy(ies)", ["sheets"] = created };
                 }
                 catch { if (tx.HasStarted() && !tx.HasEnded()) tx.RollBack(); throw; }
             }
@@ -993,7 +993,7 @@ namespace BIMBotPlugin.Core
                     tx.Commit();
                     return new JObject
                     {
-                        ["message"] = $"âœ… Section box applied around {elementIds.Count} element(s) with {padding}ft padding",
+                        ["message"] = $"✅ Section box applied around {elementIds.Count} element(s) with {padding}ft padding",
                         ["viewId"] = view3d.Id.Value,
                         ["viewName"] = view3d.Name
                     };
@@ -1045,7 +1045,7 @@ namespace BIMBotPlugin.Core
                     tx.Commit();
                     return new JObject
                     {
-                        ["message"] = $"âœ… Copied {filterIds.Count} filter(s) to {targetViewIds.Count} view(s) ({copiedCount} total applications)",
+                        ["message"] = $"✅ Copied {filterIds.Count} filter(s) to {targetViewIds.Count} view(s) ({copiedCount} total applications)",
                         ["filtersCopied"] = filterIds.Count,
                         ["viewsUpdated"] = targetViewIds.Count
                     };
@@ -1093,7 +1093,7 @@ namespace BIMBotPlugin.Core
                     var action = delta >= 0 ? "Extended" : "Shrunk";
                     return new JObject
                     {
-                        ["message"] = $"âœ… {action} element at {end} end by {Math.Abs(delta)} ft",
+                        ["message"] = $"✅ {action} element at {end} end by {Math.Abs(delta)} ft",
                         ["newLength"] = Math.Round(newStart.DistanceTo(newEnd), 4)
                     };
                 }
