@@ -31,7 +31,7 @@ namespace BIMBotPlugin.Core
         public static SocketService? SocketServiceInstance => _socketService;
         public static ExternalEventManager? EventManagerInstance => _eventManager;
 
-        public static string Version => "2.3.0";
+        public static string Version => "2.3.1";
 
         public Result OnStartup(UIControlledApplication application)
         {
@@ -297,6 +297,7 @@ namespace BIMBotPlugin.Core
         public static void StartService(UIApplication uiApp)
         {
             ActiveUIApp = uiApp;
+            _userStoppedService = false;
             if (_socketService == null)
             {
                 _socketService = new SocketService(8080, _eventManager!);
@@ -308,16 +309,40 @@ namespace BIMBotPlugin.Core
 
         public static void StopService()
         {
+            _userStoppedService = true;
             _socketService?.Stop();
             UpdateToggleButtonState();
-            Logger.Log("BIM-Bot Service stopped");
+            Logger.Log("BIM-Bot Service stopped by user");
         }
+
+        /// <summary>
+        /// Set when the user stops the service from the ribbon. The idling health
+        /// check honours this and will not restart behind the user's back.
+        /// </summary>
+        private static bool _userStoppedService;
 
         public static bool IsServiceRunning => _socketService?.IsRunning ?? false;
 
         // ========================================
         // Dynamic button state updates
         // ========================================
+
+        /// <summary>
+        /// Called after a successful activation so the ribbon reflects the new
+        /// licensed state. Never throws — a UI refresh must not fail activation.
+        /// </summary>
+        public static void SetActivationUiState(bool isActivated)
+        {
+            try
+            {
+                Logger.Log($"Activation state updated: activated={isActivated}");
+                UpdateToggleButtonState();
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError("Failed to update activation UI state", ex);
+            }
+        }
 
         /// <summary>Update the Start BIM-Bot button icon/text based on service state.</summary>
         public static void UpdateToggleButtonState()
@@ -365,7 +390,7 @@ namespace BIMBotPlugin.Core
             {
                 _autoStartAttempts++;
 
-                if (!IsServiceRunning)
+                if (!IsServiceRunning && !_userStoppedService)
                 {
                     try
                     {
@@ -463,7 +488,7 @@ namespace BIMBotPlugin.Core
                 return;
             _lastHealthCheck = now;
 
-            if (!IsServiceRunning)
+            if (!IsServiceRunning && !_userStoppedService)
             {
                 Logger.Log("Health check: service is down — auto-restarting...");
                 try

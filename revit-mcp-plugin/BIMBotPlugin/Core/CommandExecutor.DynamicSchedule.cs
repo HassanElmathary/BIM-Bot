@@ -59,19 +59,19 @@ namespace BIMBotPlugin.Core
             return null;
         }
 
-        private static ForgeTypeId UnitTypeIdFromString(string unit)
+        private static BbUnitId? UnitTypeIdFromString(string unit)
         {
             switch ((unit ?? "").Trim().ToLowerInvariant())
             {
-                case "mm": case "millimeter": case "millimeters": return UnitTypeId.Millimeters;
-                case "cm": case "centimeter": case "centimeters": return UnitTypeId.Centimeters;
-                case "m": case "meter": case "meters": case "metre": case "metres": return UnitTypeId.Meters;
-                case "ft": case "feet": case "foot": return UnitTypeId.Feet;
-                case "in": case "inch": case "inches": return UnitTypeId.Inches;
-                case "m2": case "m²": case "sqm": return UnitTypeId.SquareMeters;
-                case "ft2": case "ft²": case "sqft": return UnitTypeId.SquareFeet;
-                case "m3": case "m³": return UnitTypeId.CubicMeters;
-                case "ft3": case "ft³": return UnitTypeId.CubicFeet;
+                case "mm": case "millimeter": case "millimeters": return Compat.BbUnits.Millimeters;
+                case "cm": case "centimeter": case "centimeters": return Compat.BbUnits.Centimeters;
+                case "m": case "meter": case "meters": case "metre": case "metres": return Compat.BbUnits.Meters;
+                case "ft": case "feet": case "foot": return Compat.BbUnits.Feet;
+                case "in": case "inch": case "inches": return Compat.BbUnits.Inches;
+                case "m2": case "m²": case "sqm": return Compat.BbUnits.SquareMeters;
+                case "ft2": case "ft²": case "sqft": return Compat.BbUnits.SquareFeet;
+                case "m3": case "m³": return Compat.BbUnits.CubicMeters;
+                case "ft3": case "ft³": return Compat.BbUnits.CubicFeet;
                 default: return null;
             }
         }
@@ -108,13 +108,11 @@ namespace BIMBotPlugin.Core
                 if (unitId == null)
                 {
                     // No unit given — assume the document's display unit for this spec
-                    try { unitId = doc.GetUnits().GetFormatOptions(p.Definition.GetDataType()).GetUnitTypeId(); }
+                    try { unitId = Compat.ElementApiCompat.GetDisplayUnitFor(doc, p); }
                     catch { }
                 }
 
-                var thresholdInternal = unitId != null
-                    ? UnitUtils.ConvertToInternalUnits(threshold, unitId)
-                    : threshold;
+                var thresholdInternal = Compat.BbUnits.ToInternal(threshold, unitId);
                 var actual = p.AsDouble();
                 const double eps = 1e-9;
 
@@ -210,7 +208,7 @@ namespace BIMBotPlugin.Core
 
                 var row = new JObject
                 {
-                    ["Id"] = elem.Id.Value,
+                    ["Id"] = elem.Id.Val(),
                     ["Name"] = elem.Name,
                     ["Type"] = doc.GetElement(elem.GetTypeId())?.Name ?? ""
                 };
@@ -228,8 +226,8 @@ namespace BIMBotPlugin.Core
                         // spreadsheet totals work (instead of "900 mm" strings)
                         try
                         {
-                            var unitId = doc.GetUnits().GetFormatOptions(p.Definition.GetDataType()).GetUnitTypeId();
-                            row[col] = Math.Round(UnitUtils.ConvertFromInternalUnits(p.AsDouble(), unitId), 3);
+                            var unitId = Compat.ElementApiCompat.GetDisplayUnitFor(doc, p);
+                            row[col] = Math.Round(Compat.BbUnits.FromInternal(p.AsDouble(), unitId), 3);
                         }
                         catch { row[col] = p.AsValueString() ?? ""; }
                     }
@@ -244,7 +242,7 @@ namespace BIMBotPlugin.Core
                 }
 
                 rows.Add(row);
-                matchedIds.Add(elem.Id.Value);
+                matchedIds.Add(elem.Id.Val());
                 if (limit > 0 && rows.Count >= limit) break;
             }
 

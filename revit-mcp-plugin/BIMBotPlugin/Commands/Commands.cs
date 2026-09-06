@@ -39,7 +39,7 @@ namespace BIMBotPlugin.Commands
         {
             var info = $"BIM-Bot Plugin v{Application.Version}\n\n" +
                        $"Service Status: {(Application.IsServiceRunning ? "Running ✅" : "Stopped ❌")}\n" +
-                       $"Port: 8080\n" +
+                       $"Port: {Application.SocketServiceInstance?.Port.ToString() ?? "8080 (not started)"}\n" +
                        $"Protocol: JSON-RPC 2.0\n\n" +
                        $"To connect an AI client, configure it to use:\n" +
                        $"  Server: bim-bot\n" +

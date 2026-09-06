@@ -49,11 +49,11 @@ namespace BIMBotPlugin.Core
                 case "get_sheets":
                     return GetSheets(doc);
                 case "get_levels":
-                    return GetLevels(doc);
+                    return GetLevels(doc, parameters);
                 case "get_grids":
-                    return GetGrids(doc);
+                    return GetGrids(doc, parameters);
                 case "get_rooms":
-                    return GetRooms(doc);
+                    return GetRooms(doc, parameters);
                 case "get_available_family_types":
                     return GetFamilyTypes(doc, parameters);
                 case "get_schedules":
@@ -61,7 +61,7 @@ namespace BIMBotPlugin.Core
                 case "get_linked_models":
                     return GetLinkedModels(doc);
                 case "get_warnings":
-                    return GetWarnings(doc);
+                    return GetWarnings(doc, parameters);
                 case "export_elements":
                     return ExportElements(doc, parameters);
 
@@ -187,7 +187,7 @@ namespace BIMBotPlugin.Core
                 case "open_view":
                 {
                     var viewId = parameters["viewId"]?.Value<int>() ?? 0;
-                    var view = doc.GetElement(new ElementId(viewId)) as View;
+                    var view = doc.GetElement(viewId.ToElementId()) as View;
                     if (view == null) throw new InvalidOperationException($"View {viewId} not found");
                     uidoc!.ActiveView = view;
                     return new JObject { ["message"] = $"Opened view '{view.Name}'", ["viewId"] = viewId };
@@ -195,10 +195,10 @@ namespace BIMBotPlugin.Core
                 case "close_view":
                 {
                     var closeViewId = parameters["viewId"]?.Value<int>() ?? 0;
-                    var closeView = doc.GetElement(new ElementId(closeViewId)) as View;
+                    var closeView = doc.GetElement(closeViewId.ToElementId()) as View;
                     if (closeView == null) throw new InvalidOperationException($"View {closeViewId} not found");
                     var openUIViews = uidoc!.GetOpenUIViews();
-                    var uiView = openUIViews.FirstOrDefault(uv => uv.ViewId.Value == closeViewId);
+                    var uiView = openUIViews.FirstOrDefault(uv => uv.ViewId.Val() == closeViewId);
                     if (uiView == null) return new JObject { ["message"] = $"View '{closeView.Name}' is not open" };
                     uiView.Close();
                     return new JObject { ["message"] = $"Closed view '{closeView.Name}'", ["viewId"] = closeViewId };
@@ -643,6 +643,50 @@ namespace BIMBotPlugin.Core
                 case "show_powerbi_report":
                     return ShowPowerBIReport(parameters);
 
+                // ===== FEDERATED QUERY COMMANDS =====
+                case "get_federation_summary":
+                    return GetFederationSummary(doc);
+                case "query_across_links":
+                    return QueryAcrossLinks(doc, parameters);
+                case "get_link_element_details":
+                    return GetLinkElementDetails(doc, parameters);
+                case "compare_link_levels":
+                    return CompareLinkLevels(doc);
+                case "find_cross_link_spatial_containment":
+                    return FindCrossLinkSpatialContainment(doc, parameters);
+
+                // ===== MODEL HEALTH & QA/QC SCORECARD =====
+                case "audit_federated_model_health":
+                    return AuditFederatedModelHealth(doc, parameters);
+                case "heal_model_issues":
+                    return HealModelIssues(doc, parameters);
+                case "generate_remediation_report":
+                    return GenerateRemediationReport(doc, parameters);
+
+                // ===== IDS & ISO 19650 VALIDATION =====
+                case "validate_ids_spec":
+                    return ValidateIdsSpec(doc, parameters);
+                case "audit_iso19650_naming":
+                    return AuditIso19650Naming(doc, parameters);
+
+                // ===== CLASH TRIAGE & BCF =====
+                case "run_smart_clash_triage":
+                    return RunSmartClashTriage(doc, parameters);
+                case "export_bcf_issues":
+                    return ExportBcfIssues(doc, parameters);
+
+                // ===== MILESTONE DIFFING =====
+                case "diff_linked_milestones":
+                    return DiffLinkedMilestones(doc, parameters);
+
+                // ===== FAMILY SANITIZER =====
+                case "audit_and_clean_family":
+                    return AuditAndCleanFamily(doc, parameters);
+
+                // ===== COBie ENRICHMENT =====
+                case "enrich_cross_link_cobie":
+                    return EnrichCrossLinkCobie(doc, parameters);
+
                 default:
                     throw new InvalidOperationException($"Unknown command: {command}");
             }
@@ -655,7 +699,7 @@ namespace BIMBotPlugin.Core
             var view = uidoc.ActiveView;
             return new JObject
             {
-                ["viewId"] = view.Id.Value,
+                ["viewId"] = view.Id.Val(),
                 ["viewName"] = view.Name,
                 ["viewType"] = view.ViewType.ToString(),
                 ["scale"] = view.Scale,
@@ -688,7 +732,7 @@ namespace BIMBotPlugin.Core
             {
                 result.Add(new JObject
                 {
-                    ["id"] = elem.Id.Value,
+                    ["id"] = elem.Id.Val(),
                     ["name"] = elem.Name,
                     ["category"] = elem.Category?.Name ?? "Unknown"
                 });
@@ -710,7 +754,7 @@ namespace BIMBotPlugin.Core
                 {
                     var elemObj = new JObject
                     {
-                        ["id"] = elem.Id.Value,
+                        ["id"] = elem.Id.Val(),
                         ["name"] = elem.Name,
                         ["category"] = elem.Category?.Name ?? "Unknown"
                     };
@@ -738,24 +782,64 @@ namespace BIMBotPlugin.Core
             var includeParams = parameters["includeParameters"]?.Value<bool>() ?? false;
             var offset = parameters["offset"]?.Value<int>() ?? 0;
             var limit = parameters["limit"]?.Value<int>() ?? 0;
+            var includeLinks = parameters["includeLinks"]?.Value<bool>() ?? false;
+            var linkNames = parameters["linkNames"]?.ToObject<string[]>();
 
-            var collector = new FilteredElementCollector(doc);
             var builtInCat = GetBuiltInCategory(category);
 
+            if (includeLinks)
+            {
+                // Federated query across host + links
+                var scope = FederatedCollector.ParseScope(true, linkNames);
+                var allFederated = FederatedCollector.Collect(doc, builtInCat, scope, linkNames).ToList();
+                var totalCount = allFederated.Count;
+                var subset = allFederated.Skip(offset);
+                if (limit > 0) subset = subset.Take(limit);
+                var result = new JArray();
+
+                foreach (var fe in subset)
+                {
+                    var obj = new JObject
+                    {
+                        ["id"] = fe.Element.Id.Val(),
+                        ["namespacedId"] = fe.NamespacedId,
+                        ["name"] = fe.Element.Name,
+                        ["category"] = fe.Element.Category?.Name ?? "Unknown",
+                        ["sourceModel"] = fe.SourceModel,
+                        ["isFromLink"] = fe.IsFromLink
+                    };
+                    if (includeParams)
+                    {
+                        var paramsObj = new JObject();
+                        foreach (Parameter p in fe.Element.Parameters)
+                        {
+                            if (p.HasValue)
+                                paramsObj[p.Definition.Name] = p.AsValueString() ?? p.AsString() ?? "";
+                        }
+                        obj["parameters"] = paramsObj;
+                    }
+                    result.Add(obj);
+                }
+
+                return new JObject { ["totalCount"] = totalCount, ["count"] = result.Count, ["offset"] = offset, ["limit"] = limit, ["hasMore"] = (offset + result.Count) < totalCount, ["federated"] = true, ["elements"] = result };
+            }
+
+            // Original host-only query
+            var collector = new FilteredElementCollector(doc);
             if (builtInCat != BuiltInCategory.INVALID)
                 collector = collector.OfCategory(builtInCat);
 
             var allElements = collector.WhereElementIsNotElementType().ToElements();
-            var totalCount = allElements.Count;
-            var subset = offset > 0 ? allElements.Skip(offset) : (IEnumerable<Element>)allElements;
-            if (limit > 0) subset = subset.Take(limit);
-            var result = new JArray();
+            var hostTotalCount = allElements.Count;
+            var hostSubset = offset > 0 ? allElements.Skip(offset) : (IEnumerable<Element>)allElements;
+            if (limit > 0) hostSubset = hostSubset.Take(limit);
+            var hostResult = new JArray();
 
-            foreach (var elem in subset)
+            foreach (var elem in hostSubset)
             {
                 var obj = new JObject
                 {
-                    ["id"] = elem.Id.Value,
+                    ["id"] = elem.Id.Val(),
                     ["name"] = elem.Name,
                     ["category"] = elem.Category?.Name ?? "Unknown"
                 };
@@ -771,16 +855,32 @@ namespace BIMBotPlugin.Core
                     obj["parameters"] = paramsObj;
                 }
 
-                result.Add(obj);
+                hostResult.Add(obj);
             }
 
-            return new JObject { ["totalCount"] = totalCount, ["count"] = result.Count, ["offset"] = offset, ["limit"] = limit, ["hasMore"] = (offset + result.Count) < totalCount, ["elements"] = result };
+            return new JObject { ["totalCount"] = hostTotalCount, ["count"] = hostResult.Count, ["offset"] = offset, ["limit"] = limit, ["hasMore"] = (offset + hostResult.Count) < hostTotalCount, ["elements"] = hostResult };
         }
 
         private static JToken GetParameters(Document doc, JObject parameters)
         {
+            // Support namespaced IDs for cross-link element lookup
+            var namespacedId = parameters["namespacedId"]?.ToString();
             var elementId = parameters["elementId"]?.Value<int>() ?? 0;
-            var elem = doc.GetElement(new ElementId(elementId));
+            Document resolvedDoc = doc;
+            Element elem = null;
+
+            if (!string.IsNullOrEmpty(namespacedId))
+            {
+                var resolved = LinkDocumentResolver.ResolveNamespacedId(doc, namespacedId);
+                if (resolved == null)
+                    throw new InvalidOperationException($"Element not found: {namespacedId}");
+                resolvedDoc = resolved.Value.Doc;
+                elem = resolved.Value.Elem;
+            }
+            else
+            {
+                elem = doc.GetElement(elementId.ToElementId());
+            }
 
             if (elem == null)
                 throw new InvalidOperationException($"Element {elementId} not found");
@@ -795,7 +895,7 @@ namespace BIMBotPlugin.Core
                     instanceParams[p.Definition.Name] = p.AsValueString() ?? p.AsString() ?? "";
             }
 
-            var typeElem = doc.GetElement(elem.GetTypeId());
+            var typeElem = resolvedDoc.GetElement(elem.GetTypeId());
             if (typeElem != null)
             {
                 foreach (Parameter p in typeElem.Parameters)
@@ -869,7 +969,7 @@ namespace BIMBotPlugin.Core
 
                 result.Add(new JObject
                 {
-                    ["id"] = view.Id.Value,
+                    ["id"] = view.Id.Val(),
                     ["name"] = view.Name,
                     ["viewType"] = view.ViewType.ToString(),
                     ["scale"] = view.Scale
@@ -896,7 +996,7 @@ namespace BIMBotPlugin.Core
 
                 result.Add(new JObject
                 {
-                    ["id"] = sheet.Id.Value,
+                    ["id"] = sheet.Id.Val(),
                     ["number"] = sheet.SheetNumber,
                     ["name"] = sheet.Name,
                     ["placedViews"] = views
@@ -906,16 +1006,37 @@ namespace BIMBotPlugin.Core
             return new JObject { ["sheets"] = result, ["count"] = result.Count };
         }
 
-        private static JToken GetLevels(Document doc)
+        private static JToken GetLevels(Document doc, JObject parameters = null)
         {
-            var collector = new FilteredElementCollector(doc).OfClass(typeof(Level));
+            var includeLinks = parameters?["includeLinks"]?.Value<bool>() ?? false;
+            var linkNames = parameters?["linkNames"]?.ToObject<string[]>();
             var result = new JArray();
 
-            foreach (Level level in collector)
+            if (includeLinks)
+            {
+                var scope = FederatedCollector.ParseScope(true, linkNames);
+                foreach (var fe in FederatedCollector.CollectByClass(doc, typeof(Level), scope, linkNames))
+                {
+                    if (fe.Element is Level level)
+                    {
+                        result.Add(new JObject
+                        {
+                            ["id"] = level.Id.Val(),
+                            ["namespacedId"] = fe.NamespacedId,
+                            ["name"] = level.Name,
+                            ["elevation"] = Math.Round(level.Elevation, 4),
+                            ["sourceModel"] = fe.SourceModel
+                        });
+                    }
+                }
+                return new JObject { ["levels"] = result, ["count"] = result.Count, ["federated"] = true };
+            }
+
+            foreach (Level level in new FilteredElementCollector(doc).OfClass(typeof(Level)))
             {
                 result.Add(new JObject
                 {
-                    ["id"] = level.Id.Value,
+                    ["id"] = level.Id.Val(),
                     ["name"] = level.Name,
                     ["elevation"] = Math.Round(level.Elevation, 4)
                 });
@@ -924,37 +1045,80 @@ namespace BIMBotPlugin.Core
             return new JObject { ["levels"] = result, ["count"] = result.Count };
         }
 
-        private static JToken GetGrids(Document doc)
+        private static JToken GetGrids(Document doc, JObject parameters = null)
         {
-            var collector = new FilteredElementCollector(doc).OfClass(typeof(Grid));
+            var includeLinks = parameters?["includeLinks"]?.Value<bool>() ?? false;
+            var linkNames = parameters?["linkNames"]?.ToObject<string[]>();
             var result = new JArray();
 
-            foreach (Grid grid in collector)
+            if (includeLinks)
             {
-                var curve = grid.Curve;
+                var scope = FederatedCollector.ParseScope(true, linkNames);
+                foreach (var fe in FederatedCollector.CollectByClass(doc, typeof(Grid), scope, linkNames))
+                {
+                    if (fe.Element is Grid grid)
+                    {
+                        result.Add(new JObject
+                        {
+                            ["id"] = grid.Id.Val(),
+                            ["namespacedId"] = fe.NamespacedId,
+                            ["name"] = grid.Name,
+                            ["isCurved"] = !(grid.Curve is Line),
+                            ["sourceModel"] = fe.SourceModel
+                        });
+                    }
+                }
+                return new JObject { ["grids"] = result, ["count"] = result.Count, ["federated"] = true };
+            }
+
+            foreach (Grid grid in new FilteredElementCollector(doc).OfClass(typeof(Grid)))
+            {
                 result.Add(new JObject
                 {
-                    ["id"] = grid.Id.Value,
+                    ["id"] = grid.Id.Val(),
                     ["name"] = grid.Name,
-                    ["isCurved"] = !(curve is Line)
+                    ["isCurved"] = !(grid.Curve is Line)
                 });
             }
 
             return new JObject { ["grids"] = result, ["count"] = result.Count };
         }
 
-        private static JToken GetRooms(Document doc)
+        private static JToken GetRooms(Document doc, JObject parameters = null)
         {
-            var collector = new FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_Rooms);
+            var includeLinks = parameters?["includeLinks"]?.Value<bool>() ?? false;
+            var linkNames = parameters?["linkNames"]?.ToObject<string[]>();
             var result = new JArray();
 
-            foreach (var elem in collector)
+            if (includeLinks)
+            {
+                var scope = FederatedCollector.ParseScope(true, linkNames);
+                foreach (var fe in FederatedCollector.Collect(doc, BuiltInCategory.OST_Rooms, scope, linkNames))
+                {
+                    if (fe.Element is Room room)
+                    {
+                        result.Add(new JObject
+                        {
+                            ["id"] = room.Id.Val(),
+                            ["namespacedId"] = fe.NamespacedId,
+                            ["name"] = room.get_Parameter(BuiltInParameter.ROOM_NAME)?.AsString() ?? "",
+                            ["number"] = room.get_Parameter(BuiltInParameter.ROOM_NUMBER)?.AsString() ?? "",
+                            ["area"] = Math.Round(room.Area, 2),
+                            ["level"] = room.Level?.Name ?? "N/A",
+                            ["sourceModel"] = fe.SourceModel
+                        });
+                    }
+                }
+                return new JObject { ["rooms"] = result, ["count"] = result.Count, ["federated"] = true };
+            }
+
+            foreach (var elem in new FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_Rooms))
             {
                 if (elem is Room room)
                 {
                     result.Add(new JObject
                     {
-                        ["id"] = room.Id.Value,
+                        ["id"] = room.Id.Val(),
                         ["name"] = room.get_Parameter(BuiltInParameter.ROOM_NAME)?.AsString() ?? "",
                         ["number"] = room.get_Parameter(BuiltInParameter.ROOM_NUMBER)?.AsString() ?? "",
                         ["area"] = Math.Round(room.Area, 2),
@@ -983,7 +1147,7 @@ namespace BIMBotPlugin.Core
             {
                 result.Add(new JObject
                 {
-                    ["id"] = symbol.Id.Value,
+                    ["id"] = symbol.Id.Val(),
                     ["familyName"] = symbol.FamilyName,
                     ["typeName"] = symbol.Name,
                     ["category"] = symbol.Category?.Name ?? ""
@@ -1004,7 +1168,7 @@ namespace BIMBotPlugin.Core
 
                 result.Add(new JObject
                 {
-                    ["id"] = schedule.Id.Value,
+                    ["id"] = schedule.Id.Val(),
                     ["name"] = schedule.Name
                 });
             }
@@ -1021,7 +1185,7 @@ namespace BIMBotPlugin.Core
             {
                 result.Add(new JObject
                 {
-                    ["id"] = linkType.Id.Value,
+                    ["id"] = linkType.Id.Val(),
                     ["name"] = linkType.Name
                 });
             }
@@ -1029,23 +1193,44 @@ namespace BIMBotPlugin.Core
             return new JObject { ["linkedModels"] = result, ["count"] = result.Count };
         }
 
-        private static JToken GetWarnings(Document doc)
+        private static JToken GetWarnings(Document doc, JObject parameters = null)
         {
-            var warnings = doc.GetWarnings();
+            var includeLinks = parameters?["includeLinks"]?.Value<bool>() ?? false;
             var result = new JArray();
 
-            foreach (var warning in warnings)
+            // Host warnings
+            foreach (var warning in doc.GetWarnings())
             {
-                var elementIds = warning.GetFailingElements().Select(id => id.Value).ToList();
+                var elementIds = warning.GetFailingElements().Select(id => id.Val()).ToList();
                 result.Add(new JObject
                 {
                     ["description"] = warning.GetDescriptionText(),
                     ["severity"] = warning.GetSeverity().ToString(),
-                    ["elementIds"] = new JArray(elementIds)
+                    ["elementIds"] = new JArray(elementIds),
+                    ["sourceModel"] = "Host"
                 });
             }
 
-            return new JObject { ["warnings"] = result, ["count"] = result.Count };
+            // Linked model warnings
+            if (includeLinks)
+            {
+                foreach (var (instance, linkDoc, transform, linkName) in LinkDocumentResolver.GetLoadedLinks(doc))
+                {
+                    foreach (var warning in linkDoc.GetWarnings())
+                    {
+                        var elementIds = warning.GetFailingElements().Select(id => id.Val()).ToList();
+                        result.Add(new JObject
+                        {
+                            ["description"] = warning.GetDescriptionText(),
+                            ["severity"] = warning.GetSeverity().ToString(),
+                            ["elementIds"] = new JArray(elementIds),
+                            ["sourceModel"] = linkName
+                        });
+                    }
+                }
+            }
+
+            return new JObject { ["warnings"] = result, ["count"] = result.Count, ["federated"] = includeLinks };
         }
 
         // ===== DATA BRIDGE EXPORT =====
@@ -1136,7 +1321,7 @@ namespace BIMBotPlugin.Core
                 // Build minified object
                 var obj = new JObject
                 {
-                    ["id"] = elem.Id.Value,
+                    ["id"] = elem.Id.Val(),
                     ["guid"] = elem.UniqueId,
                     ["name"] = elem.Name,
                     ["category"] = elem.Category?.Name ?? "Unknown",
@@ -1226,7 +1411,7 @@ namespace BIMBotPlugin.Core
                     tx.Commit();
                     return new JObject
                     {
-                        ["elementId"] = wall.Id.Value,
+                        ["elementId"] = wall.Id.Val(),
                         ["message"] = $"Wall created successfully on level '{levelName}'"
                     };
                 }
@@ -1254,7 +1439,7 @@ namespace BIMBotPlugin.Core
                         .Cast<Level>()
                         .FirstOrDefault(l => l.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
                     if (existing != null)
-                        throw new InvalidOperationException($"Level '{name}' already exists (id: {existing.Id.Value})");
+                        throw new InvalidOperationException($"Level '{name}' already exists (id: {existing.Id.Val()})");
 
                     var level = Level.Create(doc, elevation);
                     level.Name = name;
@@ -1262,7 +1447,7 @@ namespace BIMBotPlugin.Core
                     tx.Commit();
                     return new JObject
                     {
-                        ["elementId"] = level.Id.Value,
+                        ["elementId"] = level.Id.Val(),
                         ["message"] = $"Level '{name}' created at elevation {elevation}"
                     };
                 }
@@ -1301,7 +1486,7 @@ namespace BIMBotPlugin.Core
                     tx.Commit();
                     return new JObject
                     {
-                        ["elementId"] = grid.Id.Value,
+                        ["elementId"] = grid.Id.Val(),
                         ["message"] = $"Grid '{grid.Name}' created"
                     };
                 }
@@ -1345,7 +1530,7 @@ namespace BIMBotPlugin.Core
                     tx.Commit();
                     return new JObject
                     {
-                        ["elementId"] = room.Id.Value,
+                        ["elementId"] = room.Id.Val(),
                         ["message"] = $"Room created on level '{levelName}'"
                     };
                 }
@@ -1393,7 +1578,7 @@ namespace BIMBotPlugin.Core
                     tx.Commit();
                     return new JObject
                     {
-                        ["elementId"] = sheet.Id.Value,
+                        ["elementId"] = sheet.Id.Val(),
                         ["message"] = $"Sheet '{sheet.SheetNumber} - {sheet.Name}' created"
                     };
                 }
@@ -1415,7 +1600,7 @@ namespace BIMBotPlugin.Core
                 try
                 {
                     var elementId = parameters["elementId"]?.Value<int>() ?? 0;
-                    var elem = doc.GetElement(new ElementId(elementId));
+                    var elem = doc.GetElement(elementId.ToElementId());
                     if (elem == null)
                         throw new InvalidOperationException($"Element {elementId} not found");
 
@@ -1486,7 +1671,7 @@ namespace BIMBotPlugin.Core
                     var dy = parameters["deltaY"]?.Value<double>() ?? 0;
                     var dz = parameters["deltaZ"]?.Value<double>() ?? 0;
 
-                    var elem = doc.GetElement(new ElementId(elementId));
+                    var elem = doc.GetElement(elementId.ToElementId());
                     if (elem == null)
                         throw new InvalidOperationException($"Element {elementId} not found");
 
@@ -1514,7 +1699,7 @@ namespace BIMBotPlugin.Core
                 try
                 {
                     var ids = (parameters["elementIds"] as JArray)?
-                        .Select(id => new ElementId(id.Value<int>()))
+                        .Select(id => (id.Value<int>()).ToElementId())
                         .ToList() ?? new List<ElementId>();
 
                     if (ids.Count == 0)
@@ -1524,7 +1709,7 @@ namespace BIMBotPlugin.Core
                     foreach (var id in ids)
                     {
                         if (doc.GetElement(id) == null)
-                            throw new InvalidOperationException($"Element {id.Value} not found");
+                            throw new InvalidOperationException($"Element {id.Val()} not found");
                     }
 
                     // doc.Delete accepts ICollection<ElementId>
@@ -1546,7 +1731,7 @@ namespace BIMBotPlugin.Core
             var isolate = parameters["isolate"]?.Value<bool>() ?? false;
 
             var requestedIds = (parameters["elementIds"] as JArray)?
-                .Select(id => new ElementId(id.Value<long>()))
+                .Select(id => (id.Value<long>()).ToElementId())
                 .ToList() ?? new List<ElementId>();
 
             // ── Resolve every ID: host doc first (excluding RevitLinkInstance containers),
@@ -1621,7 +1806,7 @@ namespace BIMBotPlugin.Core
             // Apply selection — SetReferences handles both host and linked refs.
             try
             {
-                uidoc.Selection.SetReferences(selectionRefs);
+                uidoc.Selection.SetReferencesCompat(selectionRefs);
             }
             catch
             {
@@ -1823,7 +2008,7 @@ namespace BIMBotPlugin.Core
                 }
                 else
                 {
-                    var opts = new ExternalDefinitionCreationOptions(name, SpecTypeId.String.Text);
+                    var opts = new ExternalDefinitionCreationOptions(name, Compat.BbSpecs.Text);
                     extDef = groupDef.Definitions.Create(opts) as ExternalDefinition;
                 }
 
@@ -1870,7 +2055,7 @@ namespace BIMBotPlugin.Core
             {
                 var bic = GetBuiltInCategory(catFilter);
                 if (bic != BuiltInCategory.INVALID)
-                    familySymbols = familySymbols.Where(fs => fs.Category?.Id == new ElementId(bic)).ToList();
+                    familySymbols = familySymbols.Where(fs => fs.Category?.Id == bic.ToElementId()).ToList();
             }
 
             var unused = new List<FamilySymbol>();
@@ -2022,7 +2207,7 @@ namespace BIMBotPlugin.Core
                     var dz = parameters["deltaZ"]?.Value<double>() ?? 0;
                     var count = parameters["count"]?.Value<int>() ?? 1;
 
-                    var elem = doc.GetElement(new ElementId(elementId));
+                    var elem = doc.GetElement(elementId.ToElementId());
                     if (elem == null) throw new InvalidOperationException($"Element {elementId} not found");
 
                     var translation = new XYZ(dx, dy, dz);
@@ -2031,7 +2216,7 @@ namespace BIMBotPlugin.Core
                     {
                         var offset = translation * (i + 1);
                         var copied = ElementTransformUtils.CopyElement(doc, elem.Id, offset);
-                        foreach (var id in copied) allCopied.Add(id.Value);
+                        foreach (var id in copied) allCopied.Add(id.Val());
                     }
 
                     tx.Commit();
@@ -2050,7 +2235,7 @@ namespace BIMBotPlugin.Core
                 {
                     var elementId = parameters["elementId"]?.Value<long>() ?? 0;
                     var angle = parameters["angle"]?.Value<double>() ?? 0;
-                    var elem = doc.GetElement(new ElementId(elementId));
+                    var elem = doc.GetElement(elementId.ToElementId());
                     if (elem == null) throw new InvalidOperationException($"Element {elementId} not found");
 
                     var bb = elem.get_BoundingBox(null);
@@ -2082,7 +2267,7 @@ namespace BIMBotPlugin.Core
                     var ax2Y = parameters["axisEndY"]?.Value<double>() ?? 0;
                     var keep = parameters["keepOriginal"]?.Value<bool>() ?? true;
 
-                    var elem = doc.GetElement(new ElementId(elementId));
+                    var elem = doc.GetElement(elementId.ToElementId());
                     if (elem == null) throw new InvalidOperationException($"Element {elementId} not found");
 
                     var dir = new XYZ(ax2X - ax1X, ax2Y - ax1Y, 0).Normalize();
@@ -2110,7 +2295,7 @@ namespace BIMBotPlugin.Core
                 {
                     var elementId = parameters["elementId"]?.Value<long>() ?? 0;
                     var newTypeName = parameters["newTypeName"]?.ToString();
-                    var elem = doc.GetElement(new ElementId(elementId));
+                    var elem = doc.GetElement(elementId.ToElementId());
                     if (elem == null) throw new InvalidOperationException($"Element {elementId} not found");
 
                     // Find the new type by name
@@ -2227,7 +2412,7 @@ namespace BIMBotPlugin.Core
                     int modified = 0;
                     foreach (var idToken in elementIds)
                     {
-                        var elem = doc.GetElement(new ElementId(idToken.Value<long>()));
+                        var elem = doc.GetElement((idToken.Value<long>()).ToElementId());
                         if (elem == null) continue;
                         foreach (Parameter p in elem.Parameters)
                         {
@@ -2260,13 +2445,13 @@ namespace BIMBotPlugin.Core
                     if (elementIds == null || elementIds.Count == 0)
                         throw new InvalidOperationException("elementIds is required");
 
-                    var ids = elementIds.Select(id => new ElementId(id.Value<long>())).ToList();
+                    var ids = elementIds.Select(id => (id.Value<long>()).ToElementId()).ToList();
                     var group = doc.Create.NewGroup(ids);
                     if (!string.IsNullOrEmpty(groupName))
                         group.GroupType.Name = groupName;
 
                     tx.Commit();
-                    return new JObject { ["message"] = $"✅ Grouped {ids.Count} element(s). Group ID: {group.Id.Value}", ["groupId"] = group.Id.Value };
+                    return new JObject { ["message"] = $"✅ Grouped {ids.Count} element(s). Group ID: {group.Id.Val()}", ["groupId"] = group.Id.Val() };
                 }
                 catch { if (tx.HasStarted() && !tx.HasEnded()) tx.RollBack(); throw; }
             }
@@ -2285,13 +2470,13 @@ namespace BIMBotPlugin.Core
                     if (elementIds == null || elementIds.Count == 0)
                         throw new InvalidOperationException("elementIds is required");
 
-                    var ids = elementIds.Select(id => new ElementId(id.Value<long>())).ToList();
+                    var ids = elementIds.Select(id => (id.Value<long>()).ToElementId()).ToList();
 
                     // Get reference bounding box
                     BoundingBoxXYZ refBB = null;
                     if (refId.HasValue)
                     {
-                        var refElem = doc.GetElement(new ElementId(refId.Value));
+                        var refElem = doc.GetElement((refId.Value).ToElementId());
                         refBB = refElem?.get_BoundingBox(null);
                     }
                     if (refBB == null)
@@ -2358,7 +2543,7 @@ namespace BIMBotPlugin.Core
                     int modified = 0;
                     foreach (var idToken in elementIds)
                     {
-                        var elem = doc.GetElement(new ElementId(idToken.Value<long>()));
+                        var elem = doc.GetElement((idToken.Value<long>()).ToElementId());
                         if (elem == null) continue;
                         var wsParam = elem.get_Parameter(BuiltInParameter.ELEM_PARTITION_PARAM);
                         if (wsParam != null && !wsParam.IsReadOnly)
@@ -2416,7 +2601,7 @@ namespace BIMBotPlugin.Core
 
                     if (hostId.HasValue)
                     {
-                        var host = doc.GetElement(new ElementId(hostId.Value));
+                        var host = doc.GetElement((hostId.Value).ToElementId());
                         if (host != null)
                             instance = doc.Create.NewFamilyInstance(point, symbol, host, level, Autodesk.Revit.DB.Structure.StructuralType.NonStructural);
                         else
@@ -2428,7 +2613,7 @@ namespace BIMBotPlugin.Core
                     }
 
                     tx.Commit();
-                    return new JObject { ["message"] = $"✅ Created {familyName}: {typeName} (ID: {instance.Id.Value})", ["elementId"] = instance.Id.Value };
+                    return new JObject { ["message"] = $"✅ Created {familyName}: {typeName} (ID: {instance.Id.Val()})", ["elementId"] = instance.Id.Val() };
                 }
                 catch { if (tx.HasStarted() && !tx.HasEnded()) tx.RollBack(); throw; }
             }
@@ -2469,7 +2654,7 @@ namespace BIMBotPlugin.Core
                     var instance = doc.Create.NewFamilyInstance(line, symbol, level, Autodesk.Revit.DB.Structure.StructuralType.Beam);
 
                     tx.Commit();
-                    return new JObject { ["message"] = $"✅ Created {familyName}: {typeName} (ID: {instance.Id.Value})", ["elementId"] = instance.Id.Value };
+                    return new JObject { ["message"] = $"✅ Created {familyName}: {typeName} (ID: {instance.Id.Val()})", ["elementId"] = instance.Id.Val() };
                 }
                 catch { if (tx.HasStarted() && !tx.HasEnded()) tx.RollBack(); throw; }
             }
@@ -2505,10 +2690,10 @@ namespace BIMBotPlugin.Core
                             new XYZ(p2["x"].Value<double>(), p2["y"].Value<double>(), level.Elevation)));
                     }
 
-                    var floor = Floor.Create(doc, new List<CurveLoop> { curveLoop }, floorType.Id, level.Id);
+                    var floor = Compat.ElementApiCompat.CreateFloor(doc, new List<CurveLoop> { curveLoop }, floorType.Id, level.Id);
 
                     tx.Commit();
-                    return new JObject { ["message"] = $"✅ Created floor (ID: {floor.Id.Value})", ["elementId"] = floor.Id.Value };
+                    return new JObject { ["message"] = $"✅ Created floor (ID: {floor.Id.Val()})", ["elementId"] = floor.Id.Val() };
                 }
                 catch { if (tx.HasStarted() && !tx.HasEnded()) tx.RollBack(); throw; }
             }
@@ -2544,10 +2729,10 @@ namespace BIMBotPlugin.Core
                             new XYZ(p2["x"].Value<double>(), p2["y"].Value<double>(), level.Elevation)));
                     }
 
-                    var ceiling = Ceiling.Create(doc, new List<CurveLoop> { curveLoop }, ceilingType.Id, level.Id);
+                    var ceiling = Compat.ElementApiCompat.CreateCeiling(doc, new List<CurveLoop> { curveLoop }, ceilingType.Id, level.Id);
 
                     tx.Commit();
-                    return new JObject { ["message"] = $"✅ Created ceiling (ID: {ceiling.Id.Value})", ["elementId"] = ceiling.Id.Value };
+                    return new JObject { ["message"] = $"✅ Created ceiling (ID: {ceiling.Id.Val()})", ["elementId"] = ceiling.Id.Val() };
                 }
                 catch { if (tx.HasStarted() && !tx.HasEnded()) tx.RollBack(); throw; }
             }
@@ -2597,7 +2782,7 @@ namespace BIMBotPlugin.Core
                     }
 
                     tx.Commit();
-                    return new JObject { ["message"] = $"✅ Created roof (ID: {roof.Id.Value})", ["elementId"] = roof.Id.Value };
+                    return new JObject { ["message"] = $"✅ Created roof (ID: {roof.Id.Val()})", ["elementId"] = roof.Id.Val() };
                 }
                 catch { if (tx.HasStarted() && !tx.HasEnded()) tx.RollBack(); throw; }
             }
@@ -2660,7 +2845,7 @@ namespace BIMBotPlugin.Core
                     }
 
                     tx.Commit();
-                    return new JObject { ["message"] = $"✅ Created {viewType} view (ID: {newView.Id.Value})", ["elementId"] = newView.Id.Value };
+                    return new JObject { ["message"] = $"✅ Created {viewType} view (ID: {newView.Id.Val()})", ["elementId"] = newView.Id.Val() };
                 }
                 catch { if (tx.HasStarted() && !tx.HasEnded()) tx.RollBack(); throw; }
             }
@@ -2678,7 +2863,7 @@ namespace BIMBotPlugin.Core
                     var fields = parameters["fields"] as JArray;
 
                     var cat = GetBuiltInCategory(categoryName);
-                    var catId = new ElementId(cat);
+                    var catId = cat.ToElementId();
 
                     var schedule = ViewSchedule.CreateSchedule(doc, catId);
                     schedule.Name = scheduleName;
@@ -2696,7 +2881,7 @@ namespace BIMBotPlugin.Core
                     }
 
                     tx.Commit();
-                    return new JObject { ["message"] = $"✅ Created schedule '{scheduleName}' (ID: {schedule.Id.Value})", ["elementId"] = schedule.Id.Value };
+                    return new JObject { ["message"] = $"✅ Created schedule '{scheduleName}' (ID: {schedule.Id.Val()})", ["elementId"] = schedule.Id.Val() };
                 }
                 catch { if (tx.HasStarted() && !tx.HasEnded()) tx.RollBack(); throw; }
             }
@@ -2714,7 +2899,7 @@ namespace BIMBotPlugin.Core
                     var offsetY = parameters["offsetY"]?.Value<double>() ?? 0;
                     var withLeader = parameters["withLeader"]?.Value<bool>() ?? false;
 
-                    var elem = doc.GetElement(new ElementId(elementId));
+                    var elem = doc.GetElement(elementId.ToElementId());
                     if (elem == null) throw new InvalidOperationException($"Element {elementId} not found");
 
                     var view = uidoc.ActiveView;
@@ -2728,7 +2913,7 @@ namespace BIMBotPlugin.Core
                     var tag = IndependentTag.Create(doc, view.Id, tagRef, withLeader, TagMode.TM_ADDBY_CATEGORY, TagOrientation.Horizontal, tagPoint);
 
                     tx.Commit();
-                    return new JObject { ["message"] = $"✅ Tagged element {elementId} (Tag ID: {tag.Id.Value})", ["tagId"] = tag.Id.Value };
+                    return new JObject { ["message"] = $"✅ Tagged element {elementId} (Tag ID: {tag.Id.Val()})", ["tagId"] = tag.Id.Val() };
                 }
                 catch { if (tx.HasStarted() && !tx.HasEnded()) tx.RollBack(); throw; }
             }
@@ -2751,7 +2936,7 @@ namespace BIMBotPlugin.Core
 
                     foreach (var idToken in elementIds)
                     {
-                        var elem = doc.GetElement(new ElementId(idToken.Value<long>()));
+                        var elem = doc.GetElement((idToken.Value<long>()).ToElementId());
                         if (elem == null) continue;
 
                         // Try to get a reference from the element
@@ -2776,7 +2961,7 @@ namespace BIMBotPlugin.Core
                     var dim = doc.Create.NewDimension(view, dimLine, refArray);
 
                     tx.Commit();
-                    return new JObject { ["message"] = $"✅ Created dimension (ID: {dim.Id.Value})", ["elementId"] = dim.Id.Value };
+                    return new JObject { ["message"] = $"✅ Created dimension (ID: {dim.Id.Val()})", ["elementId"] = dim.Id.Val() };
                 }
                 catch { if (tx.HasStarted() && !tx.HasEnded()) tx.RollBack(); throw; }
             }
@@ -2806,7 +2991,7 @@ namespace BIMBotPlugin.Core
                     var note = TextNote.Create(doc, view.Id, new XYZ(x, y, 0), text, textTypeId);
 
                     tx.Commit();
-                    return new JObject { ["message"] = $"✅ Created text note (ID: {note.Id.Value})", ["elementId"] = note.Id.Value };
+                    return new JObject { ["message"] = $"✅ Created text note (ID: {note.Id.Val()})", ["elementId"] = note.Id.Val() };
                 }
                 catch { if (tx.HasStarted() && !tx.HasEnded()) tx.RollBack(); throw; }
             }
@@ -2833,16 +3018,16 @@ namespace BIMBotPlugin.Core
                     {
                         var sheetNum = parameters["sheetNumber"].ToString();
                         var sheet = new FilteredElementCollector(doc).OfClass(typeof(ViewSheet)).Cast<ViewSheet>().FirstOrDefault(s => s.SheetNumber == sheetNum);
-                        if (sheet != null) sheetId = sheet.Id.Value;
+                        if (sheet != null) sheetId = sheet.Id.Val();
                     }
 
                     if (viewId == 0) throw new InvalidOperationException("viewId is required");
                     if (sheetId == 0) throw new InvalidOperationException("sheetId (or sheetNumber) is required");
 
-                    var viewport = Viewport.Create(doc, new ElementId(sheetId), new ElementId(viewId), new XYZ(x, y, 0));
+                    var viewport = Viewport.Create(doc, sheetId.ToElementId(), viewId.ToElementId(), new XYZ(x, y, 0));
 
                     tx.Commit();
-                    return new JObject { ["message"] = $"✅ Placed view on sheet (Viewport ID: {viewport.Id.Value})", ["viewportId"] = viewport.Id.Value };
+                    return new JObject { ["message"] = $"✅ Placed view on sheet (Viewport ID: {viewport.Id.Val()})", ["viewportId"] = viewport.Id.Val() };
                 }
                 catch { if (tx.HasStarted() && !tx.HasEnded()) tx.RollBack(); throw; }
             }
@@ -2958,7 +3143,7 @@ namespace BIMBotPlugin.Core
                     int modified = 0;
                     foreach (var idToken in elementIds)
                     {
-                        var elem = doc.GetElement(new ElementId(idToken.Value<long>()));
+                        var elem = doc.GetElement((idToken.Value<long>()).ToElementId());
                         if (elem == null) continue;
 
                         // Try phase created
@@ -2984,7 +3169,7 @@ namespace BIMBotPlugin.Core
             {
                 result.Add(new JObject
                 {
-                    ["id"] = ph.Id.Value,
+                    ["id"] = ph.Id.Val(),
                     ["name"] = ph.Name
                 });
             }
@@ -3000,7 +3185,7 @@ namespace BIMBotPlugin.Core
                 .Take(200)
                 .Select(m => new JObject
                 {
-                    ["id"] = m.Id.Value,
+                    ["id"] = m.Id.Val(),
                     ["name"] = m.Name,
                     ["color"] = m.Color != null && m.Color.IsValid ? $"#{m.Color.Red:X2}{m.Color.Green:X2}{m.Color.Blue:X2}" : "(none)",
                     ["transparency"] = m.Transparency
@@ -3035,7 +3220,7 @@ namespace BIMBotPlugin.Core
                     int modified = 0;
                     foreach (var idToken in elementIds)
                     {
-                        var elem = doc.GetElement(new ElementId(idToken.Value<long>()));
+                        var elem = doc.GetElement((idToken.Value<long>()).ToElementId());
                         if (elem == null) continue;
 
                         // Try specific parameter name first, then common material parameters
@@ -3077,7 +3262,7 @@ namespace BIMBotPlugin.Core
                     var viewId = parameters["viewId"]?.Value<long>();
                     View view;
                     if (viewId.HasValue)
-                        view = doc.GetElement(new ElementId(viewId.Value)) as View;
+                        view = doc.GetElement((viewId.Value).ToElementId()) as View;
                     else
                         view = uidoc.ActiveView;
 
@@ -3216,7 +3401,7 @@ namespace BIMBotPlugin.Core
                     int count = 0;
                     foreach (var idToken in elementIds)
                     {
-                        var eid = new ElementId(idToken.Value<long>());
+                        var eid = (idToken.Value<long>()).ToElementId();
                         if (visible.HasValue && !visible.Value)
                             view.HideElements(new List<ElementId> { eid });
                         else
@@ -3240,7 +3425,7 @@ namespace BIMBotPlugin.Core
                 {
                     var viewId = parameters["viewId"]?.Value<int>();
                     var view = viewId.HasValue
-                        ? doc.GetElement(new ElementId(viewId.Value)) as View
+                        ? doc.GetElement((viewId.Value).ToElementId()) as View
                         : uidoc.ActiveView;
                     if (view == null) throw new InvalidOperationException("View not found");
 
@@ -3333,7 +3518,7 @@ namespace BIMBotPlugin.Core
                     var gs = subCat.GetGraphicsStyle(GraphicsStyleType.Projection);
                     result.Add(new JObject
                     {
-                        ["id"] = gs?.Id.Value ?? -1,
+                        ["id"] = gs?.Id.Val() ?? -1,
                         ["name"] = subCat.Name,
                         ["lineWeight"] = subCat.GetLineWeight(GraphicsStyleType.Projection) ?? -1,
                         ["color"] = subCat.LineColor != null && subCat.LineColor.IsValid
@@ -3374,7 +3559,7 @@ namespace BIMBotPlugin.Core
                     int modified = 0;
                     foreach (var idToken in elementIds)
                     {
-                        var elem = doc.GetElement(new ElementId(idToken.Value<long>()));
+                        var elem = doc.GetElement((idToken.Value<long>()).ToElementId());
                         if (elem is CurveElement ce)
                         {
                             ce.LineStyle = targetStyle;
@@ -3455,7 +3640,7 @@ namespace BIMBotPlugin.Core
                     int modified = 0;
                     foreach (var idToken in elementIds)
                     {
-                        var elem = doc.GetElement(new ElementId(idToken.Value<long>()));
+                        var elem = doc.GetElement((idToken.Value<long>()).ToElementId());
                         if (elem == null) continue;
 
                         var levelParam = elem.get_Parameter(BuiltInParameter.FAMILY_LEVEL_PARAM)
@@ -3565,7 +3750,7 @@ namespace BIMBotPlugin.Core
                     IList<Room> rooms;
                     if (roomIds != null)
                     {
-                        rooms = roomIds.Select(id => doc.GetElement(new ElementId(id.Value<long>())) as Room).Where(r => r != null).ToList();
+                        rooms = roomIds.Select(id => doc.GetElement((id.Value<long>()).ToElementId()) as Room).Where(r => r != null).ToList();
                     }
                     else
                     {
@@ -3590,7 +3775,7 @@ namespace BIMBotPlugin.Core
                                 curveLoop.Append(seg.GetCurve());
 
                             var levelId = room.LevelId;
-                            Floor.Create(doc, new List<CurveLoop> { curveLoop }, floorType.Id, levelId);
+                            Compat.ElementApiCompat.CreateFloor(doc, new List<CurveLoop> { curveLoop }, floorType.Id, levelId);
                             created++;
                         }
                         catch { /* skip rooms that fail */ }
@@ -3816,7 +4001,7 @@ namespace BIMBotPlugin.Core
             // Multiple passes since purging one item may free others
             while (passes < 5)
             {
-                var purgable = doc.GetUnusedElements(new HashSet<ElementId>());
+                var purgable = Compat.PurgeCompat.GetUnusedElementIds(doc);
                 if (purgable == null || purgable.Count == 0) break;
 
                 using (var tx = new Transaction(doc, $"Deep Purge Pass {passes + 1}"))
@@ -3833,7 +4018,10 @@ namespace BIMBotPlugin.Core
                 passes++;
             }
 
-            return new JObject { ["message"] = $"✅ Purged {totalPurged} unused element(s) in {passes} pass(es)", ["purged"] = totalPurged };
+            var note = Compat.PurgeCompat.IsConservativeSweep
+                ? " (Revit 2023 and older have no GetUnusedElements API — a conservative sweep was used, so some purgeable items may remain)"
+                : "";
+            return new JObject { ["message"] = $"✅ Purged {totalPurged} unused element(s) in {passes} pass(es){note}", ["purged"] = totalPurged };
         }
 
         private static JToken DeleteEmptyGroups(Document doc)
@@ -3884,7 +4072,7 @@ namespace BIMBotPlugin.Core
                 var bb = imp.get_BoundingBox(null);
                 result.Add(new JObject
                 {
-                    ["id"] = imp.Id.Value,
+                    ["id"] = imp.Id.Val(),
                     ["name"] = imp.Name,
                     ["isLinked"] = imp.IsLinked,
                     ["pinned"] = imp.Pinned,
@@ -3942,7 +4130,7 @@ namespace BIMBotPlugin.Core
             {
                 ["message"] = $"✅ Selected {matching.Count} element(s) where '{paramName}' = '{paramValue}'",
                 ["count"] = matching.Count,
-                ["elementIds"] = new JArray(matching.Select(id => id.Value))
+                ["elementIds"] = new JArray(matching.Select(id => id.Val()))
             };
         }
 
@@ -3991,7 +4179,7 @@ namespace BIMBotPlugin.Core
                 if (!string.IsNullOrEmpty(categoryName))
                 {
                     var bic = GetBuiltInCategory(categoryName);
-                    matchCategory = elem.Category?.BuiltInCategory == bic;
+                    matchCategory = elem.Category.BuiltInCat() == bic;
                 }
 
                 if (!string.IsNullOrEmpty(levelName))
@@ -4170,7 +4358,7 @@ namespace BIMBotPlugin.Core
                     if (sourceViewId == 0 || targetViewIds == null)
                         throw new InvalidOperationException("sourceViewId and targetViewIds are required");
 
-                    var sourceView = doc.GetElement(new ElementId(sourceViewId)) as View;
+                    var sourceView = doc.GetElement(sourceViewId.ToElementId()) as View;
                     if (sourceView == null) throw new InvalidOperationException("Source view not found");
                     if (!sourceView.CropBoxActive) throw new InvalidOperationException("Source view has no active crop box");
 
@@ -4179,7 +4367,7 @@ namespace BIMBotPlugin.Core
 
                     foreach (var idToken in targetViewIds)
                     {
-                        var targetView = doc.GetElement(new ElementId(idToken.Value<long>())) as View;
+                        var targetView = doc.GetElement((idToken.Value<long>()).ToElementId()) as View;
                         if (targetView == null) continue;
 
                         targetView.CropBoxActive = true;
@@ -4223,7 +4411,7 @@ namespace BIMBotPlugin.Core
                     IList<View> targetViews;
                     if (viewIds != null)
                     {
-                        targetViews = viewIds.Select(id => doc.GetElement(new ElementId(id.Value<long>())) as View).Where(v => v != null && !v.IsTemplate).ToList();
+                        targetViews = viewIds.Select(id => doc.GetElement((id.Value<long>()).ToElementId()) as View).Where(v => v != null && !v.IsTemplate).ToList();
                     }
                     else
                     {
@@ -4266,7 +4454,7 @@ namespace BIMBotPlugin.Core
                 {
                     ["description"] = kvp.Key,
                     ["count"] = kvp.Value.Count,
-                    ["elementIds"] = new JArray(kvp.Value.SelectMany(w => w.GetFailingElements()).Select(id => id.Value).Distinct().Take(20))
+                    ["elementIds"] = new JArray(kvp.Value.SelectMany(w => w.GetFailingElements()).Select(id => id.Val()).Distinct().Take(20))
                 });
             }
 
@@ -4539,7 +4727,7 @@ namespace BIMBotPlugin.Core
 
                     foreach (var idToken in elementIds)
                     {
-                        var oldElem = doc.GetElement(new ElementId(idToken.Value<long>()));
+                        var oldElem = doc.GetElement((idToken.Value<long>()).ToElementId());
                         if (oldElem == null) continue;
 
                         // Get position from old element
@@ -4572,7 +4760,7 @@ namespace BIMBotPlugin.Core
                         try
                         {
                             var newInst = doc.Create.NewFamilyInstance(position, targetSymbol, level, Autodesk.Revit.DB.Structure.StructuralType.NonStructural);
-                            newIds.Add(newInst.Id.Value);
+                            newIds.Add(newInst.Id.Val());
                             doc.Delete(oldElem.Id);
                             converted++;
                         }
@@ -4644,17 +4832,17 @@ namespace BIMBotPlugin.Core
                     }
                     else
                     {
-                        // Determine ForgeTypeId from string
-                        var specTypeId = SpecTypeId.String.Text; // default
+                        // Determine the parameter spec from string
+                        var specTypeId = Compat.BbSpecs.Text; // default
                         switch (paramType.ToLower())
                         {
-                            case "number": case "integer": specTypeId = SpecTypeId.Int.Integer; break;
-                            case "length": specTypeId = SpecTypeId.Length; break;
-                            case "area": specTypeId = SpecTypeId.Area; break;
-                            case "volume": specTypeId = SpecTypeId.Volume; break;
-                            case "angle": specTypeId = SpecTypeId.Angle; break;
-                            case "yesno": case "boolean": specTypeId = SpecTypeId.Boolean.YesNo; break;
-                            default: specTypeId = SpecTypeId.String.Text; break;
+                            case "number": case "integer": specTypeId = Compat.BbSpecs.Integer; break;
+                            case "length": specTypeId = Compat.BbSpecs.Length; break;
+                            case "area": specTypeId = Compat.BbSpecs.Area; break;
+                            case "volume": specTypeId = Compat.BbSpecs.Volume; break;
+                            case "angle": specTypeId = Compat.BbSpecs.Angle; break;
+                            case "yesno": case "boolean": specTypeId = Compat.BbSpecs.YesNo; break;
+                            default: specTypeId = Compat.BbSpecs.Text; break;
                         }
 
                         var opts = new ExternalDefinitionCreationOptions(paramName, specTypeId);
@@ -4669,8 +4857,7 @@ namespace BIMBotPlugin.Core
                         ? (Binding)uiApp.Application.Create.NewInstanceBinding(catSet)
                         : (Binding)uiApp.Application.Create.NewTypeBinding(catSet);
 
-                    var paramGroup = GroupTypeId.Data;
-                    doc.ParameterBindings.Insert(extDef, binding, paramGroup);
+                    Compat.ElementApiCompat.InsertBinding(doc, extDef, binding);
 
                     tx.Commit();
                     return new JObject
@@ -4725,7 +4912,7 @@ namespace BIMBotPlugin.Core
                         // Try Element ID as key
                         if (keyParameter == "Id" || keyParameter == "ElementId")
                         {
-                            lookup[elem.Id.Value.ToString()] = elem;
+                            lookup[elem.Id.Val().ToString()] = elem;
                             continue;
                         }
 
@@ -4892,7 +5079,7 @@ namespace BIMBotPlugin.Core
                     {
                         ["message"] = $"✅ Created '{legendName}' with {typeInfos.Count} {categoryName} type(s)",
                         ["viewName"] = legendName,
-                        ["viewId"] = legendView.Id.Value,
+                        ["viewId"] = legendView.Id.Val(),
                         ["types"] = new JArray(typeInfos.Values)
                     };
                     return result;
@@ -4921,7 +5108,7 @@ namespace BIMBotPlugin.Core
                     if (importIds != null)
                     {
                         var idSet = new HashSet<long>(importIds.Select(id => id.Value<long>()));
-                        imports = imports.Where(i => idSet.Contains(i.Id.Value)).ToList();
+                        imports = imports.Where(i => idSet.Contains(i.Id.Val())).ToList();
                     }
 
                     if (imports.Count == 0)
@@ -4998,7 +5185,7 @@ namespace BIMBotPlugin.Core
                         }
 
                         totalLines += linesFromImport;
-                        convertedImports.Add(import.Id.Value);
+                        convertedImports.Add(import.Id.Val());
 
                         if (deleteAfter && linesFromImport > 0)
                         {
@@ -5183,7 +5370,7 @@ namespace BIMBotPlugin.Core
                     if (string.IsNullOrEmpty(paramName)) throw new InvalidOperationException("'parameterName' required");
 
                     var bic = GetBuiltInCategory(categoryName);
-                    var catIds = new List<ElementId> { new ElementId(bic) };
+                    var catIds = new List<ElementId> { bic.ToElementId() };
 
                     // Find the parameter to filter by
                     var sampleElem = new FilteredElementCollector(doc).OfCategory(bic).WhereElementIsNotElementType().FirstOrDefault();
@@ -5224,7 +5411,7 @@ namespace BIMBotPlugin.Core
                     return new JObject
                     {
                         ["message"] = $"✅ Created view filter '{filterName}' for {categoryName}",
-                        ["filterId"] = filter.Id.Value,
+                        ["filterId"] = filter.Id.Val(),
                         ["filterName"] = filterName
                     };
                 }
@@ -5281,7 +5468,7 @@ namespace BIMBotPlugin.Core
 
                 result.Add(new JObject
                 {
-                    ["id"] = a.Id.Value,
+                    ["id"] = a.Id.Val(),
                     ["name"] = nameParam?.AsString() ?? "",
                     ["number"] = numberParam?.AsString() ?? "",
                     ["area"] = areaParam?.AsDouble() ?? 0,
@@ -5299,7 +5486,7 @@ namespace BIMBotPlugin.Core
 
             var planList = new JArray();
             foreach (var ap in areaPlans)
-                planList.Add(new JObject { ["id"] = ap.Id.Value, ["name"] = ap.Name });
+                planList.Add(new JObject { ["id"] = ap.Id.Val(), ["name"] = ap.Name });
 
             return new JObject
             {
@@ -5324,7 +5511,7 @@ namespace BIMBotPlugin.Core
             {
                 result.Add(new JObject
                 {
-                    ["id"] = opt.Id.Value,
+                    ["id"] = opt.Id.Val(),
                     ["name"] = opt.Name,
                     ["isPrimary"] = opt.IsPrimary
                 });
@@ -5567,7 +5754,7 @@ namespace BIMBotPlugin.Core
             {
                 var row = new Dictionary<string, string>
                 {
-                    ["Id"] = elem.Id.Value.ToString(),
+                    ["Id"] = elem.Id.Val().ToString(),
                     ["Name"] = elem.Name ?? "",
                     ["Category"] = elem.Category?.Name ?? ""
                 };
@@ -5968,9 +6155,9 @@ namespace BIMBotPlugin.Core
                     if (candidate.Id == elem1.Id) continue;
 
                     // Dedup: sort IDs to create a unique pair key
-                    var pairKey = elem1.Id.Value < candidate.Id.Value
-                        ? $"{elem1.Id.Value}_{candidate.Id.Value}"
-                        : $"{candidate.Id.Value}_{elem1.Id.Value}";
+                    var pairKey = elem1.Id.Val() < candidate.Id.Val()
+                        ? $"{elem1.Id.Val()}_{candidate.Id.Val()}"
+                        : $"{candidate.Id.Val()}_{elem1.Id.Val()}";
 
                     if (foundPairs.Contains(pairKey)) continue;
 
@@ -6000,9 +6187,9 @@ namespace BIMBotPlugin.Core
 
                     clashes.Add(new JObject
                     {
-                        ["element1Id"] = elem1.Id.Value,
+                        ["element1Id"] = elem1.Id.Val(),
                         ["element1Name"] = $"{elem1.Category?.Name}: {elem1.Name}",
-                        ["element2Id"] = candidate.Id.Value,
+                        ["element2Id"] = candidate.Id.Val(),
                         ["element2Name"] = $"{candidate.Category?.Name}: {candidate.Name}",
                         ["location"] = loc
                     });

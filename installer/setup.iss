@@ -1,11 +1,14 @@
 ; ============================================================
 ;  BIM-Bot — Professional Installer (Inno Setup 6)
 ;  AI-Powered BIM Automation • 187 MCP Tools • Revit 2020–2027
+;  One plugin build per Revit version (plugin\R2020 .. plugin\R2027), each
+;  compiled against that year's API. Do not point two years at one folder —
+;  the ElementId/ForgeTypeId APIs differ across the range.
 ;  by Hassan Ahmed Elmathary
 ; ============================================================
 
 #define MyAppName      "BIM-Bot"
-#define MyAppVersion   "2.3.0"
+#define MyAppVersion   "2.3.1"
 #define MyAppPublisher "Hassan Ahmed Elmathary"
 #define MyAppURL       "https://github.com/HassanElmathary/BIM-Bot"
 #define MyAppExeName   "Start MCP Server.bat"
@@ -78,7 +81,7 @@ Name: "claude"; Description: "Auto-configure Claude Desktop"; Types: full custom
 
 [Tasks]
 ; Auto-detect installed Revit versions — only show those found.
-Name: "revit2020"; Description: "Revit 2020 (.NET 4.8)"; GroupDescription: "Deploy Revit plugin to:"; Components: plugin; Check: IsRevitInstalled('2020')
+Name: "revit2020"; Description: "Revit 2020 (.NET 4.7)"; GroupDescription: "Deploy Revit plugin to:"; Components: plugin; Check: IsRevitInstalled('2020')
 Name: "revit2021"; Description: "Revit 2021 (.NET 4.8)"; GroupDescription: "Deploy Revit plugin to:"; Components: plugin; Check: IsRevitInstalled('2021')
 Name: "revit2022"; Description: "Revit 2022 (.NET 4.8)"; GroupDescription: "Deploy Revit plugin to:"; Components: plugin; Check: IsRevitInstalled('2022')
 Name: "revit2023"; Description: "Revit 2023 (.NET 4.8)"; GroupDescription: "Deploy Revit plugin to:"; Components: plugin; Check: IsRevitInstalled('2023')
@@ -102,9 +105,15 @@ Source: "..\revit-mcp-server\node_modules\*"; DestDir: "{app}\server\node_module
 Source: "..\revit-mcp-server\package.json"; DestDir: "{app}\server"; Flags: ignoreversion; Components: server
 Source: "..\revit-mcp-server\scripts\configure-claude.cjs"; DestDir: "{app}\server\scripts"; Flags: ignoreversion; Components: server
 
-; Revit Plugin DLLs (both framework targets)
-Source: "..\revit-mcp-plugin\BIMBotPlugin\bin\Release\net48\*"; DestDir: "{app}\plugin\net48"; Flags: ignoreversion recursesubdirs; Components: plugin
-Source: "..\revit-mcp-plugin\BIMBotPlugin\bin\Release\net8.0-windows\*"; DestDir: "{app}\plugin\net8"; Flags: ignoreversion recursesubdirs; Components: plugin
+; Revit Plugin DLLs — one build per Revit version
+Source: "..\revit-mcp-plugin\BIMBotPlugin\bin\R2020\Release\net47\*"; DestDir: "{app}\plugin\R2020"; Flags: ignoreversion recursesubdirs; Components: plugin; Tasks: revit2020
+Source: "..\revit-mcp-plugin\BIMBotPlugin\bin\R2021\Release\net48\*"; DestDir: "{app}\plugin\R2021"; Flags: ignoreversion recursesubdirs; Components: plugin; Tasks: revit2021
+Source: "..\revit-mcp-plugin\BIMBotPlugin\bin\R2022\Release\net48\*"; DestDir: "{app}\plugin\R2022"; Flags: ignoreversion recursesubdirs; Components: plugin; Tasks: revit2022
+Source: "..\revit-mcp-plugin\BIMBotPlugin\bin\R2023\Release\net48\*"; DestDir: "{app}\plugin\R2023"; Flags: ignoreversion recursesubdirs; Components: plugin; Tasks: revit2023
+Source: "..\revit-mcp-plugin\BIMBotPlugin\bin\R2024\Release\net48\*"; DestDir: "{app}\plugin\R2024"; Flags: ignoreversion recursesubdirs; Components: plugin; Tasks: revit2024
+Source: "..\revit-mcp-plugin\BIMBotPlugin\bin\R2025\Release\net8.0-windows\*"; DestDir: "{app}\plugin\R2025"; Flags: ignoreversion recursesubdirs; Components: plugin; Tasks: revit2025
+Source: "..\revit-mcp-plugin\BIMBotPlugin\bin\R2026\Release\net8.0-windows\*"; DestDir: "{app}\plugin\R2026"; Flags: ignoreversion recursesubdirs; Components: plugin; Tasks: revit2026
+Source: "..\revit-mcp-plugin\BIMBotPlugin\bin\R2027\Release\net10.0-windows\*"; DestDir: "{app}\plugin\R2027"; Flags: ignoreversion recursesubdirs; Components: plugin; Tasks: revit2027
 
 ; License
 Source: "..\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
@@ -133,10 +142,39 @@ Type: filesandordirs; Name: "{app}\plugin"
 
 function IsRevitInstalled(Year: string): Boolean;
 var
-  RevitPath: string;
+  i: Integer;
+  Root: string;
 begin
-  RevitPath := ExpandConstant('{pf}\Autodesk\Revit ' + Year);
-  Result := DirExists(RevitPath);
+  // Default location first — the common case.
+  if DirExists(ExpandConstant('{pf}\Autodesk\Revit ' + Year)) then
+  begin
+    Result := True;
+    Exit;
+  end;
+
+  // Revit can be installed anywhere; a second drive is common on workstations
+  // that keep C: small, and the registry layout differs by release (2025+ no
+  // longer writes an "Autodesk Revit <year>" key), so probing the filesystem is
+  // the only detection that holds across 2020-2027. Getting this wrong hid the
+  // checkbox entirely: no plugin was deployed and the BIM-Bot tab never
+  // appeared, with nothing in the UI to explain why.
+  // Ord('C')..Ord('Z') — Pascal Script has no Char loop variable.
+  for i := 67 to 90 do
+  begin
+    Root := Chr(i) + ':\';
+    if DirExists(Root + 'Program Files\Autodesk\Revit ' + Year) then
+    begin
+      Result := True;
+      Exit;
+    end;
+    if DirExists(Root + 'Autodesk\Revit ' + Year) then
+    begin
+      Result := True;
+      Exit;
+    end;
+  end;
+
+  Result := False;
 end;
 
 function GetRevitAddInsDir(Year: string): string;
@@ -150,10 +188,8 @@ end;
 
 function GetPluginSubfolder(YearInt: Integer): string;
 begin
-  if YearInt <= 2024 then
-    Result := 'net48'
-  else
-    Result := 'net8';
+  // Every Revit version gets its own build — the APIs differ across the range.
+  Result := 'R' + IntToStr(YearInt);
 end;
 
 // ── Addin File Management ───────────────────────────────────
@@ -258,15 +294,26 @@ end;
 // previous install location was never fixed).
 // Fallback: legacy Pascal string injection if Node execution fails.
 
+// Last-resort path, used only when the bundled Node runtime could not run
+// configure-claude.cjs at all.
+//
+// It deliberately does NOT edit an existing config. The previous version did,
+// by string substitution on an AnsiString round-trip, and that had two ways to
+// destroy a working setup: a config whose "mcpServers" key was spelled with
+// different spacing fell through to the "create new config" branch and
+// overwrote every other MCP server the user had; and any non-ASCII byte in the
+// file (a profile path with accented or Arabic characters, say) was mangled by
+// the Ansi conversion, leaving JSON that Claude reports as corrupt. Writing a
+// fresh file only when none exists cannot do either. Anything more subtle is
+// the plugin's job: ClaudeConfigService parses the JSON properly and re-runs
+// on every Revit start.
 procedure ConfigureClaudeDesktopFallback();
 var
   ClaudeDir: string;
   ClaudeConfig: string;
-  ConfigContent: string;
+  Lines: TArrayOfString;
   NodeExe: string;
   ServerJs: string;
-  ExistingStr: string;
-  ExistingAnsi: AnsiString;
 begin
   ClaudeDir := ExpandConstant('{userappdata}\Claude');
   ClaudeConfig := ClaudeDir + '\claude_desktop_config.json';
@@ -279,47 +326,31 @@ begin
 
   if FileExists(ClaudeConfig) then
   begin
-    if LoadStringFromFile(ClaudeConfig, ExistingAnsi) then
-    begin
-      ExistingStr := String(ExistingAnsi);
-
-      // Skip if already configured
-      if Pos('"BIM-Bot"', ExistingStr) > 0 then
-      begin
-        Log('Claude Desktop config already contains BIM-Bot entry — skipping');
-        Exit;
-      end;
-
-      // Inject into existing mcpServers block
-      if Pos('"mcpServers"', ExistingStr) > 0 then
-      begin
-        StringChangeEx(ExistingStr, '"mcpServers": {',
-          '"mcpServers": {' + #13#10 +
-          '    "BIM-Bot": {' + #13#10 +
-          '      "command": "' + NodeExe + '",' + #13#10 +
-          '      "args": ["' + ServerJs + '"],' + #13#10 +
-          '      "env": {}' + #13#10 +
-          '    },', True);
-        SaveStringToFile(ClaudeConfig, AnsiString(ExistingStr), False);
-        Log('Merged BIM-Bot into existing Claude Desktop config');
-        Exit;
-      end;
-    end;
+    Log('Claude Desktop config already exists — leaving it alone. ' +
+        'Revit will repair or add the BIM-Bot entry on next start ' +
+        '(BIM-Bot ribbon → Connect Claude does it on demand).');
+    Exit;
   end;
 
-  // Create new config
   ForceDirectories(ClaudeDir);
-  ConfigContent := '{' + #13#10 +
-    '  "mcpServers": {' + #13#10 +
-    '    "BIM-Bot": {' + #13#10 +
-    '      "command": "' + NodeExe + '",' + #13#10 +
-    '      "args": ["' + ServerJs + '"],' + #13#10 +
-    '      "env": {}' + #13#10 +
-    '    }' + #13#10 +
-    '  }' + #13#10 +
-    '}';
-  SaveStringToFile(ClaudeConfig, AnsiString(ConfigContent), False);
-  Log('Created Claude Desktop config with BIM-Bot');
+
+  SetArrayLength(Lines, 9);
+  Lines[0] := '{';
+  Lines[1] := '  "mcpServers": {';
+  Lines[2] := '    "BIM-Bot": {';
+  Lines[3] := '      "command": "' + NodeExe + '",';
+  Lines[4] := '      "args": ["' + ServerJs + '"],';
+  Lines[5] := '      "env": {}';
+  Lines[6] := '    }';
+  Lines[7] := '  }';
+  Lines[8] := '}';
+
+  // UTF-8, no BOM. The old AnsiString write corrupted any path with non-ASCII
+  // characters, and a BOM makes Claude Desktop reject the file outright.
+  if SaveStringsToUTF8FileWithoutBOM(ClaudeConfig, Lines, False) then
+    Log('Created Claude Desktop config with BIM-Bot')
+  else
+    Log('Failed to create Claude Desktop config at ' + ClaudeConfig);
 end;
 
 procedure ConfigureClaudeDesktop();
@@ -502,7 +533,8 @@ var
 begin
   if CurStep = ssPostInstall then
   begin
-    // Install .addin files for selected Revit versions (2020–2027)
+    // Install .addin files for selected Revit versions (2020–2027).
+    // Each manifest points at plugin\R<year>, built against that year's API.
     Years[0] := '2020'; Tasks[0] := 'revit2020';
     Years[1] := '2021'; Tasks[1] := 'revit2021';
     Years[2] := '2022'; Tasks[2] := 'revit2022';

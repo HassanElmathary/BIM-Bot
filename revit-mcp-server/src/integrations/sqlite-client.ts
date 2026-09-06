@@ -53,6 +53,15 @@ export interface SnapshotResult {
  * Creates a table named after the category (e.g., "doors", "walls")
  * and inserts all elements. Each snapshot is timestamped.
  */
+/**
+ * Quotes a SQLite identifier. Column names come from Revit parameter names, which
+ * are user-authored and may contain a double quote - doubling it keeps the name
+ * inside the quoted identifier instead of terminating it.
+ */
+function quoteIdent(name: string): string {
+    return `"${name.replace(/"/g, '""')}"`;
+}
+
 export function saveSnapshot(
     data: Record<string, unknown>[],
     category: string,
@@ -64,6 +73,7 @@ export function saveSnapshot(
 
     const database = getDatabase();
     const safeName = (tableName || category).toLowerCase().replace(/[^a-z0-9_]/g, "_");
+    const quotedTable = quoteIdent(safeName);
 
     // Collect all keys
     const keys = new Set<string>();
@@ -75,25 +85,37 @@ export function saveSnapshot(
     const columns = Array.from(keys);
 
     // Create table if not exists (all columns as TEXT for flexibility)
-    const colDefs = columns.map((c) => `"${c}" TEXT`).join(", ");
+    const colDefs = columns.map((c) => `${quoteIdent(c)} TEXT`).join(", ");
     database.exec(
-        `CREATE TABLE IF NOT EXISTS "${safeName}" (
+        `CREATE TABLE IF NOT EXISTS ${quotedTable} (
             _snapshot_id INTEGER,
             _created_at TEXT DEFAULT (datetime('now')),
             ${colDefs}
         )`
     );
 
+    // CREATE TABLE IF NOT EXISTS is a no-op once the table exists, so a later
+    // snapshot carrying new parameters would fail with "no such column".
+    // Reconcile the live schema against this batch's columns before inserting.
+    const existing = new Set(
+        (database.pragma(`table_info(${quotedTable})`) as Array<{ name: string }>).map((c) => c.name)
+    );
+    for (const col of columns) {
+        if (!existing.has(col)) {
+            database.exec(`ALTER TABLE ${quotedTable} ADD COLUMN ${quoteIdent(col)} TEXT`);
+        }
+    }
+
     // Get next snapshot ID
     const snapshotRow = database
-        .prepare(`SELECT COALESCE(MAX(_snapshot_id), 0) + 1 as next_id FROM "${safeName}"`)
+        .prepare(`SELECT COALESCE(MAX(_snapshot_id), 0) + 1 as next_id FROM ${quotedTable}`)
         .get() as { next_id: number };
     const snapshotId = snapshotRow.next_id;
 
     // Insert data in a transaction for speed
     const placeholders = columns.map(() => "?").join(", ");
     const insertStmt = database.prepare(
-        `INSERT INTO "${safeName}" (_snapshot_id, ${columns.map((c) => `"${c}"`).join(", ")}) VALUES (?, ${placeholders})`
+        `INSERT INTO ${quotedTable} (_snapshot_id, ${columns.map(quoteIdent).join(", ")}) VALUES (?, ${placeholders})`
     );
 
     const insertMany = database.transaction((items: Record<string, unknown>[]) => {

@@ -32,31 +32,39 @@ namespace BIMBotPlugin.Core
         // ────────────────────────────────────────────────────────
 
         /// <summary>
-        /// Locate the MCP server entry point. Prefers the installed layout
-        /// (…\BIMBot\server\build\index.js next to the plugin), falls back
-        /// to the dev repo layout (revit-mcp-server\build\index.js found by
-        /// walking up from the plugin DLL).
+        /// Directories to search for the install root, nearest first: the folder
+        /// holding BIMBotPlugin.dll, then each of its ancestors.
+        ///
+        /// Walking is not optional. The installer deploys one build per Revit
+        /// year, so the DLL sits at {app}\plugin\R2024\BIMBotPlugin.dll — two
+        /// levels below {app}, not one. Code that assumed a single level probed
+        /// {app}\plugin\server\build\index.js, never found it, and so left every
+        /// real installation unable to configure Claude at all.
+        /// </summary>
+        private static IEnumerable<string> InstallRootCandidates()
+        {
+            var dir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+            for (int i = 0; i < 8 && !string.IsNullOrEmpty(dir); i++)
+            {
+                yield return dir!;
+                dir = Path.GetDirectoryName(dir);
+            }
+        }
+
+        /// <summary>
+        /// Locate the MCP server entry point: the installed layout
+        /// ({app}\server\build\index.js) or the dev repo layout
+        /// ({repo}\revit-mcp-server\build\index.js).
         /// </summary>
         public static string? ResolveServerIndexJs()
         {
-            var pluginDllDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
-            if (pluginDllDir == null) return null;
-
-            // Installed layout: {app}\plugin\BIMBotPlugin.dll → {app}\server\build\index.js
-            var appDir = Path.GetDirectoryName(pluginDllDir);
-            if (appDir != null)
+            foreach (var root in InstallRootCandidates())
             {
-                var installed = Path.Combine(appDir, "server", "build", "index.js");
+                var installed = Path.Combine(root, "server", "build", "index.js");
                 if (File.Exists(installed)) return installed;
-            }
 
-            // Dev layout: walk up from bin\Release\net48 looking for revit-mcp-server\build\index.js
-            var dir = pluginDllDir;
-            for (int i = 0; i < 8 && dir != null; i++)
-            {
-                var dev = Path.Combine(dir, "revit-mcp-server", "build", "index.js");
+                var dev = Path.Combine(root, "revit-mcp-server", "build", "index.js");
                 if (File.Exists(dev)) return dev;
-                dir = Path.GetDirectoryName(dir);
             }
 
             return null;
@@ -68,12 +76,9 @@ namespace BIMBotPlugin.Core
         /// </summary>
         public static string ResolveNodeExe()
         {
-            var pluginDllDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
-            var appDir = pluginDllDir != null ? Path.GetDirectoryName(pluginDllDir) : null;
-
             var candidates = new List<string>();
-            if (appDir != null)
-                candidates.Add(Path.Combine(appDir, "nodejs", "node.exe"));
+            foreach (var root in InstallRootCandidates())
+                candidates.Add(Path.Combine(root, "nodejs", "node.exe"));
             candidates.Add(Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "nodejs", "node.exe"));
             candidates.Add(Path.Combine(
@@ -152,17 +157,42 @@ namespace BIMBotPlugin.Core
             var result = new ConfigureResult { Target = target };
 
             JObject config;
+            bool rebuiltFromBroken = false;
+            bool hadBom = false;
             if (File.Exists(configPath))
             {
                 try
                 {
-                    config = JObject.Parse(File.ReadAllText(configPath));
+                    // Strip a UTF-8 BOM before parsing — several editors write one
+                    // and it makes the file unreadable to some JSON parsers. A file
+                    // that has one gets rewritten below even if its entry is fine.
+                    var raw = File.ReadAllText(configPath);
+                    if (raw.Length > 0 && raw[0] == '﻿')
+                    {
+                        raw = raw.Substring(1);
+                        hadBom = true;
+                    }
+                    config = JObject.Parse(raw);
                 }
                 catch (Exception ex)
                 {
-                    // Never destroy a config we can't parse.
-                    result.Detail = $"Config exists but is not valid JSON ({ex.Message}) — left untouched. Fix it manually: {configPath}";
-                    return result;
+                    // A config Claude cannot parse is already broken from the
+                    // user's point of view — "left untouched, fix it yourself"
+                    // is a dead end for a non-developer. Quarantine it with a
+                    // timestamped copy and rebuild a clean one instead.
+                    try
+                    {
+                        var quarantine = configPath + $".broken-{DateTime.Now:yyyyMMdd-HHmmss}";
+                        File.Copy(configPath, quarantine, overwrite: true);
+                        config = new JObject();
+                        rebuiltFromBroken = true;
+                        Logger.Log($"Claude config was invalid JSON ({ex.Message}); quarantined to {quarantine}");
+                    }
+                    catch (Exception copyEx)
+                    {
+                        result.Detail = $"Config is not valid JSON ({ex.Message}) and could not be backed up ({copyEx.Message}) — left untouched: {configPath}";
+                        return result;
+                    }
                 }
             }
             else if (createIfMissing)
@@ -182,14 +212,15 @@ namespace BIMBotPlugin.Core
             }
 
             var existing = mcpServers[ServerKey] as JObject;
-            if (IsEntryValid(existing))
+            if (IsEntryValid(existing) && !hadBom)
             {
                 result.Configured = true;
                 result.Detail = "Already configured correctly.";
                 return result;
             }
 
-            // Missing or stale → write the correct entry (backup first)
+            // Missing, stale, BOM-prefixed, or rebuilt from a broken file →
+            // write the correct entry (backup first).
             try
             {
                 if (File.Exists(configPath))
@@ -199,13 +230,20 @@ namespace BIMBotPlugin.Core
                 if (dir != null) Directory.CreateDirectory(dir);
 
                 mcpServers[ServerKey] = BuildEntry(nodeExe, indexJs, stdioType);
-                File.WriteAllText(configPath, config.ToString(Formatting.Indented));
+                // UTF-8 without BOM — Claude Desktop chokes on a BOM.
+                File.WriteAllText(configPath, config.ToString(Formatting.Indented),
+                    new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
 
                 result.Configured = true;
                 result.Changed = true;
-                result.Detail = existing == null
-                    ? "Added BIM-Bot entry."
-                    : "Repaired stale BIM-Bot entry (old path no longer existed).";
+                if (rebuiltFromBroken)
+                    result.Detail = "Config was corrupt (invalid JSON) — backed it up and rebuilt it.";
+                else if (existing == null)
+                    result.Detail = "Added BIM-Bot entry.";
+                else if (hadBom)
+                    result.Detail = "Rewrote config without the UTF-8 BOM that was breaking it.";
+                else
+                    result.Detail = "Repaired stale BIM-Bot entry (old path no longer existed).";
             }
             catch (Exception ex)
             {
@@ -243,14 +281,15 @@ namespace BIMBotPlugin.Core
             var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
             var userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
 
-            // Claude Desktop — create the config if missing (Desktop may be
-            // installed but never configured; the file only appears after use).
+            // Claude Desktop — always create the config, even when we cannot see
+            // the app yet. %APPDATA%\Claude only appears after Claude Desktop has
+            // been run at least once, so gating on it meant anyone who installed
+            // BIM-Bot first (the normal order on a fresh laptop) got silently
+            // skipped and had to hand-write the config. Writing the file early is
+            // harmless: Claude Desktop reads it on first launch.
             var desktopConfig = Path.Combine(appData, "Claude", "claude_desktop_config.json");
-            var desktopInstalled = Directory.Exists(Path.Combine(appData, "Claude"))
-                || Directory.Exists(Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AnthropicClaude"));
             results.Add(EnsureConfigFile("Claude Desktop", desktopConfig, nodeExe, indexJs,
-                createIfMissing: desktopInstalled));
+                createIfMissing: true));
 
             // Claude Code — only touch ~/.claude.json if it already exists.
             var claudeCodeConfig = Path.Combine(userProfile, ".claude.json");
@@ -287,6 +326,32 @@ namespace BIMBotPlugin.Core
             }
 
             return results;
+        }
+
+        /// <summary>
+        /// Human-readable health report for the "Connect Claude" dialog. Answers
+        /// the three questions a stuck user actually has: is the server there, is
+        /// the Revit-side service listening, and where did the config go.
+        /// </summary>
+        public static string Diagnose()
+        {
+            var sb = new System.Text.StringBuilder();
+
+            var indexJs = ResolveServerIndexJs();
+            var nodeExe = ResolveNodeExe();
+
+            sb.AppendLine("Diagnostics");
+            sb.AppendLine($"  Plugin:      {Assembly.GetExecutingAssembly().Location}");
+            sb.AppendLine($"  MCP server:  {indexJs ?? "NOT FOUND — reinstall BIM-Bot (the server component was not deployed)"}");
+            sb.AppendLine($"  Node.js:     {(File.Exists(nodeExe) ? nodeExe : nodeExe + "  (not found on disk — reinstall BIM-Bot)")}");
+
+            var running = Application.IsServiceRunning;
+            var port = Application.SocketServiceInstance?.Port;
+            sb.AppendLine($"  BIM-Bot service: {(running ? $"running on 127.0.0.1:{port}" : "STOPPED — click \"Start BIM-Bot\" on this ribbon")}");
+            sb.AppendLine($"  Handshake:   {(File.Exists(ServiceEndpoint.FilePath) ? ServiceEndpoint.FilePath : "not written yet")}");
+            sb.AppendLine($"  Log file:    {Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "BIMBot", "logs")}");
+
+            return sb.ToString().TrimEnd();
         }
 
         /// <summary>

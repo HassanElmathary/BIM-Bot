@@ -47,22 +47,22 @@ namespace BIMBotPlugin.Core
                 case "views":
                     return new FilteredElementCollector(doc).OfClass(typeof(View)).Cast<View>()
                         .Where(v => !v.IsTemplate && v.ViewType != ViewType.Internal && v.ViewType != ViewType.ProjectBrowser && v.ViewType != ViewType.SystemBrowser)
-                        .Select(v => (v.Id.Value, v.Name, (Element)v));
+                        .Select(v => (v.Id.Val(), v.Name, (Element)v));
                 case "sheets":
                     return new FilteredElementCollector(doc).OfClass(typeof(ViewSheet)).Cast<ViewSheet>()
-                        .Select(s => (s.Id.Value, $"{s.SheetNumber} — {s.Name}", (Element)s));
+                        .Select(s => (s.Id.Val(), $"{s.SheetNumber} — {s.Name}", (Element)s));
                 case "sheetnumbers":
                     return new FilteredElementCollector(doc).OfClass(typeof(ViewSheet)).Cast<ViewSheet>()
-                        .Select(s => (s.Id.Value, s.SheetNumber, (Element)s));
+                        .Select(s => (s.Id.Val(), s.SheetNumber, (Element)s));
                 case "levels":
                     return new FilteredElementCollector(doc).OfClass(typeof(Level)).Cast<Level>()
-                        .Select(l => (l.Id.Value, l.Name, (Element)l));
+                        .Select(l => (l.Id.Val(), l.Name, (Element)l));
                 case "families":
                     return new FilteredElementCollector(doc).OfClass(typeof(Family)).Cast<Family>()
-                        .Select(f => (f.Id.Value, f.Name, (Element)f));
+                        .Select(f => (f.Id.Val(), f.Name, (Element)f));
                 case "materials":
                     return new FilteredElementCollector(doc).OfClass(typeof(Material)).Cast<Material>()
-                        .Select(m => (m.Id.Value, m.Name, (Element)m));
+                        .Select(m => (m.Id.Val(), m.Name, (Element)m));
                 case "worksets":
                     if (!doc.IsWorkshared) return Enumerable.Empty<(long, string, Element)>();
                     return new FilteredWorksetCollector(doc).OfKind(WorksetKind.UserWorkset)
@@ -126,7 +126,7 @@ namespace BIMBotPlugin.Core
 
                     var canFix = fixableParam(p) && !string.IsNullOrEmpty(defaultValue);
                     var v = Violation(ruleId, "requiredParameter", severity,
-                        $"Missing required parameter '{pn}'", elem.Id.Value, elem.Name, categoryName, canFix);
+                        $"Missing required parameter '{pn}'", elem.Id.Val(), elem.Name, categoryName, canFix);
 
                     if (fix && canFix)
                     {
@@ -161,7 +161,7 @@ namespace BIMBotPlugin.Core
                 {
                     var v = Violation(ruleId, "lineWeight", severity,
                         $"Projection line weight is {actual?.ToString() ?? "unset"}, standard requires {projWeight.Value}",
-                        cat.Id.Value, categoryName, categoryName, fixable: true);
+                        cat.Id.Val(), categoryName, categoryName, fixable: true);
                     if (fix)
                     {
                         try { cat.SetLineWeight(projWeight.Value, GraphicsStyleType.Projection); v["fixed"] = true; } catch { }
@@ -176,7 +176,7 @@ namespace BIMBotPlugin.Core
                 {
                     var v = Violation(ruleId, "lineWeight", severity,
                         $"Cut line weight is {actual?.ToString() ?? "unset"}, standard requires {cutWeight.Value}",
-                        cat.Id.Value, categoryName, categoryName, fixable: true);
+                        cat.Id.Val(), categoryName, categoryName, fixable: true);
                     if (fix)
                     {
                         try { cat.SetLineWeight(cutWeight.Value, GraphicsStyleType.Cut); v["fixed"] = true; } catch { }
@@ -221,7 +221,7 @@ namespace BIMBotPlugin.Core
                 var v = Violation("views.requireViewTemplate", "viewTemplate", severity,
                     "View has no view template assigned" +
                     (canFix ? $" (default: '{defaultTemplateName}')" : ""),
-                    view.Id.Value, view.Name, view.ViewType.ToString(), canFix);
+                    view.Id.Val(), view.Name, view.ViewType.ToString(), canFix);
 
                 if (fix && canFix)
                 {
@@ -254,7 +254,7 @@ namespace BIMBotPlugin.Core
                 {
                     violations.Add(Violation("health.noCadImports", "health", "error",
                         "Imported (not linked) CAD file in the model. Use find_cad_imports to remove.",
-                        imp.Id.Value, imp.Category?.Name ?? "Import", "CAD Import"));
+                        imp.Id.Val(), imp.Category?.Name ?? "Import", "CAD Import"));
                 }
             }
 
@@ -266,7 +266,7 @@ namespace BIMBotPlugin.Core
                 {
                     violations.Add(Violation("health.noInPlaceFamilies", "health", "warning",
                         "In-place family (bloats file size, breaks scheduling).",
-                        fam.Id.Value, fam.Name, "Family"));
+                        fam.Id.Val(), fam.Name, "Family"));
                 }
             }
         }
@@ -309,7 +309,7 @@ namespace BIMBotPlugin.Core
                 var currentName = currentWorkset?.Name ?? "Unknown";
                 var v = Violation(ruleId, "workset", severity,
                     $"Element is on workset '{currentName}', standard requires '{worksetName}'",
-                    elem.Id.Value, elem.Name, categoryName, fixable: true, bepReference: bepRef);
+                    elem.Id.Val(), elem.Name, categoryName, fixable: true, bepReference: bepRef);
 
                 if (fix)
                 {
@@ -376,7 +376,7 @@ namespace BIMBotPlugin.Core
                 var currentName = currentFilter?.Name ?? "None";
                 var v = Violation("phaseCompliance", "phase", severity,
                     $"View phase filter is '{currentName}', standard requires '{requiredFilterName}'",
-                    view.Id.Value, view.Name, view.ViewType.ToString(), fixable: true, bepReference: bepRef);
+                    view.Id.Val(), view.Name, view.ViewType.ToString(), fixable: true, bepReference: bepRef);
 
                 if (fix)
                 {

@@ -69,6 +69,8 @@ export function registerReadingTools(server: McpServer) {
         {
             category: z.string().describe("Revit category name, e.g. 'Walls', 'Doors', 'Windows', 'Floors', 'Ceilings', 'Roofs', 'Structural Columns'"),
             includeParameters: z.boolean().optional().describe("Include all parameters for each element (default: false)"),
+            includeLinks: z.boolean().optional().describe("Include elements from linked models"),
+            linkNames: z.array(z.string()).optional().describe("Specific link names to include"),
             offset: z.number().optional().describe("Skip this many elements (for pagination). Default: 0"),
             limit: z.number().optional().describe("Max elements to return (0 = all). Default: 0 (return all)")
         },
@@ -78,6 +80,8 @@ export function registerReadingTools(server: McpServer) {
                     client.sendCommand("get_elements", {
                         category: args.category,
                         includeParameters: args.includeParameters || false,
+                        includeLinks: args.includeLinks,
+                        linkNames: args.linkNames,
                         offset: args.offset || 0,
                         limit: args.limit || 0
                     })
@@ -93,11 +97,14 @@ export function registerReadingTools(server: McpServer) {
     server.tool(
         "get_parameters",
         "Get all parameters (instance and type) for a specific element by its ID.",
-        { elementId: z.number().describe("The Revit element ID") },
-        async ({ elementId }) => {
+        { 
+            elementId: z.number().describe("The Revit element ID"),
+            namespacedId: z.string().optional().describe("Namespaced ID for cross-link lookup, e.g. 'LinkName:12345'")
+        },
+        async (args) => {
             try {
                 const response = await withRevitConnection(async (client) =>
-                    client.sendCommand("get_parameters", { elementId })
+                    client.sendCommand("get_parameters", args)
                 );
                 return { content: [{ type: "text", text: JSON.stringify(response, null, 2) }] };
             } catch (error) {
@@ -163,11 +170,14 @@ export function registerReadingTools(server: McpServer) {
     server.tool(
         "get_levels",
         "Get all levels in the Revit project with their names and elevations.",
-        {},
-        async () => {
+        {
+            includeLinks: z.boolean().optional().describe("Include elements from linked models"),
+            linkNames: z.array(z.string()).optional().describe("Specific link names to include")
+        },
+        async (args) => {
             try {
                 const response = await withRevitConnection(async (client) =>
-                    client.sendCommand("get_levels", {})
+                    client.sendCommand("get_levels", args)
                 );
                 return { content: [{ type: "text", text: JSON.stringify(response, null, 2) }] };
             } catch (error) {
@@ -180,11 +190,14 @@ export function registerReadingTools(server: McpServer) {
     server.tool(
         "get_grids",
         "Get all grids in the Revit project with their names, directions, and positions.",
-        {},
-        async () => {
+        {
+            includeLinks: z.boolean().optional().describe("Include elements from linked models"),
+            linkNames: z.array(z.string()).optional().describe("Specific link names to include")
+        },
+        async (args) => {
             try {
                 const response = await withRevitConnection(async (client) =>
-                    client.sendCommand("get_grids", {})
+                    client.sendCommand("get_grids", args)
                 );
                 return { content: [{ type: "text", text: JSON.stringify(response, null, 2) }] };
             } catch (error) {
@@ -197,11 +210,14 @@ export function registerReadingTools(server: McpServer) {
     server.tool(
         "get_rooms",
         "Get all rooms in the Revit project with their names, numbers, areas, and boundary information.",
-        {},
-        async () => {
+        {
+            includeLinks: z.boolean().optional().describe("Include elements from linked models"),
+            linkNames: z.array(z.string()).optional().describe("Specific link names to include")
+        },
+        async (args) => {
             try {
                 const response = await withRevitConnection(async (client) =>
-                    client.sendCommand("get_rooms", {})
+                    client.sendCommand("get_rooms", args)
                 );
                 return { content: [{ type: "text", text: JSON.stringify(response, null, 2) }] };
             } catch (error) {
@@ -215,12 +231,14 @@ export function registerReadingTools(server: McpServer) {
         "get_families",
         "Get available family types in the Revit project. Optionally filter by category.",
         {
-            category: z.string().optional().describe("Optional category filter, e.g. 'Doors', 'Windows', 'Furniture'")
+            category: z.string().optional().describe("Optional category filter, e.g. 'Doors', 'Windows', 'Furniture'"),
+            includeLinks: z.boolean().optional().describe("Include elements from linked models"),
+            linkNames: z.array(z.string()).optional().describe("Specific link names to include")
         },
-        async ({ category }) => {
+        async (args) => {
             try {
                 const response = await withRevitConnection(async (client) =>
-                    client.sendCommand("get_available_family_types", { category: category || "" })
+                    client.sendCommand("get_available_family_types", args)
                 );
                 return { content: [{ type: "text", text: JSON.stringify(response, null, 2) }] };
             } catch (error) {
@@ -305,11 +323,14 @@ export function registerReadingTools(server: McpServer) {
     server.tool(
         "get_warnings",
         "Get all active warnings/errors in the Revit model for quality control.",
-        {},
-        async () => {
+        {
+            includeLinks: z.boolean().optional().describe("Include elements from linked models"),
+            linkNames: z.array(z.string()).optional().describe("Specific link names to include")
+        },
+        async (args) => {
             try {
                 const response = await withRevitConnection(async (client) =>
-                    client.sendCommand("get_warnings", {})
+                    client.sendCommand("get_warnings", args)
                 );
                 return { content: [{ type: "text", text: JSON.stringify(response, null, 2) }] };
             } catch (error) {

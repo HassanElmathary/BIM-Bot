@@ -33,7 +33,7 @@ namespace BIMBotPlugin.Core
                 {
                     if (long.TryParse(idStr.Trim(), out var id))
                     {
-                        var elem = doc.GetElement(new ElementId(id));
+                        var elem = doc.GetElement(id.ToElementId());
                         if (elem is ViewSheet vs && !vs.IsPlaceholder)
                             viewIds.Add(vs.Id);
                     }
@@ -47,7 +47,7 @@ namespace BIMBotPlugin.Core
                 {
                     if (long.TryParse(idStr.Trim(), out var id))
                     {
-                        var elem = doc.GetElement(new ElementId(id));
+                        var elem = doc.GetElement(id.ToElementId());
                         if (elem is View v && !v.IsTemplate && v.CanBePrinted)
                             viewIds.Add(v.Id);
                     }
@@ -67,6 +67,10 @@ namespace BIMBotPlugin.Core
                 viewIds = allSheets.Select(s => s.Id).ToList();
             }
 
+            // Revit 2020/2021 have no usable PDFExportOptions — print instead.
+#if REVIT_PRE_2022
+            return PrintViewsToPdf(doc, viewIds, outputFolder);
+#else
             // Use Revit PDF export (Revit 2022+)
             try
             {
@@ -135,7 +139,72 @@ namespace BIMBotPlugin.Core
             {
                 return new JObject { ["message"] = $"PDF export error: {ex.Message}\nMake sure a PDF printer is installed." };
             }
+#endif
         }
+
+#if REVIT_PRE_2022
+        /// <summary>
+        /// PDF fallback for Revit 2020/2021: drive PrintManager at an installed
+        /// PDF printer. Fidelity and the format options offered by
+        /// PDFExportOptions (raster quality, colour depth, zoom) are not
+        /// available this way — the printer's own settings apply instead.
+        /// </summary>
+        private static JToken PrintViewsToPdf(Document doc, List<ElementId> viewIds, string outputFolder)
+        {
+            try
+            {
+                var printManager = doc.PrintManager;
+                var installed = System.Drawing.Printing.PrinterSettings.InstalledPrinters
+                    .Cast<string>()
+                    .ToList();
+                var pdfPrinter = installed.FirstOrDefault(p =>
+                    p.IndexOf("PDF", StringComparison.OrdinalIgnoreCase) >= 0);
+
+                if (pdfPrinter == null)
+                    return new JObject
+                    {
+                        ["message"] = "Revit " + Compat.ElementApiCompat.BandName +
+                            " has no PDF export API, so BIM-Bot prints to a PDF printer instead — "
+                            + "but no PDF printer is installed. Install one (e.g. \"Microsoft Print to PDF\") and retry."
+                    };
+
+                printManager.SelectNewPrintDriver(pdfPrinter);
+                printManager.PrintRange = PrintRange.Select;
+                printManager.CombinedFile = false;
+                printManager.PrintToFile = true;
+
+                var viewSet = new ViewSet();
+                foreach (var id in viewIds)
+                {
+                    if (doc.GetElement(id) is View v) viewSet.Insert(v);
+                }
+                if (viewSet.IsEmpty)
+                    return new JObject { ["message"] = "No printable views or sheets were selected." };
+
+                var vsSetting = printManager.ViewSheetSetting;
+                vsSetting.CurrentViewSheetSet.Views = viewSet;
+
+                printManager.PrintToFileName =
+                    System.IO.Path.Combine(outputFolder, (doc.Title ?? "Export") + ".pdf");
+                printManager.Apply();
+                printManager.SubmitPrint();
+
+                return new JObject
+                {
+                    ["message"] = $"✅ Sent {viewSet.Size} view/sheet(s) to \"{pdfPrinter}\".\n"
+                        + $"Output folder: {outputFolder}\n"
+                        + $"(Revit {Compat.ElementApiCompat.BandName} has no native PDF export — "
+                        + "printed instead, so raster quality/colour options were not applied.)",
+                    ["count"] = viewSet.Size,
+                    ["outputFolder"] = outputFolder
+                };
+            }
+            catch (Exception ex)
+            {
+                return new JObject { ["message"] = $"PDF print error: {ex.Message}" };
+            }
+        }
+#endif
 
         private static JToken ExportToImages(Document doc, JObject parameters)
         {
@@ -152,7 +221,7 @@ namespace BIMBotPlugin.Core
                 foreach (var idStr in sheetIdStr.Split(','))
                     if (long.TryParse(idStr.Trim(), out var id))
                     {
-                        var elem = doc.GetElement(new ElementId(id));
+                        var elem = doc.GetElement(id.ToElementId());
                         if (elem is ViewSheet) selectedIds.Add(elem.Id);
                     }
             }
@@ -162,7 +231,7 @@ namespace BIMBotPlugin.Core
                 foreach (var idStr in viewIdStr.Split(','))
                     if (long.TryParse(idStr.Trim(), out var id))
                     {
-                        var elem = doc.GetElement(new ElementId(id));
+                        var elem = doc.GetElement(id.ToElementId());
                         if (elem is View v && !v.IsTemplate && v.CanBePrinted) selectedIds.Add(v.Id);
                     }
             }
@@ -231,7 +300,7 @@ namespace BIMBotPlugin.Core
                     var firstId = idStr.Split(',').FirstOrDefault()?.Trim();
                     if (long.TryParse(firstId, out var id))
                     {
-                        var elem = doc.GetElement(new ElementId(id));
+                        var elem = doc.GetElement(id.ToElementId());
                         if (elem is View v)
                             ifcOpts.FilterViewId = v.Id;
                     }
@@ -273,7 +342,7 @@ namespace BIMBotPlugin.Core
                     foreach (var idStr in sheetIdStr.Split(','))
                         if (long.TryParse(idStr.Trim(), out var id))
                         {
-                            var elem = doc.GetElement(new ElementId(id));
+                            var elem = doc.GetElement(id.ToElementId());
                             if (elem is ViewSheet) viewIds.Add(elem.Id);
                         }
                 }
@@ -283,7 +352,7 @@ namespace BIMBotPlugin.Core
                     foreach (var idStr in viewIdStr.Split(','))
                         if (long.TryParse(idStr.Trim(), out var id))
                         {
-                            var elem = doc.GetElement(new ElementId(id));
+                            var elem = doc.GetElement(id.ToElementId());
                             if (elem is View v && !v.IsTemplate && v.CanBePrinted) viewIds.Add(v.Id);
                         }
                 }
@@ -334,7 +403,7 @@ namespace BIMBotPlugin.Core
                     {
                         if (long.TryParse(idStr.Trim(), out var id))
                         {
-                            var elem = doc.GetElement(new ElementId(id));
+                            var elem = doc.GetElement(id.ToElementId());
                             if (elem is View v && !v.IsTemplate && v.CanBePrinted)
                                 viewIds.Add(v.Id);
                         }
@@ -348,7 +417,7 @@ namespace BIMBotPlugin.Core
                     {
                         if (long.TryParse(idStr.Trim(), out var id))
                         {
-                            var elem = doc.GetElement(new ElementId(id));
+                            var elem = doc.GetElement(id.ToElementId());
                             if (elem is ViewSheet)
                                 viewIds.Add(elem.Id);
                         }
@@ -418,11 +487,11 @@ namespace BIMBotPlugin.Core
                                         default:
                                             try
                                             {
-                                                var lengthUnit = doc.GetUnits().GetFormatOptions(SpecTypeId.Length).GetUnitTypeId();
-                                                if (lengthUnit == UnitTypeId.Millimeters) multiplier = 304.8;
-                                                else if (lengthUnit == UnitTypeId.Meters) multiplier = 0.3048;
-                                                else if (lengthUnit == UnitTypeId.Centimeters) multiplier = 30.48;
-                                                else if (lengthUnit == UnitTypeId.Inches) multiplier = 12.0;
+                                                var lengthUnit = Compat.BbUnits.GetLengthUnit(doc);
+                                                if (Compat.BbUnits.Is(lengthUnit, Compat.BbUnits.Millimeters)) multiplier = 304.8;
+                                                else if (Compat.BbUnits.Is(lengthUnit, Compat.BbUnits.Meters)) multiplier = 0.3048;
+                                                else if (Compat.BbUnits.Is(lengthUnit, Compat.BbUnits.Centimeters)) multiplier = 30.48;
+                                                else if (Compat.BbUnits.Is(lengthUnit, Compat.BbUnits.Inches)) multiplier = 12.0;
                                                 else multiplier = 1.0;
                                             }
                                             catch
@@ -564,7 +633,7 @@ namespace BIMBotPlugin.Core
                     foreach (var idStr in sheetIdStr.Split(','))
                         if (long.TryParse(idStr.Trim(), out var id))
                         {
-                            var elem = doc.GetElement(new ElementId(id));
+                            var elem = doc.GetElement(id.ToElementId());
                             if (elem is ViewSheet) selectedIds.Add(elem.Id);
                         }
                 }
@@ -574,7 +643,7 @@ namespace BIMBotPlugin.Core
                     foreach (var idStr in viewIdStr.Split(','))
                         if (long.TryParse(idStr.Trim(), out var id))
                         {
-                            var elem = doc.GetElement(new ElementId(id));
+                            var elem = doc.GetElement(id.ToElementId());
                             if (elem is View v && !v.IsTemplate && v.CanBePrinted) selectedIds.Add(v.Id);
                         }
                 }
@@ -640,7 +709,7 @@ namespace BIMBotPlugin.Core
                     var firstId = idStr.Split(',').FirstOrDefault()?.Trim();
                     if (long.TryParse(firstId, out var id))
                     {
-                        var elem = doc.GetElement(new ElementId(id));
+                        var elem = doc.GetElement(id.ToElementId());
                         if (elem is View v)
                         {
                             nwcOpts.ExportScope = NavisworksExportScope.View;
@@ -694,7 +763,7 @@ namespace BIMBotPlugin.Core
 
                         // First column = ElementId
                         if (!int.TryParse(vals[0].Trim('"').Trim(), out int elemId)) { skipped++; continue; }
-                        var elem = doc.GetElement(new ElementId(elemId));
+                        var elem = doc.GetElement(elemId.ToElementId());
                         if (elem == null) { skipped++; continue; }
 
                         for (int col = 1; col < headers.Length && col < vals.Length; col++)

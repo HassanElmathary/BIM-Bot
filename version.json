@@ -1,8 +1,8 @@
 {
-  "version": "2.3.0",
-  "releaseUrl": "https://github.com/HassanElmathary/BIM-Bot/releases/tag/v2.3.0",
-  "downloadUrl": "https://github.com/HassanElmathary/BIM-Bot/releases/download/v2.3.0/BIMBot-Setup-2.3.0.exe",
-  "assetFileName": "BIMBot-Setup-2.3.0.exe",
-  "changelog": "BIM-Bot v2.3.0 — Fixes MCP auto-connect on standard-user installs: the installer now configures the profile of the person installing, not the admin account that answered the UAC prompt. Adds 187 MCP tools including audit_model_standards, parameter_batch_editor, generate_dynamic_schedule and validate_shared_coordinates, plus a centralized Light/Dark theme system.",
+  "version": "2.3.1",
+  "releaseUrl": "https://github.com/HassanElmathary/BIM-Bot/releases/tag/v2.3.1",
+  "downloadUrl": "https://github.com/HassanElmathary/BIM-Bot/releases/download/v2.3.1/BIMBot-Setup-2.3.1.exe",
+  "assetFileName": "BIMBot-Setup-2.3.1.exe",
+  "changelog": "BIM-Bot v2.3.1 — Fixes Claude auto-connect on every real installation. The plugin resolved the install root one folder above BIMBotPlugin.dll, but per-Revit-year builds put it two levels down, so \"Connect Claude\" and the startup self-heal could never find the MCP server and silently did nothing. The service also no longer depends on port 8080 being free: it moves to the next free port and publishes it, so Revit commands work on machines where another app owns 8080. Corrupt or BOM-prefixed client configs are now backed up and rebuilt instead of abandoned, Claude Desktop is configured even when installed after BIM-Bot, and Revit is detected on non-default drives. Adds scripts/bimbot-doctor.ps1 to diagnose and repair an install in one pass.",
   "minVersion": "1.0.0"
 }

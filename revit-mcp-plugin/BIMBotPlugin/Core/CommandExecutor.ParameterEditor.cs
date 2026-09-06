@@ -57,7 +57,7 @@ namespace BIMBotPlugin.Core
                             touched = true;
                             if (changes.Count < previewLimit)
                             {
-                                change!["elementId"] = elem.Id.Value;
+                                change!["elementId"] = elem.Id.Val();
                                 change["elementName"] = elem.Name;
                                 changes.Add(change);
                             }
@@ -70,7 +70,7 @@ namespace BIMBotPlugin.Core
                         {
                             skipped++;
                             if (errors.Count < previewLimit)
-                                errors.Add($"[{elem.Id.Value}] {error}");
+                                errors.Add($"[{elem.Id.Val()}] {error}");
                         }
                     }
                     if (touched) elementsEdited++;
@@ -124,7 +124,7 @@ namespace BIMBotPlugin.Core
             var ids = parameters["elementIds"] as JArray;
             if (ids != null && ids.Count > 0)
             {
-                return ids.Select(t => doc.GetElement(new ElementId(t.Value<long>())))
+                return ids.Select(t => doc.GetElement((t.Value<long>()).ToElementId()))
                           .Where(e => e != null)
                           .ToList();
             }
@@ -381,7 +381,7 @@ namespace BIMBotPlugin.Core
                     double internalValue;
                     try
                     {
-                        var unitId = PbeUnitId(unit) ?? p.GetUnitTypeId();
+                        var unitId = PbeUnitId(unit) ?? p.UnitOf();
                         internalValue = UnitUtils.ConvertToInternalUnits(dv, unitId);
                     }
                     catch { internalValue = dv; }
@@ -473,7 +473,7 @@ namespace BIMBotPlugin.Core
 
             try
             {
-                var unitId = PbeUnitId(unit) ?? p.GetUnitTypeId();
+                var unitId = PbeUnitId(unit) ?? p.UnitOf();
                 return UnitUtils.ConvertToInternalUnits(dv, unitId);
             }
             catch { return dv; }
@@ -486,22 +486,22 @@ namespace BIMBotPlugin.Core
             return m.Success ? m.Value : text.Trim();
         }
 
-        private static ForgeTypeId? PbeUnitId(string? unit)
+        private static BbUnitId? PbeUnitId(string? unit)
         {
             if (string.IsNullOrWhiteSpace(unit)) return null;
             switch (unit!.Trim().ToLowerInvariant())
             {
-                case "mm": case "millimeter": case "millimeters": return UnitTypeId.Millimeters;
-                case "cm": case "centimeter": case "centimeters": return UnitTypeId.Centimeters;
-                case "m": case "meter": case "meters": return UnitTypeId.Meters;
-                case "ft": case "feet": case "foot": return UnitTypeId.Feet;
-                case "in": case "inch": case "inches": return UnitTypeId.Inches;
-                case "m2": case "m²": case "sqm": return UnitTypeId.SquareMeters;
-                case "ft2": case "ft²": case "sqft": return UnitTypeId.SquareFeet;
-                case "m3": case "m³": case "cbm": return UnitTypeId.CubicMeters;
-                case "ft3": case "ft³": case "cft": return UnitTypeId.CubicFeet;
-                case "deg": case "degree": case "degrees": return UnitTypeId.Degrees;
-                case "rad": case "radian": case "radians": return UnitTypeId.Radians;
+                case "mm": case "millimeter": case "millimeters": return Compat.BbUnits.Millimeters;
+                case "cm": case "centimeter": case "centimeters": return Compat.BbUnits.Centimeters;
+                case "m": case "meter": case "meters": return Compat.BbUnits.Meters;
+                case "ft": case "feet": case "foot": return Compat.BbUnits.Feet;
+                case "in": case "inch": case "inches": return Compat.BbUnits.Inches;
+                case "m2": case "m²": case "sqm": return Compat.BbUnits.SquareMeters;
+                case "ft2": case "ft²": case "sqft": return Compat.BbUnits.SquareFeet;
+                case "m3": case "m³": case "cbm": return Compat.BbUnits.CubicMeters;
+                case "ft3": case "ft³": case "cft": return Compat.BbUnits.CubicFeet;
+                case "deg": case "degree": case "degrees": return Compat.BbUnits.Degrees;
+                case "rad": case "radian": case "radians": return Compat.BbUnits.Radians;
                 default: return null;
             }
         }

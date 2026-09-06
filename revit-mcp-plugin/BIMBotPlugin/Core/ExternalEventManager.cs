@@ -40,11 +40,16 @@ namespace BIMBotPlugin.Core
             _commandQueue.Enqueue(request);
             var raised = _externalEvent.Raise();
             
-            if (raised != ExternalEventRequest.Accepted)
+            // Pending means the event is already queued and will fire on the next
+            // idle cycle - our command is in the queue and will still be picked up.
+            // Only Denied is an actual refusal; throwing on Pending abandoned an
+            // enqueued request and broke rapid back-to-back calls.
+            if (raised == ExternalEventRequest.Denied)
             {
+                request.CompletionSource.TrySetCanceled();
                 throw new InvalidOperationException(
-                    $"Revit rejected the external event request (status: {raised}). " +
-                    "Revit may be busy with another operation.");
+                    "Revit denied the external event request. Revit may be shutting down " +
+                    "or in a state where external events cannot run.");
             }
 
             // Timeout after 5 minutes — export operations can take significant time on large models

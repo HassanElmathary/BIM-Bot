@@ -1,0 +1,65 @@
+name: add_feature
+description: Add a new feature to BIM-Bot safely and update all related systems.
+
+inputs:
+  - feature_name:
+      type: string
+      required: true
+      description: Name of the tool or feature to add (e.g. validate_fire_rating)
+  - category:
+      type: string
+      required: true
+      description: Target category out of the 19 valid BIM-Bot categories
+  - description:
+      type: string
+      required: true
+      description: Description of tool functionality and AI purpose
+  - revit_handler_method:
+      type: string
+      required: true
+      description: C# method name in Revit plugin handler
+
+steps:
+  - name: Validate Duplication
+    action: Check proposed tool name against existing 186 tools to prevent duplicate names or overlapping schema responsibilities.
+
+  - name: Category Assignment
+    action: Assign the tool to strictly 1 of the 19 official categories (Reading, Creating, Editing, Documentation, QA/QC, AI, Power Tools, Advanced, Drafting, Export, Extended, File Management, MEP, Power BI, Rendering, Settings, Sketch, Transactions, BIM Dashboard).
+
+  - name: Increment Tool Counter
+    action: Calculate new total tool count (e.g. 186 -> 187).
+
+  - name: Design MCP Server Tool
+    action: Create TypeScript tool definition with JSON schema parameters in revit-mcp-server/src/tools/.
+
+  - name: Design Revit Plugin Handler
+    action: Implement C# command handler in revit-mcp-plugin/ to process TCP JSON-RPC requests on port 8080 via ExternalEvent.
+
+  - name: Update AI Tool Registry
+    action: Register tool in system prompt / AI layer configuration if exposed to LLM agents (Claude, Gemini, Cursor).
+
+  - name: Update Installer
+    action: Add any new compiled DLLs, dependencies, or configuration scripts to the Inno Setup installer installer/installer.iss if needed.
+
+  - name: Update README Documentation
+    action: Increment tool count header and insert tool row in the Markdown Tool Reference Table under the matching category.
+
+  - name: Update GitHub Release Notes
+    action: Stage changelog entry under Added section for the next release notes draft.
+
+  - name: Update npm Package
+    action: Prepare package bump and update TypeScript exports in package manifest.
+
+  - name: Update Website Feature Section
+    action: Add tool card / feature entry in website.md and website static pages.
+
+  - name: Generate Changelog Entry
+    action: Render formatted CHANGELOG.md block.
+
+outputs:
+  - architecture_plan
+  - code_structure_changes
+  - readme_update_block
+  - website_update_block
+  - release_notes
+  - version_bump_plan

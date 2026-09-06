@@ -120,7 +120,7 @@ namespace BIMBotPlugin.UI
         private void ToggleTheme()
         {
             _isDarkMode = !_isDarkMode;
-            ThemeManager.SetTheme(_isDarkMode ? ThemeMode.Dark : ThemeMode.Light);
+            ThemeManager.SetTheme(_isDarkMode ? Themes.ThemeMode.Dark : Themes.ThemeMode.Light);
             ApplyThemeBrushes();
             // Rebuild entire UI (simplest approach for full theme swap)
             _tabButtons.Clear();

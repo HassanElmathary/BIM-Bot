@@ -50,6 +50,12 @@ namespace BIMBotPlugin.Commands
                     }
                 }
 
+                // Always show where things live. "Not connected" with no further
+                // detail is what left users stuck: they could not tell a missing
+                // server from a stopped service from a bad config path.
+                sb.AppendLine();
+                sb.AppendLine(ClaudeConfigService.Diagnose());
+
                 TaskDialog.Show("Connect to Claude", sb.ToString().TrimEnd());
                 return anyConfigured ? Result.Succeeded : Result.Failed;
             }

@@ -491,6 +491,38 @@ namespace BIMBotPlugin.Core
             return bmp;
         }
 
+        // ════════════════════════════════════════════════════
+        // ACTIVATE KEY — golden key icon for license activation
+        // ════════════════════════════════════════════════════
+        /// <summary>Activation key icon — golden key shape.</summary>
+        public static BitmapSource ActivateKey(int size = 32) => Render(size, (dc, s) =>
+        {
+            double m = s * 0.08;
+            double cx = s / 2.0, cy = s / 2.0;
+
+            // Key head (circle)
+            double headR = s * 0.22;
+            double headCx = s * 0.35, headCy = s * 0.32;
+            dc.DrawEllipse(B(CAmber), P(Color.FromRgb(0xD9, 0x77, 0x06), s * 0.04), new Point(headCx, headCy), headR, headR);
+            // Key hole (inner circle cutout)
+            dc.DrawEllipse(B(Color.FromRgb(0x1E, 0x29, 0x3B)), null, new Point(headCx, headCy), headR * 0.4, headR * 0.4);
+
+            // Key shaft
+            var shaft = P(CAmber, s * 0.09);
+            double shaftStartX = headCx + headR * 0.7;
+            double shaftEndX = s - m;
+            double shaftY = s * 0.55;
+            dc.DrawLine(shaft, new Point(shaftStartX, headCy + headR * 0.3), new Point(shaftEndX, shaftY));
+
+            // Key teeth
+            var toothPen = P(CAmber, s * 0.07);
+            dc.DrawLine(toothPen, new Point(shaftEndX - s * 0.08, shaftY), new Point(shaftEndX - s * 0.08, shaftY + s * 0.14));
+            dc.DrawLine(toothPen, new Point(shaftEndX - s * 0.22, shaftY), new Point(shaftEndX - s * 0.22, shaftY + s * 0.10));
+
+            // Sparkle (top right)
+            DrawStar4(dc, s * 0.78, s * 0.18, s * 0.08, Colors.White);
+        });
+
         /// <summary>QA/QC icon — shield with a checkmark.</summary>
         public static BitmapSource QaQc(int size) => Render(size, (dc, s) =>
         {

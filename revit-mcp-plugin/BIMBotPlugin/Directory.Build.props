@@ -1,0 +1,16 @@
+<Project>
+  <!--
+    Per-Revit-version build bands. These must be set BEFORE the SDK props are
+    imported, otherwise restore and the default Compile glob still use plain
+    obj\ — which then sweeps every other band's generated AssemblyInfo.cs into
+    the compile and fails with duplicate-attribute errors.
+
+    RevitVersion is normally supplied as a global property
+    (-p:RevitVersion=2023); the default here keeps a bare `dotnet build` working.
+  -->
+  <PropertyGroup>
+    <RevitVersion Condition="'$(RevitVersion)' == ''">2026</RevitVersion>
+    <BaseOutputPath>$(MSBuildThisFileDirectory)bin\R$(RevitVersion)\</BaseOutputPath>
+    <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory)obj\R$(RevitVersion)\</BaseIntermediateOutputPath>
+  </PropertyGroup>
+</Project>

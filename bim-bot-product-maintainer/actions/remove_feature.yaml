@@ -1,0 +1,51 @@
+name: remove_feature
+description: Safely remove a feature from BIM-Bot and clean all references.
+
+inputs:
+  - tool_name:
+      type: string
+      required: true
+      description: Name of the tool or feature to deprecate/remove
+  - reason:
+      type: string
+      required: true
+      description: Rationale for feature removal or replacement
+
+steps:
+  - name: Confirm Removal Approval
+    action: Verify removal request, checking if replacement tool exists or feature is fully deprecated.
+
+  - name: Identify Category and Tool Count
+    action: Locate target tool category and determine current total tool count (e.g. 187 -> 186).
+
+  - name: Remove MCP Tool Registration
+    action: Unregister tool from revit-mcp-server tool registry and remove corresponding TS files.
+
+  - name: Remove Revit Command Handler
+    action: Remove C# handler case from TCP JSON-RPC router in revit-mcp-plugin.
+
+  - name: Remove AI Exposure
+    action: Strip tool reference from system prompts and AI tool capabilities list.
+
+  - name: Remove from Tool Reference Table
+    action: Delete corresponding row from README.md tool reference table.
+
+  - name: Decrement Tool Count
+    action: Decrement tool count across README.md, version.json, website.md, and installer text.
+
+  - name: Update README Badges
+    action: Update total tools badge if displaying numeric count.
+
+  - name: Update Website Listing
+    action: Remove tool card and updated statistics on website.md and landing page.
+
+  - name: Add Deprecation Notice
+    action: Add entry under Removed section in CHANGELOG.md and release notes.
+
+  - name: Bump Version
+    action: Determine minor or major SemVer bump based on breaking change impact.
+
+outputs:
+  - removal_audit_trail
+  - count_sync_report
+  - changelog_removal_entry

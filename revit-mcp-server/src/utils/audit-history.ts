@@ -55,8 +55,9 @@ export function appendHistory(entry: AuditHistoryEntry): void {
  */
 export function getPreviousScore(projectName: string): number | null {
     const history = loadHistory();
-    // Find the most recent entry for this project (excluding the very last one
-    // which might be the current run if called after appendHistory)
+    // Most recent entry for this project. Callers must read this BEFORE calling
+    // appendHistory for the current run, otherwise the "previous" score is the
+    // run in progress (see qaqc_tools.ts, which does read it first).
     for (let i = history.length - 1; i >= 0; i--) {
         if (history[i].projectName === projectName) {
             return history[i].complianceScore;

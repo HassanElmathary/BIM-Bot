@@ -1,0 +1,53 @@
+name: edit_feature
+description: Modify an existing BIM-Bot feature and propagate changes across all layers.
+
+inputs:
+  - tool_name:
+      type: string
+      required: true
+      description: Name of the existing tool to edit (e.g. parameter_batch_editor)
+  - edit_type:
+      type: string
+      required: true
+      description: Type of change (schema_update | behavior_fix | performance_optimization | parameter_addition)
+  - breaking_changes:
+      type: boolean
+      required: true
+      description: Whether the edit alters existing parameter signatures or return format
+
+steps:
+  - name: Identify Tool and Category
+    action: Locate tool implementation in revit-mcp-server and C# handler in revit-mcp-plugin.
+
+  - name: Check Breaking Changes
+    action: Evaluate backwards compatibility with existing AI prompts and automated workflows.
+
+  - name: Update MCP JSON Schema
+    action: Update TypeScript interface and JSON schema validation rules in MCP server tool definitions.
+
+  - name: Update Revit Handler Logic
+    action: Modify C# code execution, parameter extraction, and Revit API transaction handling.
+
+  - name: Validate Multi-Version Compatibility
+    action: Test across Revit versions (2020 through 2027 API differences).
+
+  - name: Update AI Tool Description
+    action: Refine parameter descriptions and usage examples provided to LLMs.
+
+  - name: Update README Documentation
+    action: Refresh tool parameters and description in README.md tool reference table.
+
+  - name: Update Tool Reference Table
+    action: Synchronize modified schema details across reference tables.
+
+  - name: Add Changelog Entry
+    action: Record entry under Improved or Fixed section in CHANGELOG.md.
+
+  - name: Determine Version Bump
+    action: Recommend patch bump for bugfixes/optimizations or minor/major bump for breaking schema edits.
+
+outputs:
+  - tool_diff_summary
+  - schema_change_log
+  - readme_diff_block
+  - version_recommendation

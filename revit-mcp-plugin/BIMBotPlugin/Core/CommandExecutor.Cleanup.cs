@@ -33,7 +33,7 @@ namespace BIMBotPlugin.Core
             if (!string.IsNullOrEmpty(floorIdsStr) && floorIdsStr != "all")
             {
                 var ids = floorIdsStr.Split(',').Select(s => int.Parse(s.Trim())).ToHashSet();
-                floors = floors.Where(f => ids.Contains((int)f.Id.Value)).ToList();
+                floors = floors.Where(f => ids.Contains((int)f.Id.Val())).ToList();
             }
 
             if (floors.Count == 0)
@@ -199,13 +199,13 @@ namespace BIMBotPlugin.Core
                         .WhereElementIsNotElementType()
                         .Where(e =>
                         {
-                            try { var p = e.get_Parameter(BuiltInParameter.DATUM_VOLUME_OF_INTEREST); return p != null && ((int?)p.AsElementId()?.Value) == sb.Id.Value; }
+                            try { var p = e.get_Parameter(BuiltInParameter.DATUM_VOLUME_OF_INTEREST); return p != null && ((int?)p.AsElementId()?.Val()) == sb.Id.Val(); }
                             catch { return false; }
                         }).Count();
 
                     items.Add(new JObject
                     {
-                        ["id"] = sb.Id.Value,
+                        ["id"] = sb.Id.Val(),
                         ["name"] = sb.Name,
                         ["usedInViews"] = usedIn,
                         ["minX"] = bb?.Min.X, ["minY"] = bb?.Min.Y, ["minZ"] = bb?.Min.Z,
@@ -221,7 +221,7 @@ namespace BIMBotPlugin.Core
                     var views = new FilteredElementCollector(doc).OfClass(typeof(View)).Cast<View>();
                     return !views.Any(v =>
                     {
-                        try { var p = v.get_Parameter(BuiltInParameter.VIEWER_VOLUME_OF_INTEREST_CROP); return p != null && ((int?)p.AsElementId()?.Value) == sb.Id.Value; }
+                        try { var p = v.get_Parameter(BuiltInParameter.VIEWER_VOLUME_OF_INTEREST_CROP); return p != null && ((int?)p.AsElementId()?.Val()) == sb.Id.Val(); }
                         catch { return false; }
                     });
                 }).ToList();
@@ -282,7 +282,7 @@ namespace BIMBotPlugin.Core
             {
                 items.Add(new JObject
                 {
-                    ["id"] = sheet.Id.Value,
+                    ["id"] = sheet.Id.Val(),
                     ["number"] = sheet.SheetNumber,
                     ["name"] = sheet.Name
                 });
@@ -323,11 +323,11 @@ namespace BIMBotPlugin.Core
 
                     var usedTemplateIds = allViews
                         .Select(v => v.ViewTemplateId)
-                        .Where(id => id != null && id.Value != -1)
-                        .Select(id => id.Value)
+                        .Where(id => id != null && id.Val() != -1)
+                        .Select(id => id.Val())
                         .ToHashSet();
 
-                    var unusedTemplates = templates.Where(t => !usedTemplateIds.Contains((int)t.Id.Value)).ToList();
+                    var unusedTemplates = templates.Where(t => !usedTemplateIds.Contains((int)t.Id.Val())).ToList();
                     foreach (var t in unusedTemplates) doc.Delete(t.Id);
                     result["unusedTemplates"] = unusedTemplates.Count;
                     totalCleaned += unusedTemplates.Count;
@@ -367,12 +367,12 @@ namespace BIMBotPlugin.Core
                         try
                         {
                             var fIds = v.GetFilters();
-                            foreach (var fId in fIds) usedFilterIds.Add((int)fId.Value);
+                            foreach (var fId in fIds) usedFilterIds.Add((int)fId.Val());
                         }
                         catch (Exception ex) { Logger.Log($"Filter query failed for view '{v.Name}': {ex.Message}"); }
                     }
 
-                    var unusedFilters = filters.Where(f => !usedFilterIds.Contains((int)f.Id.Value)).ToList();
+                    var unusedFilters = filters.Where(f => !usedFilterIds.Contains((int)f.Id.Val())).ToList();
                     foreach (var f in unusedFilters) doc.Delete(f.Id);
                     result["unusedFilters"] = unusedFilters.Count;
                     totalCleaned += unusedFilters.Count;
@@ -396,7 +396,7 @@ namespace BIMBotPlugin.Core
                 foreach (var vpId in sheet.GetAllViewports())
                 {
                     var vp = doc.GetElement(vpId) as Viewport;
-                    if (vp != null) sheetsWithViewIds.Add((int)(long)vp.ViewId.Value);
+                    if (vp != null) sheetsWithViewIds.Add((int)(long)vp.ViewId.Val());
                 }
             }
 
@@ -409,7 +409,7 @@ namespace BIMBotPlugin.Core
                             v.ViewType != ViewType.SystemBrowser &&
                             v.ViewType != ViewType.Internal &&
                             v.ViewType != ViewType.DrawingSheet &&
-                            !sheetsWithViewIds.Contains((int)v.Id.Value))
+                            !sheetsWithViewIds.Contains((int)v.Id.Val()))
                 .ToList();
 
             var items = new JArray();
@@ -417,7 +417,7 @@ namespace BIMBotPlugin.Core
             {
                 items.Add(new JObject
                 {
-                    ["id"] = v.Id.Value,
+                    ["id"] = v.Id.Val(),
                     ["name"] = v.Name,
                     ["type"] = v.ViewType.ToString()
                 });
@@ -529,7 +529,7 @@ namespace BIMBotPlugin.Core
                 {
                     instanceCount += new FilteredElementCollector(doc)
                         .OfClass(typeof(FamilyInstance))
-                        .Where(e => ((FamilyInstance)e).Symbol.Id.Value == symId.Value)
+                        .Where(e => ((FamilyInstance)e).Symbol.Id.Val() == symId.Val())
                         .Count();
                 }
 
@@ -563,7 +563,7 @@ namespace BIMBotPlugin.Core
             {
                 items.Add(new JObject
                 {
-                    ["id"] = c.family.Id.Value,
+                    ["id"] = c.family.Id.Val(),
                     ["name"] = c.family.Name,
                     ["category"] = c.family.FamilyCategory?.Name,
                     ["instances"] = c.instances,
@@ -642,7 +642,7 @@ namespace BIMBotPlugin.Core
                 return new JObject
                 {
                     ["message"] = $"ðŸ’¥ Created exploded 3D view '{view3d.Name}' with {levels.Count} levels, spacing={spacing}ft",
-                    ["viewId"] = view3d.Id.Value,
+                    ["viewId"] = view3d.Id.Val(),
                     ["viewName"] = view3d.Name,
                     ["levels"] = levels.Count,
                     ["hint"] = "For actual displacement, use execute_code to move elements per-level by offset."
@@ -670,7 +670,7 @@ namespace BIMBotPlugin.Core
                 if (elementIdInt.HasValue)
                 {
                     // Orient to element
-                    var elem = doc.GetElement(new ElementId(elementIdInt.Value));
+                    var elem = doc.GetElement((elementIdInt.Value).ToElementId());
                     if (elem != null)
                     {
                         var loc = elem.Location as LocationCurve;
@@ -708,7 +708,7 @@ namespace BIMBotPlugin.Core
                 return new JObject { ["error"] = "Need at least 2 element IDs" };
 
             var elements = elementIdsArr
-                .Select(id => doc.GetElement(new ElementId(id.Value<int>())))
+                .Select(id => doc.GetElement((id.Value<int>()).ToElementId()))
                 .Where(e => e != null)
                 .ToList();
 
@@ -807,7 +807,7 @@ namespace BIMBotPlugin.Core
             var viewIdParam = parameters["viewId"]?.Value<int>();
 
             var view = viewIdParam.HasValue
-                ? doc.GetElement(new ElementId(viewIdParam.Value)) as View
+                ? doc.GetElement((viewIdParam.Value).ToElementId()) as View
                 : uiDoc.ActiveView;
 
             var cat1 = GetBuiltInCategory(cat1Str);
@@ -939,7 +939,7 @@ namespace BIMBotPlugin.Core
             if (!string.IsNullOrEmpty(elementIdsStr))
             {
                 var ids = elementIdsStr.Split(',').Select(s => int.Parse(s.Trim()));
-                elements = ids.Select(id => doc.GetElement(new ElementId(id))).Where(e => e != null).ToList();
+                elements = ids.Select(id => doc.GetElement(id.ToElementId())).Where(e => e != null).ToList();
             }
 
             if (elements.Count == 0)
@@ -951,7 +951,7 @@ namespace BIMBotPlugin.Core
 
             foreach (var elem in elements)
             {
-                var item = new JObject { ["id"] = elem.Id.Value, ["name"] = elem.Name };
+                var item = new JObject { ["id"] = elem.Id.Val(), ["name"] = elem.Name };
 
                 // Length from LocationCurve
                 var locCurve = elem.Location as LocationCurve;

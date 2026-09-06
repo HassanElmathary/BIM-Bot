@@ -27,7 +27,7 @@ namespace BIMBotPlugin.Core
             var topos = new FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_Topography).WhereElementIsNotElementType().ToList();
 #pragma warning restore CS0618
             var pads = new FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_BuildingPad).WhereElementIsNotElementType().ToList();
-            return new JObject { ["message"] = $"🏔️ Site: {topos.Count} topo surfaces, {pads.Count} building pads", ["topography"] = JArray.FromObject(topos.Select(t => new { id = t.Id.Value, t.Name })), ["buildingPads"] = JArray.FromObject(pads.Select(p => new { id = p.Id.Value, p.Name })) };
+            return new JObject { ["message"] = $"🏔️ Site: {topos.Count} topo surfaces, {pads.Count} building pads", ["topography"] = JArray.FromObject(topos.Select(t => new { id = t.Id.Val(), t.Name })), ["buildingPads"] = JArray.FromObject(pads.Select(p => new { id = p.Id.Val(), p.Name })) };
         }
     }
 }

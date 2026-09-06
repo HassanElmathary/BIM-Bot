@@ -47,6 +47,17 @@ namespace BIMBotPlugin.Core
         /// Synchronous update check (used by the ribbon button command).
         /// Tries the lightweight manifest first, falls back to GitHub Releases API.
         /// </summary>
+        /// <summary>
+        /// Blocking GET for the synchronous ribbon path. Task.Run moves the await
+        /// off the caller's synchronization context - awaiting .Result directly on
+        /// Revit's UI thread deadlocks when the continuation tries to post back to
+        /// a thread that is blocked waiting for it.
+        /// </summary>
+        private static string GetStringBlocking(string url)
+        {
+            return Task.Run(() => _httpClient.GetStringAsync(url)).GetAwaiter().GetResult();
+        }
+
         public UpdateInfo CheckForUpdate()
         {
             try
@@ -57,7 +68,7 @@ namespace BIMBotPlugin.Core
                     return manifestResult;
 
                 // Fall back to full GitHub Releases API
-                var json = _httpClient.GetStringAsync(API_URL).Result;
+                var json = GetStringBlocking(API_URL);
                 return ParseRelease(json);
             }
             catch (Exception ex)
@@ -102,7 +113,7 @@ namespace BIMBotPlugin.Core
                 try
                 {
                     Logger.Log($"Checking update manifest: {url}");
-                    var json = _httpClient.GetStringAsync(url).Result;
+                    var json = GetStringBlocking(url);
                     var result = ParseManifest(json);
                     if (result != null)
                     {
@@ -194,7 +205,13 @@ namespace BIMBotPlugin.Core
                     "BIMBot", "Updates");
                 Directory.CreateDirectory(downloadDir);
 
-                var filePath = Path.Combine(downloadDir, fileName);
+                // fileName comes from the release manifest; GetFileName strips any
+                // directory component so a crafted name cannot escape the folder.
+                var safeName = Path.GetFileName(fileName);
+                if (string.IsNullOrWhiteSpace(safeName))
+                    throw new InvalidOperationException($"Invalid update file name: '{fileName}'");
+
+                var filePath = Path.Combine(downloadDir, safeName);
 
                 // Delete old file if it exists
                 if (File.Exists(filePath))

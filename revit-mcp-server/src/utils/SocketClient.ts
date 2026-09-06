@@ -1,4 +1,5 @@
 import * as net from "net";
+import * as crypto from "crypto";
 
 export interface RevitCommand {
     jsonrpc: string;

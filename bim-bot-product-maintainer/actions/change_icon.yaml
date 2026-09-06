@@ -1,0 +1,47 @@
+name: change_icon
+description: Update BIM-Bot icons and branding assets across all platforms.
+
+inputs:
+  - asset_type:
+      type: string
+      required: true
+      description: Target asset area (revit_ribbon | website | installer | readme_badge | npm_logo | github_social)
+  - source_file_path:
+      type: string
+      required: true
+      description: Path to new image asset (.png, .ico, .svg)
+
+steps:
+  - name: Identify Icon Scope
+    action: Determine target locations:
+      - Revit ribbon: revit-mcp-plugin/Resources/ (16x16, 32x32 PNG)
+      - Website: docs/assets/ or website static assets
+      - Installer: installer/assets/app.ico
+      - README badge: header graphics
+      - npm package: assets logo
+      - GitHub repository: social preview image (.github/assets)
+
+  - name: Replace Icon Assets
+    action: Overwrite target image files with verified resolutions and formats.
+
+  - name: Update .addin File
+    action: Update image path references in Revit addin manifest or resource manager if applicable.
+
+  - name: Rebuild Revit Plugin Resources
+    action: Recompile C# resource file (.resx) and embedded resources into BIMBotPlugin.dll.
+
+  - name: Update Website Static Assets
+    action: Replace favicon, logo, and brand images on website.md / html targets.
+
+  - name: Update GitHub Repo Images
+    action: Commit updated branding assets to repository.
+
+  - name: Regenerate Installer
+    action: Re-run Inno Setup compiler to embed new .ico file in setup executable if installer icon changed.
+
+  - name: Commit Branding Version Bump
+    action: Log asset change in release notes.
+
+outputs:
+  - asset_replacement_log
+  - build_verification_status

@@ -294,6 +294,23 @@ namespace BIMBotPlugin.Antigravity
 
         // ── Response Parser ──
 
+        /// <summary>
+        /// SocketService frames replies as "Content-Length: {n}" + newline + json. Everything
+        /// downstream wants the JSON only, so drop the header line when present.
+        /// Raw JSON (older service builds) passes through untouched.
+        /// </summary>
+        private static string StripContentLengthHeader(string raw)
+        {
+            var text = raw.TrimStart();
+            while (text.StartsWith("Content-Length:", StringComparison.OrdinalIgnoreCase))
+            {
+                var newline = text.IndexOf('\n');
+                if (newline < 0) break;
+                text = text.Substring(newline + 1).TrimStart();
+            }
+            return text;
+        }
+
         private static AntigravityResponse ParseResponse(string raw)
         {
             if (string.IsNullOrWhiteSpace(raw))
@@ -301,14 +318,14 @@ namespace BIMBotPlugin.Antigravity
 
             try
             {
-                var json = JObject.Parse(raw);
+                var json = JObject.Parse(StripContentLengthHeader(raw));
 
                 if (json["error"] != null)
                     return new AntigravityResponse { Text = $"❌ {json["error"]?["message"]?.ToString() ?? "Unknown error"}" };
 
                 var result = json["result"];
                 if (result == null)
-                    return new AntigravityResponse { Text = raw };
+                    return new AntigravityResponse { Text = StripContentLengthHeader(raw) };
 
                 // Extract human-readable message
                 if (result["message"] != null)

@@ -1,0 +1,70 @@
+name: deploy_release
+description: Deploy a new BIM-Bot version and synchronize GitHub, npm, README, and website.
+
+inputs:
+  - version_number:
+      type: string
+      required: true
+      description: Target version number in SemVer format (e.g. 2.3.0)
+  - release_type:
+      type: string
+      required: true
+      description: Type of release (patch | minor | major)
+
+steps:
+  - name: Validate Version Increment
+    action: Confirm version number follows SemVer (X.Y.Z) and is greater than current version in version.json and package.json.
+
+  - name: Update package.json Version
+    action: Bump version field in revit-mcp-server/package.json and root config files.
+
+  - name: Update Installer Version
+    action: Update version definition `#define MyAppVersion` in installer/installer.iss and build output filename script.
+
+  - name: Update README Badges
+    action: Update npm version badge, GitHub release badge, and installation command strings in README.md.
+
+  - name: Update Tool Count
+    action: Verify and synchronize total tool count (e.g., 186 tools across 19 categories) across all markdown and code definitions.
+
+  - name: Update Supported Revit Matrix
+    action: Ensure supported Revit version range (2020–2027) is up to date in version.json and docs.
+
+  - name: Generate CHANGELOG.md Entry
+    action: Append new version section to CHANGELOG.md with release highlights.
+
+  - name: Create Git Tag
+    action: Tag git repository with tag `v<version_number>` (e.g., `v2.3.0`).
+
+  - name: Push to GitHub
+    action: Push master/main branch and tag `v<version_number>` to remote repository.
+
+  - name: Create GitHub Release
+    action: Publish release on GitHub using release notes template and release URL from version.json.
+
+  - name: Attach Installer EXE
+    action: Attach `BIMBot-Setup-<version_number>.exe` asset to the GitHub release page.
+
+  - name: Publish npm Package
+    action: Execute build script and publish updated `revit-mcp-server` package to npm registry (`npm publish`).
+
+  - name: Update Website Feature List
+    action: Synchronize tool listings, release highlights, and counters on website.md / landing page.
+
+  - name: Update Website Version Display
+    action: Update download CTA buttons and version badges on website.
+
+  - name: Update Documentation Page
+    action: Rebuild/update docs site assets and reference pages.
+
+  - name: Confirm MCP Client Config
+    action: Verify default client setup key `"BIM-Bot"` configuration stays consistent across documentation.
+
+  - name: Generate Release Summary
+    action: Produce final deployment report summarizing all updated endpoints and badges.
+
+outputs:
+  - version_bump_summary
+  - release_asset_urls
+  - npm_publish_status
+  - sync_check_results

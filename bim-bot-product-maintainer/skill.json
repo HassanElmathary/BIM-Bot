@@ -1,0 +1,16 @@
+{
+  "name": "bim-bot-product-maintainer",
+  "version": "1.0.0",
+  "description": "Full lifecycle management skill for BIM-Bot including feature creation, editing, removal, UI changes, GitHub deployment, npm publish, README update, and website sync.",
+  "scope": [
+    "MCP server",
+    "Revit plugin",
+    "AI layer",
+    "Installer",
+    "GitHub",
+    "npm",
+    "README",
+    "Website",
+    "Release automation"
+  ]
+}

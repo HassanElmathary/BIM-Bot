@@ -76,7 +76,7 @@ export async function syncToNotion(
     for (let i = 0; i < data.length; i += batchSize) {
         const batch = data.slice(i, i + batchSize);
 
-        for (const item of batch) {
+        for (const [offset, item] of batch.entries()) {
             try {
                 const properties: Record<string, unknown> = {};
 
@@ -109,7 +109,9 @@ export async function syncToNotion(
             } catch (error) {
                 result.failed++;
                 result.errors.push(
-                    `Element ${i}: ${error instanceof Error ? error.message : String(error)}`
+                    // `i` is the batch start; add the in-batch offset so the
+                    // message points at the element that actually failed.
+                    `Element ${i + offset}: ${error instanceof Error ? error.message : String(error)}`
                 );
             }
         }

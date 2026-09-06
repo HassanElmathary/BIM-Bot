@@ -83,6 +83,11 @@ namespace BIMBotPlugin.AI
                     "3. Copy the Client ID and Client Secret\n" +
                     "4. Paste them in the MCP server's .env file");
 
+            // CSRF guard: a random nonce that must come back unchanged on the
+            // callback. Without it, anything that can reach the loopback listener
+            // can feed us an attacker's authorization code.
+            var state = GenerateStateNonce();
+
             // Build the Google OAuth consent URL
             var authUrl = "https://accounts.google.com/o/oauth2/v2/auth"
                 + $"?client_id={Uri.EscapeDataString(clientId)}"
@@ -90,6 +95,7 @@ namespace BIMBotPlugin.AI
                 + "&response_type=code"
                 + $"&scope={Uri.EscapeDataString(string.Join(" ", Scopes))}"
                 + "&access_type=offline"
+                + $"&state={Uri.EscapeDataString(state)}"
                 + "&prompt=consent";
 
             // Start local HTTP listener for the callback
@@ -116,6 +122,14 @@ namespace BIMBotPlugin.AI
                 // Extract the authorization code
                 var code = request.QueryString["code"];
                 var error = request.QueryString["error"];
+                var returnedState = request.QueryString["state"];
+
+                if (!FixedTimeEquals(returnedState, state))
+                {
+                    SendResponse(response, 400, "Sign-in Failed",
+                        "The sign-in response did not match this request. Please try again.");
+                    throw new Exception("OAuth state mismatch - possible CSRF; authorization code discarded.");
+                }
 
                 if (!string.IsNullOrEmpty(error))
                 {
@@ -248,15 +262,38 @@ namespace BIMBotPlugin.AI
             File.WriteAllText(TokenFilePath, tokens.ToString(Formatting.Indented));
         }
 
+        /// <summary>Cryptographically random, URL-safe state value.</summary>
+        private static string GenerateStateNonce()
+        {
+            var bytes = new byte[32];
+            using (var rng = System.Security.Cryptography.RandomNumberGenerator.Create())
+                rng.GetBytes(bytes);
+            return Convert.ToBase64String(bytes).Replace('+', '-').Replace('/', '_').TrimEnd('=');
+        }
+
+        /// <summary>Length-independent, non-short-circuiting comparison for the state nonce.</summary>
+        private static bool FixedTimeEquals(string? a, string? b)
+        {
+            if (a == null || b == null || a.Length != b.Length) return false;
+            var diff = 0;
+            for (var i = 0; i < a.Length; i++) diff |= a[i] ^ b[i];
+            return diff == 0;
+        }
+
         private static void SendResponse(HttpListenerResponse response, int statusCode, string title, string message)
         {
+            // title/message can carry provider-supplied text (e.g. the `error` query
+            // parameter), so both are encoded before landing in the page.
+            var safeTitle = System.Net.WebUtility.HtmlEncode(title ?? "");
+            var safeMessage = System.Net.WebUtility.HtmlEncode(message ?? "");
+
             var html = $@"
 <html>
 <body style=""font-family:'Segoe UI',sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);"">
   <div style=""text-align:center;background:white;padding:40px;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,0.3);"">
     <div style=""font-size:64px;margin-bottom:16px;"">{(statusCode == 200 ? "✅" : "❌")}</div>
-    <h1 style=""color:#333;margin:0 0 8px 0;"">{title}</h1>
-    <p style=""color:#666;"">{message}</p>
+    <h1 style=""color:#333;margin:0 0 8px 0;"">{safeTitle}</h1>
+    <p style=""color:#666;white-space:pre-line;"">{safeMessage}</p>
     <p style=""color:#999;font-size:14px;"">You can close this window.</p>
   </div>
   <script>setTimeout(()=>window.close(),5000)</script>

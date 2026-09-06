@@ -203,7 +203,9 @@ namespace BIMBotPlugin.Core
                 "power bi", "powerbi"))
                 cats.Add(ToolCategory.Export);
             if (ContainsAny(msg, "check", "audit", "warning", "purge", "clean", "statistic",
-                "unused", "issue", "error", "cad", "resolve", "join", "sync"))
+                "unused", "issue", "error", "cad", "resolve", "join", "sync",
+                "federat", "health", "clash", "bcf", "ids", "iso", "19650",
+                "remediat", "cobie", "milestone", "diff", "sanitiz", "naming convention"))
                 cats.Add(ToolCategory.QAQC);
             if (ContainsAny(msg, "view", "sheet", "section", "elevation", "callout", "template",
                 "viewport", "open", "close", "duplicate", "style", "override", "scale",
@@ -270,15 +272,18 @@ namespace BIMBotPlugin.Core
             R("get_selected_elements", "Selected elements", ToolCategory.Reading,
                 new[] { "selected", "selection", "what is selected" });
 
-            R("get_elements", "Query elements", ToolCategory.Reading,
+            R("get_elements", "Query elements by category with optional cross-link federation", ToolCategory.Reading,
                 new[] { "elements", "get elements", "find elements", "query" },
                 ToolParam.Opt("category", "string", "Category"),
                 ToolParam.Opt("typeName", "string", "Type filter"),
-                ToolParam.Opt("levelName", "string", "Level filter"));
+                ToolParam.Opt("levelName", "string", "Level filter"),
+                ToolParam.Opt("includeLinks", "boolean", "Include elements from linked models"),
+                ToolParam.ArrOpt("linkNames", "Filter to specific linked models by name"));
 
-            R("get_parameters", "Element parameters", ToolCategory.Reading,
+            R("get_parameters", "Element parameters (supports cross-link via namespacedId)", ToolCategory.Reading,
                 new[] { "parameters", "get parameters", "show parameters", "element parameters" },
-                ToolParam.Req("elementId", "integer", "Element ID"));
+                ToolParam.Opt("elementId", "integer", "Element ID (host only)"),
+                ToolParam.Opt("namespacedId", "string", "Namespaced ID for cross-link lookup, e.g. 'LinkName:12345'"));
 
             R("get_project_info", "Project info", ToolCategory.Reading,
                 new[] { "project info", "project details", "project" });
@@ -290,14 +295,20 @@ namespace BIMBotPlugin.Core
             R("get_sheets", "List sheets", ToolCategory.Reading,
                 new[] { "sheets", "list sheets", "show sheets" });
 
-            R("get_levels", "List levels", ToolCategory.Reading,
-                new[] { "levels", "list levels", "show levels", "get levels" });
+            R("get_levels", "List levels with optional cross-link federation", ToolCategory.Reading,
+                new[] { "levels", "list levels", "show levels", "get levels" },
+                ToolParam.Opt("includeLinks", "boolean", "Include levels from linked models"),
+                ToolParam.ArrOpt("linkNames", "Filter to specific linked models"));
 
-            R("get_grids", "List grids", ToolCategory.Reading,
-                new[] { "grids", "list grids", "show grids" });
+            R("get_grids", "List grids with optional cross-link federation", ToolCategory.Reading,
+                new[] { "grids", "list grids", "show grids" },
+                ToolParam.Opt("includeLinks", "boolean", "Include grids from linked models"),
+                ToolParam.ArrOpt("linkNames", "Filter to specific linked models"));
 
-            R("get_rooms", "List rooms", ToolCategory.Reading,
-                new[] { "rooms", "list rooms", "show rooms", "get rooms" });
+            R("get_rooms", "List rooms with optional cross-link federation", ToolCategory.Reading,
+                new[] { "rooms", "list rooms", "show rooms", "get rooms" },
+                ToolParam.Opt("includeLinks", "boolean", "Include rooms from linked models"),
+                ToolParam.ArrOpt("linkNames", "Filter to specific linked models"));
 
             R("get_available_family_types", "Available family types", ToolCategory.Reading,
                 new[] { "family types", "families", "available types" },
@@ -306,11 +317,12 @@ namespace BIMBotPlugin.Core
             R("get_schedules", "List schedules", ToolCategory.Reading,
                 new[] { "schedules", "list schedules" });
 
-            R("get_linked_models", "Linked models", ToolCategory.Reading,
+            R("get_linked_models", "Linked models with detailed status and element counts", ToolCategory.Reading,
                 new[] { "linked models", "links", "linked" });
 
-            R("get_warnings", "Model warnings", ToolCategory.Reading,
-                new[] { "warnings", "model warnings", "show warnings" });
+            R("get_warnings", "Model warnings with optional cross-link federation", ToolCategory.Reading,
+                new[] { "warnings", "model warnings", "show warnings" },
+                ToolParam.Opt("includeLinks", "boolean", "Include warnings from linked models"));
 
             R("get_family_info", "Family info", ToolCategory.Reading,
                 new[] { "family info", "family details" },
@@ -1555,6 +1567,100 @@ namespace BIMBotPlugin.Core
                 true,
                 ToolParam.Req("code", "string", "C# code body"),
                 ToolParam.Opt("description", "string", "Brief description"));
+
+            // ===================== FEDERATED QUERY (5 tools) =====================
+            R("get_federation_summary", "Get a dashboard of the federated model: host model info, all linked models with load status, element counts, warning counts, and coordinate alignment", ToolCategory.Reading,
+                new[] { "federation", "federated", "all links", "link summary", "model overview" });
+
+            R("query_across_links", "Query elements across host and linked models with optional parameter filtering and pagination. Returns elements tagged with their source model name.", ToolCategory.Reading,
+                new[] { "cross link", "across links", "federated query", "query links" },
+                ToolParam.Opt("category", "string", "Category filter (e.g. Walls, Doors, Mechanical Equipment)"),
+                ToolParam.ArrOpt("linkNames", "Filter to specific linked models by name (partial match)"),
+                ToolParam.Opt("includeHost", "boolean", "Include host model elements (default: true)"),
+                ToolParam.Opt("includeParameters", "boolean", "Include element parameters"),
+                ToolParam.Opt("parameterFilter", "string", "Filter by parameter value (e.g. 'Fire Rating=2 HR')"),
+                ToolParam.Opt("offset", "integer", "Pagination offset"),
+                ToolParam.Opt("limit", "integer", "Max results per page (default: 200)"));
+
+            R("get_link_element_details", "Get full parameter details of a specific element inside a linked model using namespaced ID (e.g. 'StructuralLink:12345')", ToolCategory.Reading,
+                new[] { "link element", "linked element details", "cross link element" },
+                ToolParam.Req("namespacedId", "string", "Namespaced element ID (format: 'LinkName:ElementId' or 'Host:ElementId')"));
+
+            R("compare_link_levels", "Compare level names and elevations across host and all linked models. Detects mismatches, missing levels, and elevation discrepancies.", ToolCategory.QAQC,
+                new[] { "compare levels", "level mismatch", "link levels" });
+
+            R("find_cross_link_spatial_containment", "Find which host rooms contain equipment from linked models. Maps MEP equipment in links to architectural rooms in the host using spatial containment.", ToolCategory.Reading,
+                new[] { "spatial containment", "room equipment", "cross link rooms", "equipment location" },
+                ToolParam.Opt("equipmentCategory", "string", "Category of equipment to locate (default: Mechanical Equipment)"),
+                ToolParam.Opt("sourceLinkName", "string", "Filter to a specific linked model"));
+
+            // ===================== MODEL HEALTH SCORECARD (3 tools) =====================
+            R("audit_federated_model_health", "Compute 0-100% health scores for host and each linked model. Checks: warnings, in-place families, CAD imports, unpinned datums, unplaced rooms, views not on sheets.", ToolCategory.QAQC,
+                new[] { "model health", "health score", "federated audit", "health check" },
+                ToolParam.Opt("scope", "string", "host_only | selected_links | all (default: all)"),
+                ToolParam.ArrOpt("linkNames", "Filter to specific links"),
+                ToolParam.Opt("severityThreshold", "string", "critical | moderate | all (default: all)"));
+
+            R("heal_model_issues", "One-click safe fixes for common model health issues (host model only). Actions: pin_datums, purge_cad_imports, clean_unplaced_rooms. Use dryRun to preview changes.", ToolCategory.QAQC,
+                new[] { "heal model", "fix model", "auto fix", "clean model" },
+                ToolParam.ArrOpt("actions", "Actions to perform: pin_datums, purge_cad_imports, clean_unplaced_rooms"),
+                ToolParam.Opt("dryRun", "boolean", "Preview changes without executing (default: false)"));
+
+            R("generate_remediation_report", "Generate an actionable remediation report for a specific linked model listing all health issues for the service provider to fix.", ToolCategory.QAQC,
+                new[] { "remediation report", "fix report", "link health report" },
+                ToolParam.Req("linkName", "string", "Name of the linked model"),
+                ToolParam.Opt("format", "string", "Output format: txt | csv (default: txt)"));
+
+            // ===================== IDS & ISO 19650 VALIDATION (2 tools) =====================
+            R("validate_ids_spec", "Validate model elements against a buildingSMART Information Delivery Specification (IDS) XML file. Checks required parameters per IFC entity type.", ToolCategory.QAQC,
+                new[] { "ids validation", "information delivery", "buildingsmart", "ids check" },
+                ToolParam.Opt("idsXmlContent", "string", "IDS XML content as string"),
+                ToolParam.Opt("idsFilePath", "string", "Path to .ids XML file"),
+                ToolParam.Opt("scope", "string", "host_only | selected_links | all"),
+                ToolParam.Opt("discipline", "string", "Filter by discipline"));
+
+            R("audit_iso19650_naming", "Validate naming conventions against ISO 19650 standards for views, sheets, worksets, families, levels, or links.", ToolCategory.QAQC,
+                new[] { "iso 19650", "naming convention", "naming audit", "naming standard" },
+                ToolParam.Req("targetType", "string", "What to check: sheets | views | worksets | families | levels | links"),
+                ToolParam.Opt("pattern", "string", "Custom regex pattern to validate against"),
+                ToolParam.Opt("includeLinks", "boolean", "Also check naming in linked models"));
+
+            // ===================== CLASH TRIAGE & BCF (2 tools) =====================
+            R("run_smart_clash_triage", "Cross-discipline clash detection between host and linked models. Uses spatial partitioning and proximity clustering to group raw collisions into actionable issues.", ToolCategory.QAQC,
+                new[] { "smart clash", "clash triage", "cross link clash", "interference check" },
+                ToolParam.Req("sourceCategory", "string", "Source element category (e.g. Walls, Structural Framing)"),
+                ToolParam.Req("targetCategory", "string", "Target element category (e.g. Ducts, Pipes)"),
+                ToolParam.Opt("sourceLink", "string", "Source model (Host or link name, default: Host)"),
+                ToolParam.Opt("targetLink", "string", "Target model (Host or link name, default: first link)"),
+                ToolParam.Opt("levelName", "string", "Filter to a specific level"),
+                ToolParam.Opt("toleranceMm", "number", "Clash tolerance in mm (default: 25)"));
+
+            R("export_bcf_issues", "Export clash results or issues to a BCF 2.1/3.0 zip file for import into BIMcollab, Revizto, or ACC.", ToolCategory.QAQC,
+                new[] { "bcf export", "bcf issues", "bimcollab", "clash export" },
+                ToolParam.ArrOpt("issues", "Array of issues: [{title, description, elementIds}]", new JObject { ["type"] = "object", ["properties"] = new JObject { ["title"] = new JObject { ["type"] = "string" }, ["description"] = new JObject { ["type"] = "string" }, ["elementIds"] = new JObject { ["type"] = "array", ["items"] = new JObject { ["type"] = "integer" } } } }),
+                ToolParam.Req("outputFilePath", "string", "Output .bcf zip file path"),
+                ToolParam.Opt("bcfVersion", "string", "BCF version: 2.1 | 3.0 (default: 2.1)"));
+
+            // ===================== MILESTONE DIFFING (1 tool) =====================
+            R("diff_linked_milestones", "Compare current state of a linked model against a saved baseline snapshot. Detects added, deleted, and geometrically modified elements.", ToolCategory.QAQC,
+                new[] { "model diff", "milestone diff", "link comparison", "change tracking" },
+                ToolParam.Req("linkInstanceName", "string", "Name of the linked model to diff"),
+                ToolParam.Opt("baselineSnapshotPath", "string", "Path to saved baseline JSON snapshot"),
+                ToolParam.Opt("saveSnapshot", "boolean", "Save current state as a new baseline (default: false)"));
+
+            // ===================== FAMILY SANITIZER (1 tool) =====================
+            R("audit_and_clean_family", "Deep audit loaded families for CAD imports, excessive geometry, and unused subcategories. Optionally fix issues.", ToolCategory.QAQC,
+                new[] { "family sanitizer", "family audit", "clean family", "family health" },
+                ToolParam.Opt("familyFilePath", "string", "Path to .rfa file (or audits loaded families if omitted)"),
+                ToolParam.Opt("fix", "boolean", "Auto-fix issues (default: false)"),
+                ToolParam.Opt("maxPolygonCount", "integer", "Maximum geometry count threshold (default: 10000)"));
+
+            // ===================== COBie ENRICHMENT (1 tool) =====================
+            R("enrich_cross_link_cobie", "Enrich COBie asset data by mapping MEP equipment in linked models to host rooms/spaces. Reports manufacturer, model, serial, warranty data completeness.", ToolCategory.QAQC,
+                new[] { "cobie", "asset handover", "facility management", "cobie enrichment" },
+                ToolParam.Opt("mepCategory", "string", "MEP category to process (default: Mechanical Equipment)"),
+                ToolParam.Opt("sourceLinkName", "string", "Filter to a specific linked model"),
+                ToolParam.Opt("targetHostRoomPhase", "string", "Phase for room containment check"));
         }
 
         // ── Helper to register a tool ──

@@ -578,4 +578,45 @@ export function registerPowerTools(server: McpServer) {
             }
         }
     );
+
+    server.tool(
+        "batch_get_parameters",
+        "Batch get parameters for elements.",
+        {
+            elementIds: z.array(z.number()).describe("Element IDs"),
+            includeLinks: z.boolean().optional().describe("Include elements from linked models"),
+            linkNames: z.array(z.string()).optional().describe("Specific link names to include")
+        },
+        async (args) => {
+            try {
+                const response = await withRevitConnection(async (client) =>
+                    client.sendCommand("batch_get_parameters", args)
+                );
+                return { content: [{ type: "text", text: JSON.stringify(response, null, 2) }] };
+            } catch (error) {
+                return { content: [{ type: "text", text: `Failed: ${error instanceof Error ? error.message : String(error)}` }] };
+            }
+        }
+    );
+
+    server.tool(
+        "find_elements_by_parameter",
+        "Find elements by parameter value.",
+        {
+            parameterName: z.string().describe("Parameter name"),
+            value: z.string().describe("Parameter value"),
+            includeLinks: z.boolean().optional().describe("Include elements from linked models"),
+            linkNames: z.array(z.string()).optional().describe("Specific link names to include")
+        },
+        async (args) => {
+            try {
+                const response = await withRevitConnection(async (client) =>
+                    client.sendCommand("find_elements_by_parameter", args)
+                );
+                return { content: [{ type: "text", text: JSON.stringify(response, null, 2) }] };
+            } catch (error) {
+                return { content: [{ type: "text", text: `Failed: ${error instanceof Error ? error.message : String(error)}` }] };
+            }
+        }
+    );
 }

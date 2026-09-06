@@ -892,7 +892,7 @@ namespace BIMBotPlugin.UI.Tools
                 {
                     var rev = "";
                     try { rev = sheet.get_Parameter(DB.BuiltInParameter.SHEET_CURRENT_REVISION)?.AsString() ?? ""; } catch { }
-                    _realSheets.Add(new[] { sheet.SheetNumber, sheet.Name, rev, "", sheet.Id.Value.ToString() });
+                    _realSheets.Add(new[] { sheet.SheetNumber, sheet.Name, rev, "", sheet.Id.Val().ToString() });
                 }
 
                 // Get all printable views (exclude templates, sheets, and internal views)
@@ -906,7 +906,7 @@ namespace BIMBotPlugin.UI.Tools
 
                 foreach (var view in views)
                 {
-                    _realViews.Add(new[] { view.Name, view.ViewType.ToString(), view.Id.Value.ToString() });
+                    _realViews.Add(new[] { view.Name, view.ViewType.ToString(), view.Id.Val().ToString() });
                 }
 
                 Logger.Log($"Export Manager loaded {_realSheets.Count} sheets and {_realViews.Count} views from document.");

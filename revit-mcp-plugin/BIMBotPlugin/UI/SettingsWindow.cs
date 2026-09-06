@@ -7,6 +7,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using BIMBotPlugin.AI;
+using BIMBotPlugin.Core;
 using BIMBotPlugin.UI.Themes;
 
 namespace BIMBotPlugin.UI
@@ -49,7 +50,7 @@ namespace BIMBotPlugin.UI
 
             Title = "AI Settings";
             Width = 440;
-            Height = 500;
+            Height = 620;
             WindowStartupLocation = WindowStartupLocation.CenterOwner;
             ResizeMode = ResizeMode.NoResize;
             ThemeManager.ApplyTheme(this);
@@ -75,7 +76,7 @@ namespace BIMBotPlugin.UI
             themeCombo.SelectionChanged += (s, e) =>
             {
                 var selected = (themeCombo.SelectedItem as ComboBoxItem)?.Content as string;
-                ThemeManager.SetTheme(selected == "Light" ? ThemeMode.Light : ThemeMode.Dark);
+                ThemeManager.SetTheme(selected == "Light" ? Themes.ThemeMode.Light : Themes.ThemeMode.Dark);
                 ThemeManager.ApplyTheme(this);
             };
             stack.Children.Add(themeCombo);
@@ -110,6 +111,74 @@ namespace BIMBotPlugin.UI
             stack.Children.Add(_modelCombo);
 
 
+
+            // ── License / Account Info ──
+            var licensePanel = new StackPanel();
+            var licenseInfo = LicenseService.GetCachedInfo();
+            bool isActivated = LicenseService.IsActivated();
+
+            var statusRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 2, 0, 2) };
+            statusRow.Children.Add(new TextBlock { Text = "Status: ", Foreground = DarkTheme.FgDim, FontSize = 11 });
+            statusRow.Children.Add(new TextBlock
+            {
+                Text = isActivated ? "✓ Active & Licensed" : "✗ Not Activated",
+                Foreground = isActivated
+                    ? new SolidColorBrush(Color.FromRgb(0x10, 0xB9, 0x81))
+                    : new SolidColorBrush(Color.FromRgb(0xEF, 0x44, 0x44)),
+                FontSize = 11, FontWeight = FontWeights.SemiBold
+            });
+            licensePanel.Children.Add(statusRow);
+
+            if (licenseInfo != null)
+            {
+                licensePanel.Children.Add(new TextBlock
+                {
+                    Text = $"User: {licenseInfo.Username}",
+                    Foreground = DarkTheme.FgDim, FontSize = 11,
+                    Margin = new Thickness(0, 2, 0, 0)
+                });
+                licensePanel.Children.Add(new TextBlock
+                {
+                    Text = $"Machine ID: {licenseInfo.MachineId}",
+                    Foreground = DarkTheme.FgDim, FontSize = 11, FontFamily = new FontFamily("Consolas"),
+                    Margin = new Thickness(0, 2, 0, 0)
+                });
+            }
+
+            if (isActivated)
+            {
+                var deactivateBtn = new Button
+                {
+                    Content = "Deactivate License",
+                    Background = new SolidColorBrush(Color.FromRgb(0x7F, 0x1D, 0x1D)),
+                    Foreground = Brushes.White,
+                    BorderThickness = new Thickness(0),
+                    Padding = new Thickness(10, 5, 10, 5),
+                    FontSize = 11, Cursor = Cursors.Hand,
+                    Margin = new Thickness(0, 8, 0, 0),
+                    HorizontalAlignment = HorizontalAlignment.Left
+                };
+                deactivateBtn.Click += (s, ev) =>
+                {
+                    var dlg = MessageBox.Show(
+                        "Are you sure you want to deactivate BIM-Bot on this machine?\n\n" +
+                        "All tools will be hidden until you re-activate with a valid key.",
+                        "Deactivate License",
+                        MessageBoxButton.YesNo, MessageBoxImage.Warning);
+                    if (dlg == MessageBoxResult.Yes)
+                    {
+                        LicenseService.ClearLicense();
+                        BIMBotPlugin.Core.Application.SetActivationUiState(false);
+                        MessageBox.Show("License deactivated. Restart Revit or click Activate to re-activate.",
+                            "Deactivated", MessageBoxButton.OK, MessageBoxImage.Information);
+                    }
+                };
+                licensePanel.Children.Add(deactivateBtn);
+            }
+
+            var licenseGroup = DarkTheme.MakeGroupBox("🔑 License", licensePanel);
+            licenseGroup.Margin = new Thickness(0, 0, 0, 16);
+            stack.Children.Add(licenseGroup);
 
             // Buttons
             var btnPanel = new StackPanel

@@ -17,7 +17,7 @@ node build/tests/test-startup.js
 ```
 
 ### 3. Install Plugin to Revit
-Download **`BIMBot-Setup-2.3.0.exe`** from [GitHub Releases](https://github.com/HassanElmathary/BIM-Bot/releases) and run as Administrator.
+Download **`BIMBot-Setup-2.3.1.exe`** from [GitHub Releases](https://github.com/HassanElmathary/BIM-Bot/releases) and run as Administrator.
 
 Or build from source: compile `installer/setup.iss` with [Inno Setup](https://jrsoftware.org/isinfo.php).
 
@@ -137,7 +137,7 @@ cd "path\to\BIM-Bot"   # wherever you cloned the repo
 git push origin main
 
 # 3. Create a new release
-gh release create v2.3.0 "installer/output/BIMBot-Setup-2.3.0.exe" --title "BIM-Bot v2.3.0" --notes "Multi-client MCP auto-connect (Claude, Cursor, Windsurf, VS Code), device-agnostic paths, Power BI embed. 187 MCP tools, Revit 2020–2027, one-click installer"
+gh release create v2.3.1 "installer/output/BIMBot-Setup-2.3.1.exe" --title "BIM-Bot v2.3.1" --notes "Fixes Claude auto-connect on real installations (install-root resolution), automatic port fallback when 8080 is taken, self-repair of corrupt client configs, and a new bimbot-doctor.ps1. 187 MCP tools, Revit 2020–2027, one-click installer"
 ```
 
 ### After GitHub is set up:

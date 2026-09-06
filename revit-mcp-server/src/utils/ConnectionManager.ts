@@ -1,4 +1,5 @@
 import { RevitSocketClient } from "./SocketClient.js";
+import { resolveEndpoint } from "./endpoint.js";
 
 /**
  * Persistent singleton connection manager for Revit TCP communication.
@@ -18,9 +19,19 @@ let _connecting: Promise<void> | null = null;
 const MAX_RETRIES = 5;
 const INITIAL_DELAY_MS = 1000; // 1s → 2s → 4s → 8s → 16s
 
+/**
+ * Build a client aimed at wherever the Revit plugin is actually listening.
+ * The endpoint is re-resolved on every construction rather than cached: Revit
+ * may have restarted onto a different port since this process started.
+ */
+function newClient(): RevitSocketClient {
+    const { host, port } = resolveEndpoint();
+    return new RevitSocketClient(host, port);
+}
+
 function getOrCreateClient(): RevitSocketClient {
     if (!_client || _client.rawSocket.destroyed) {
-        _client = new RevitSocketClient("localhost", 8080);
+        _client = newClient();
     }
     return _client;
 }
@@ -48,18 +59,27 @@ async function connectWithRetry(client: RevitSocketClient): Promise<void> {
 
                 // Create a fresh socket for each retry (old one may be in bad state)
                 if (client.rawSocket.destroyed || !client.isConnected) {
-                    _client = new RevitSocketClient("localhost", 8080);
+                    _client = newClient();
                     client = _client;
                 }
             }
         }
     }
 
+    const ep = resolveEndpoint();
+    const where =
+        ep.source === "handshake"
+            ? `${ep.host}:${ep.port} (from the plugin's handshake file)`
+            : ep.source === "env"
+                ? `${ep.host}:${ep.port} (from BIMBOT_HOST/BIMBOT_PORT)`
+                : `${ep.host}:${ep.port} (default — the plugin has not published a ` +
+                  `port, so its service is probably not running)`;
+
     throw new Error(
-        `Could not connect to Revit after ${MAX_RETRIES} attempts. ` +
+        `Could not connect to Revit at ${where} after ${MAX_RETRIES} attempts. ` +
         `Last error: ${lastError?.message ?? "unknown"}. ` +
-        `Make sure Revit is open with the BIM-Bot plugin loaded — ` +
-        `the service auto-starts when Revit opens.`
+        `Check that Revit is open with a project loaded, and that the BIM-Bot ribbon ` +
+        `button reads "BIM-Bot ON" — click it to start the service if it does not.`
     );
 }
 
@@ -143,6 +163,9 @@ export async function withRevitConnection<T>(
 
     try {
         await ensureConnected(client);
+        // connectWithRetry may have swapped _client for a fresh socket after a
+        // failed attempt. Re-read it, or the operation runs on the dead one.
+        client = getOrCreateClient();
         return await operation(client);
     } catch (err) {
         // If the connection died mid-operation, reset and retry once
@@ -153,6 +176,7 @@ export async function withRevitConnection<T>(
 
             try {
                 await ensureConnected(client);
+                client = getOrCreateClient();
                 return await operation(client);
             } catch (retryErr) {
                 _client = null;

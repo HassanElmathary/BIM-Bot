@@ -14,22 +14,61 @@ namespace BIMBotPlugin.Core
     /// </summary>
     public static partial class CommandExecutor
     {
+        /// <summary>
+        /// Minimum length Revit will accept for a linear MEP run. Below this the
+        /// creation APIs throw "Points cannot be coincident", which surfaces to the
+        /// user as an opaque Revit exception instead of a usable message.
+        /// </summary>
+        private const double MinRunLengthFt = 0.01;
+
+        /// <summary>
+        /// Reads startX/Y/Z and endX/Y/Z and rejects a degenerate run up front.
+        /// Returns false and fills <paramref name="error"/> when the run is too short.
+        /// </summary>
+        private static bool TryReadRunEndpoints(JObject parameters, string what,
+            out XYZ start, out XYZ end, out JObject? error)
+        {
+            start = new XYZ(
+                parameters["startX"]?.Value<double>() ?? 0,
+                parameters["startY"]?.Value<double>() ?? 0,
+                parameters["startZ"]?.Value<double>() ?? 0);
+            end = new XYZ(
+                parameters["endX"]?.Value<double>() ?? 0,
+                parameters["endY"]?.Value<double>() ?? 0,
+                parameters["endZ"]?.Value<double>() ?? 0);
+
+            var length = start.DistanceTo(end);
+            if (length < MinRunLengthFt)
+            {
+                error = new JObject
+                {
+                    ["error"] = $"Cannot create {what}: start and end points are coincident "
+                              + $"(distance {length:0.####} ft, minimum {MinRunLengthFt} ft).",
+                    ["hint"] = "Supply distinct startX/startY/startZ and endX/endY/endZ values."
+                };
+                return false;
+            }
+
+            error = null;
+            return true;
+        }
+
         private static JToken CreateDuct(Document doc, JObject parameters)
         {
             var levelName = parameters["levelName"]?.ToString();
             var level = FindLevel(doc, levelName);
             if (level == null) return new JObject { ["error"] = $"Level '{levelName}' not found" };
+            if (!TryReadRunEndpoints(parameters, "duct", out var start, out var end, out var runError))
+                return runError!;
             var ductType = new FilteredElementCollector(doc).OfClass(typeof(DuctType)).FirstOrDefault();
             var sysType = new FilteredElementCollector(doc).OfClass(typeof(MechanicalSystemType)).FirstOrDefault();
             if (ductType == null || sysType == null) return new JObject { ["error"] = "No duct or system type found" };
             using (var tx = new Transaction(doc, "Create Duct"))
             {
                 tx.Start();
-                var duct = Duct.Create(doc, sysType.Id, ductType.Id, level.Id,
-                    new XYZ(parameters["startX"]?.Value<double>() ?? 0, parameters["startY"]?.Value<double>() ?? 0, parameters["startZ"]?.Value<double>() ?? 0),
-                    new XYZ(parameters["endX"]?.Value<double>() ?? 0, parameters["endY"]?.Value<double>() ?? 0, parameters["endZ"]?.Value<double>() ?? 0));
+                var duct = Duct.Create(doc, sysType.Id, ductType.Id, level.Id, start, end);
                 tx.Commit();
-                return new JObject { ["message"] = $"🔧 Created duct (ID: {duct.Id.Value})", ["elementId"] = duct.Id.Value };
+                return new JObject { ["message"] = $"🔧 Created duct (ID: {duct.Id.Val()})", ["elementId"] = duct.Id.Val() };
             }
         }
 
@@ -38,17 +77,17 @@ namespace BIMBotPlugin.Core
             var levelName = parameters["levelName"]?.ToString();
             var level = FindLevel(doc, levelName);
             if (level == null) return new JObject { ["error"] = $"Level '{levelName}' not found" };
+            if (!TryReadRunEndpoints(parameters, "pipe", out var start, out var end, out var runError))
+                return runError!;
             var pipeType = new FilteredElementCollector(doc).OfClass(typeof(PipeType)).FirstOrDefault();
             var sysType = new FilteredElementCollector(doc).OfClass(typeof(PipingSystemType)).FirstOrDefault();
             if (pipeType == null || sysType == null) return new JObject { ["error"] = "No pipe or system type found" };
             using (var tx = new Transaction(doc, "Create Pipe"))
             {
                 tx.Start();
-                var pipe = Pipe.Create(doc, sysType.Id, pipeType.Id, level.Id,
-                    new XYZ(parameters["startX"]?.Value<double>() ?? 0, parameters["startY"]?.Value<double>() ?? 0, parameters["startZ"]?.Value<double>() ?? 0),
-                    new XYZ(parameters["endX"]?.Value<double>() ?? 0, parameters["endY"]?.Value<double>() ?? 0, parameters["endZ"]?.Value<double>() ?? 0));
+                var pipe = Pipe.Create(doc, sysType.Id, pipeType.Id, level.Id, start, end);
                 tx.Commit();
-                return new JObject { ["message"] = $"🔧 Created pipe (ID: {pipe.Id.Value})", ["elementId"] = pipe.Id.Value };
+                return new JObject { ["message"] = $"🔧 Created pipe (ID: {pipe.Id.Val()})", ["elementId"] = pipe.Id.Val() };
             }
         }
 
@@ -68,7 +107,7 @@ namespace BIMBotPlugin.Core
                 tx.Start();
                 var fd = FlexDuct.Create(doc, sysType.Id, flexType.Id, level.Id, pts.First(), pts.Last(), pts);
                 tx.Commit();
-                return new JObject { ["message"] = $"🔧 Created flex duct (ID: {fd.Id.Value})", ["elementId"] = fd.Id.Value };
+                return new JObject { ["message"] = $"🔧 Created flex duct (ID: {fd.Id.Val()})", ["elementId"] = fd.Id.Val() };
             }
         }
 
@@ -84,7 +123,7 @@ namespace BIMBotPlugin.Core
                 var spaceName = parameters["spaceName"]?.ToString();
                 if (!string.IsNullOrEmpty(spaceName)) space.get_Parameter(BuiltInParameter.ROOM_NAME)?.Set(spaceName);
                 tx.Commit();
-                return new JObject { ["message"] = $"📦 Created MEP space (ID: {space.Id.Value})", ["elementId"] = space.Id.Value };
+                return new JObject { ["message"] = $"📦 Created MEP space (ID: {space.Id.Val()})", ["elementId"] = space.Id.Val() };
             }
         }
 
@@ -92,9 +131,9 @@ namespace BIMBotPlugin.Core
         {
             var systems = new JArray();
             foreach (var sys in new FilteredElementCollector(doc).OfClass(typeof(MechanicalSystem)).Cast<MechanicalSystem>())
-                systems.Add(new JObject { ["id"] = sys.Id.Value, ["name"] = sys.Name, ["type"] = "Mechanical", ["elements"] = sys.DuctNetwork?.Size ?? 0 });
+                systems.Add(new JObject { ["id"] = sys.Id.Val(), ["name"] = sys.Name, ["type"] = "Mechanical", ["elements"] = sys.DuctNetwork?.Size ?? 0 });
             foreach (var sys in new FilteredElementCollector(doc).OfClass(typeof(PipingSystem)).Cast<PipingSystem>())
-                systems.Add(new JObject { ["id"] = sys.Id.Value, ["name"] = sys.Name, ["type"] = "Piping", ["elements"] = sys.PipingNetwork?.Size ?? 0 });
+                systems.Add(new JObject { ["id"] = sys.Id.Val(), ["name"] = sys.Name, ["type"] = "Piping", ["elements"] = sys.PipingNetwork?.Size ?? 0 });
             return new JObject { ["message"] = $"🔧 Found {systems.Count} MEP systems", ["systems"] = systems };
         }
 
@@ -106,7 +145,7 @@ namespace BIMBotPlugin.Core
             var items = new JArray();
             foreach (var e in elements.Take(50))
             {
-                var item = new JObject { ["id"] = e.Id.Value, ["name"] = e.Name };
+                var item = new JObject { ["id"] = e.Id.Val(), ["name"] = e.Name };
                 var sizeP = e.get_Parameter(BuiltInParameter.RBS_CALCULATED_SIZE); if (sizeP != null) item["size"] = sizeP.AsString();
                 items.Add(item);
             }
@@ -168,8 +207,8 @@ namespace BIMBotPlugin.Core
                     tx.Commit();
                     return new JObject
                     {
-                        ["message"] = $"⚡ Created electrical circuit (ID: {circuit.Id.Value})",
-                        ["circuitId"] = circuit.Id.Value,
+                        ["message"] = $"⚡ Created electrical circuit (ID: {circuit.Id.Val()})",
+                        ["circuitId"] = circuit.Id.Val(),
                         ["circuitNumber"] = circuit.CircuitNumber ?? "",
                         ["systemType"] = circuit.SystemType.ToString()
                     };

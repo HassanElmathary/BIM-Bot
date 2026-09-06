@@ -15,7 +15,15 @@ export interface CsvExportOptions {
 
 function escapeCsv(value: unknown): string {
     if (value === null || value === undefined) return "";
-    const s = typeof value === "object" ? JSON.stringify(value) : String(value);
+    let s = typeof value === "object" ? JSON.stringify(value) : String(value);
+
+    // Formula injection: Excel and Sheets evaluate a cell starting with = + - @
+    // (or a leading tab/CR before one). Revit parameter values are user-authored,
+    // so a leading apostrophe forces the cell to stay literal text.
+    if (/^[=+\-@\t\r]/.test(s)) {
+        s = `'${s}`;
+    }
+
     return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 

@@ -81,6 +81,7 @@ function ensureConfig(label, configPath, nodeExe, indexJs, createIfMissing, opts
 
     let config = {};
     let hadBom = false;
+    let rebuiltFromBroken = false;
     if (fs.existsSync(configPath)) {
         try {
             // Strip UTF-8 BOM — some editors/tools write one and it breaks JSON.parse
@@ -88,7 +89,17 @@ function ensureConfig(label, configPath, nodeExe, indexJs, createIfMissing, opts
             hadBom = raw.charCodeAt(0) === 0xfeff;
             config = JSON.parse(hadBom ? raw.slice(1) : raw);
         } catch (err) {
-            return `${label}: config is not valid JSON (${err.message}) — left untouched: ${configPath}`;
+            // A config the client cannot parse is already broken for the user;
+            // "left untouched, fix it yourself" is a dead end for a non-developer.
+            // Quarantine it with a timestamped copy and rebuild a clean one.
+            try {
+                const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+                fs.copyFileSync(configPath, `${configPath}.broken-${stamp}`);
+                config = {};
+                rebuiltFromBroken = true;
+            } catch (copyErr) {
+                return `${label}: config is not valid JSON (${err.message}) and could not be backed up (${copyErr.message}) — left untouched: ${configPath}`;
+            }
         }
     } else if (!createIfMissing) {
         return `${label}: not installed (no config file) — skipped`;
@@ -123,6 +134,7 @@ function ensureConfig(label, configPath, nodeExe, indexJs, createIfMissing, opts
         return `${label}: failed to write config (${err.message}): ${configPath}`;
     }
 
+    if (rebuiltFromBroken) return `${label}: config was corrupt (invalid JSON) — backed it up and rebuilt it`;
     if (hadBom) return `${label}: rewrote config without UTF-8 BOM (breaks some parsers)`;
     return `${label}: ${wasStale ? "repaired stale entry" : "added BIM-Bot entry"}`;
 }
@@ -131,7 +143,7 @@ function ensureConfig(label, configPath, nodeExe, indexJs, createIfMissing, opts
  * Configure every supported MCP client inside one user profile.
  * Returns the number of clients that ended up configured.
  */
-function configureProfile(home, nodeExe, indexJs) {
+function configureProfile(home, nodeExe, indexJs, { scanningAllProfiles = false } = {}) {
     const appData = path.join(home, "AppData", "Roaming");
     const localAppData = path.join(home, "AppData", "Local");
     let configured = 0;
@@ -141,13 +153,23 @@ function configureProfile(home, nodeExe, indexJs) {
         if (!/: (not installed|config is not valid JSON|failed to write config)/.test(line)) configured++;
     };
 
-    // Claude Desktop — create config if the app appears installed (or the
-    // config dir already exists); otherwise skip quietly.
+    // Claude Desktop. For the profile we were actually asked about, write the
+    // config even when the app is not visible yet: %APPDATA%\Claude only appears
+    // after Claude Desktop has run once, so gating on it silently skipped
+    // everyone who installs BIM-Bot before Claude (the normal order on a fresh
+    // laptop) and left them hand-editing JSON. Creating it early is harmless —
+    // Claude reads it on first launch.
+    //
+    // When sweeping every profile on the machine, only touch profiles that
+    // already show a Claude footprint; an installer has no business seeding
+    // config folders in unrelated users' profiles. Those users are covered
+    // anyway: the Revit plugin self-heals on startup, as themselves.
     const desktopConfig = path.join(appData, "Claude", "claude_desktop_config.json");
-    const desktopInstalled =
+    const claudeSeen =
         fs.existsSync(path.join(appData, "Claude")) ||
         fs.existsSync(path.join(localAppData, "AnthropicClaude"));
-    report(ensureConfig("Claude Desktop", desktopConfig, nodeExe, indexJs, desktopInstalled));
+    report(ensureConfig("Claude Desktop", desktopConfig, nodeExe, indexJs,
+        scanningAllProfiles ? claudeSeen : true));
 
     // Claude Code — only modify ~/.claude.json if it already exists.
     report(ensureConfig("Claude Code", path.join(home, ".claude.json"),
@@ -219,7 +241,9 @@ function main() {
     let totalConfigured = 0;
     for (const home of profiles) {
         console.log(`Profile: ${home}`);
-        totalConfigured += configureProfile(home, nodeExe, indexJs);
+        totalConfigured += configureProfile(home, nodeExe, indexJs, {
+            scanningAllProfiles: !!opts.allUsers && !opts.home,
+        });
     }
 
     if (totalConfigured === 0) {

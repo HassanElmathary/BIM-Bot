@@ -1,12 +1,38 @@
 import * as fs from "fs";
 import * as path from "path";
 import * as http from "http";
+import * as crypto from "crypto";
 import * as url from "url";
 import { fileURLToPath } from "url";
 import open from "open";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+/** Escapes text destined for HTML so provider-supplied values cannot inject markup. */
+function escapeHtml(value: string): string {
+    return value
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+}
+
+function errorPage(title: string, detail: string): string {
+    return `<html><body style="font-family:'Segoe UI',sans-serif;padding:40px;">`
+        + `<h1>${escapeHtml(title)}</h1><p>${escapeHtml(detail)}</p>`
+        + `<script>setTimeout(()=>window.close(),3000)</script></body></html>`;
+}
+
+/** Constant-time comparison for the OAuth state nonce. */
+function timingSafeStringEqual(a: string | null, b: string): boolean {
+    if (a === null) return false;
+    const bufA = Buffer.from(a, "utf8");
+    const bufB = Buffer.from(b, "utf8");
+    if (bufA.length !== bufB.length) return false;
+    return crypto.timingSafeEqual(bufA, bufB);
+}
 
 interface TokenData {
     access_token: string;
@@ -115,6 +141,12 @@ export class GoogleAuth {
             authUrl.searchParams.set("access_type", "offline");
             authUrl.searchParams.set("prompt", "consent");
 
+            // CSRF guard: this nonce must come back unchanged on the callback,
+            // otherwise anything able to hit the loopback listener could hand us
+            // an authorization code belonging to someone else.
+            const state = crypto.randomBytes(32).toString("base64url");
+            authUrl.searchParams.set("state", state);
+
             const server = http.createServer(async (req, res) => {
                 try {
                     const reqUrl = new URL(req.url || "", `http://localhost:${this.config.redirectPort}`);
@@ -122,10 +154,22 @@ export class GoogleAuth {
                     if (reqUrl.pathname === "/callback") {
                         const code = reqUrl.searchParams.get("code");
                         const error = reqUrl.searchParams.get("error");
+                        const returnedState = reqUrl.searchParams.get("state");
+
+                        if (!timingSafeStringEqual(returnedState, state)) {
+                            res.writeHead(400, { "Content-Type": "text/html" });
+                            res.end(errorPage("Authentication Failed",
+                                "This sign-in response did not match the request. Please try again."));
+                            server.close();
+                            reject(new Error("OAuth state mismatch - possible CSRF; authorization code discarded."));
+                            return;
+                        }
 
                         if (error) {
                             res.writeHead(400, { "Content-Type": "text/html" });
-                            res.end(`<html><body><h1>Authentication Failed</h1><p>${error}</p><script>setTimeout(()=>window.close(),3000)</script></body></html>`);
+                            // `error` is provider-controlled and lands in the page,
+                            // so it is escaped rather than interpolated raw.
+                            res.end(errorPage("Authentication Failed", `Google returned: ${error}`));
                             server.close();
                             reject(new Error(`OAuth error: ${error}`));
                             return;

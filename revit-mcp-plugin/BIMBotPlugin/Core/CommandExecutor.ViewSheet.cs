@@ -36,7 +36,7 @@ namespace BIMBotPlugin.Core
             if (!string.IsNullOrWhiteSpace(roomIdsStr))
             {
                 var ids = roomIdsStr.Split(',').Select(s => s.Trim()).Where(s => int.TryParse(s, out _)).Select(s => int.Parse(s)).ToHashSet();
-                rooms = rooms.Where(r => ids.Contains((int)r.Id.Value)).ToList();
+                rooms = rooms.Where(r => ids.Contains((int)r.Id.Val())).ToList();
             }
 
             if (rooms.Count == 0)
@@ -111,7 +111,7 @@ namespace BIMBotPlugin.Core
             if (!string.IsNullOrWhiteSpace(roomIdsStr))
             {
                 var ids = roomIdsStr.Split(',').Select(s => s.Trim()).Where(s => int.TryParse(s, out _)).Select(s => int.Parse(s)).ToHashSet();
-                rooms = rooms.Where(r => ids.Contains((int)r.Id.Value)).ToList();
+                rooms = rooms.Where(r => ids.Contains((int)r.Id.Val())).ToList();
             }
 
             if (rooms.Count == 0)
@@ -185,7 +185,7 @@ namespace BIMBotPlugin.Core
             View parentView = null;
 
             if (!string.IsNullOrWhiteSpace(parentViewIdStr) && int.TryParse(parentViewIdStr, out int pvId))
-                parentView = doc.GetElement(new ElementId(pvId)) as View;
+                parentView = doc.GetElement(pvId.ToElementId()) as View;
 
             if (parentView == null)
             {
@@ -214,7 +214,7 @@ namespace BIMBotPlugin.Core
             if (!string.IsNullOrWhiteSpace(roomIdsStr))
             {
                 var ids = roomIdsStr.Split(',').Select(s => s.Trim()).Where(s => int.TryParse(s, out _)).Select(s => int.Parse(s)).ToHashSet();
-                rooms = rooms.Where(r => ids.Contains((int)r.Id.Value)).ToList();
+                rooms = rooms.Where(r => ids.Contains((int)r.Id.Val())).ToList();
             }
 
             if (rooms.Count == 0)
@@ -276,7 +276,7 @@ namespace BIMBotPlugin.Core
             if (!int.TryParse(refSheetIdStr.Trim(), out int refId))
                 return new JObject { ["message"] = $"Invalid referenceSheetId: {refSheetIdStr}" };
 
-            var refSheet = doc.GetElement(new ElementId(refId)) as ViewSheet;
+            var refSheet = doc.GetElement(refId.ToElementId()) as ViewSheet;
             if (refSheet == null)
                 return new JObject { ["message"] = $"Reference sheet not found with ID: {refSheetIdStr}" };
 
@@ -297,7 +297,7 @@ namespace BIMBotPlugin.Core
             var targetIds = tgtSheetIdsStr.Split(',')
                 .Select(s => s.Trim())
                 .Where(s => int.TryParse(s, out _))
-                .Select(s => new ElementId(int.Parse(s)))
+                .Select(s => (int.Parse(s)).ToElementId())
                 .ToList();
 
             int aligned = 0;
@@ -479,7 +479,7 @@ namespace BIMBotPlugin.Core
             if (!int.TryParse(viewIdStr, out int id))
                 return new JObject { ["message"] = $"Invalid viewId: {viewIdStr}" };
 
-            var view = doc.GetElement(new ElementId(id)) as View;
+            var view = doc.GetElement(id.ToElementId()) as View;
             if (view == null)
                 return new JObject { ["message"] = $"View not found with ID: {viewIdStr}" };
 
@@ -552,7 +552,7 @@ namespace BIMBotPlugin.Core
             {
                 foreach (var s in viewIdsStr.Split(','))
                     if (int.TryParse(s.Trim(), out int vid))
-                        ids.Add(new ElementId(vid));
+                        ids.Add(vid.ToElementId());
             }
 
             if (ids.Count == 0)
@@ -606,7 +606,7 @@ namespace BIMBotPlugin.Core
                     {
                         var sheetNum = parameters["sheetNumber"].ToString();
                         var sheet = new FilteredElementCollector(doc).OfClass(typeof(ViewSheet)).Cast<ViewSheet>().FirstOrDefault(s => s.SheetNumber == sheetNum);
-                        if (sheet != null) sheetId = sheet.Id.Value;
+                        if (sheet != null) sheetId = sheet.Id.Val();
                     }
 
                     if (sheetId == 0) throw new InvalidOperationException("sheetId (or sheetNumber) is required");
@@ -615,9 +615,9 @@ namespace BIMBotPlugin.Core
                     if (viewIds == null || viewIds.Count == 0)
                     {
                         if (viewId == 0) throw new InvalidOperationException("viewId or viewIds required");
-                        var vp = Viewport.Create(doc, new ElementId(sheetId), new ElementId(viewId), new XYZ(x, y, 0));
+                        var vp = Viewport.Create(doc, sheetId.ToElementId(), viewId.ToElementId(), new XYZ(x, y, 0));
                         tx.Commit();
-                        return new JObject { ["message"] = $"âœ… Placed view on sheet (Viewport ID: {vp.Id.Value})", ["viewportId"] = vp.Id.Value };
+                        return new JObject { ["message"] = $"âœ… Placed view on sheet (Viewport ID: {vp.Id.Val()})", ["viewportId"] = vp.Id.Val() };
                     }
      
                     // Multiple views
@@ -628,8 +628,8 @@ namespace BIMBotPlugin.Core
                         var id = vid.Value<long>();
                         try
                         {
-                            var vp = Viewport.Create(doc, new ElementId(sheetId), new ElementId(id), new XYZ(startX + placed * spacing, startY, 0));
-                            results.Add(new JObject { ["viewId"] = id, ["viewportId"] = vp.Id.Value });
+                            var vp = Viewport.Create(doc, sheetId.ToElementId(), id.ToElementId(), new XYZ(startX + placed * spacing, startY, 0));
+                            results.Add(new JObject { ["viewId"] = id, ["viewportId"] = vp.Id.Val() });
                             placed++;
                         }
                         catch { /* skip views that can't be placed */ }
@@ -671,7 +671,7 @@ namespace BIMBotPlugin.Core
                 {
                     ["description"] = w.GetDescriptionText(),
                     ["severity"] = w.GetSeverity().ToString(),
-                    ["elementIds"] = new JArray(w.GetFailingElements().Select(id => id.Value))
+                    ["elementIds"] = new JArray(w.GetFailingElements().Select(id => id.Val()))
                 });
             }
 
@@ -764,7 +764,7 @@ namespace BIMBotPlugin.Core
                     // If source element ID provided, copy from it to targets
                     if (sourceId > 0 && targetIds != null)
                     {
-                        var sourceElem = doc.GetElement(new ElementId(sourceId));
+                        var sourceElem = doc.GetElement(sourceId.ToElementId());
                         if (sourceElem == null) throw new InvalidOperationException($"Source element {sourceId} not found");
 
                         string sourceValue = null;
@@ -781,7 +781,7 @@ namespace BIMBotPlugin.Core
                         int transferred = 0;
                         foreach (var tid in targetIds)
                         {
-                            var targetElem = doc.GetElement(new ElementId(tid.Value<long>()));
+                            var targetElem = doc.GetElement((tid.Value<long>()).ToElementId());
                             if (targetElem == null) continue;
                             foreach (Parameter p in targetElem.Parameters)
                             {
@@ -890,7 +890,7 @@ namespace BIMBotPlugin.Core
             {
                 ["message"] = $"âœ… Selected {matching.Count} element(s)",
                 ["count"] = matching.Count,
-                ["elementIds"] = new JArray(matching.Select(id => id.Value))
+                ["elementIds"] = new JArray(matching.Select(id => id.Val()))
             };
         }
 
@@ -905,7 +905,7 @@ namespace BIMBotPlugin.Core
                     var count = parameters["count"]?.Value<int>() ?? 1;
                     var suffix = parameters["suffix"]?.ToString() ?? " - Copy";
 
-                    var sourceSheet = doc.GetElement(new ElementId(sheetId)) as ViewSheet;
+                    var sourceSheet = doc.GetElement(sheetId.ToElementId()) as ViewSheet;
                     if (sourceSheet == null) throw new InvalidOperationException($"Sheet {sheetId} not found");
 
                     // Get the title block from the source sheet
@@ -923,7 +923,7 @@ namespace BIMBotPlugin.Core
                         try { newSheet.SheetNumber = newNumber; } catch (Exception ex) { Logger.Log($"Sheet number assignment failed: {ex.Message}"); }
                         newSheet.Name = sourceSheet.Name;
 
-                        created.Add(new JObject { ["sheetId"] = newSheet.Id.Value, ["number"] = newSheet.SheetNumber });
+                        created.Add(new JObject { ["sheetId"] = newSheet.Id.Val(), ["number"] = newSheet.SheetNumber });
                     }
 
                     tx.Commit();
@@ -952,7 +952,7 @@ namespace BIMBotPlugin.Core
 
                     foreach (var eid in elementIds)
                     {
-                        var elem = doc.GetElement(new ElementId(eid.Value<long>()));
+                        var elem = doc.GetElement((eid.Value<long>()).ToElementId());
                         if (elem == null) continue;
                         var bb = elem.get_BoundingBox(null);
                         if (bb == null) continue;
@@ -994,7 +994,7 @@ namespace BIMBotPlugin.Core
                     return new JObject
                     {
                         ["message"] = $"âœ… Section box applied around {elementIds.Count} element(s) with {padding}ft padding",
-                        ["viewId"] = view3d.Id.Value,
+                        ["viewId"] = view3d.Id.Val(),
                         ["viewName"] = view3d.Name
                     };
                 }
@@ -1012,7 +1012,7 @@ namespace BIMBotPlugin.Core
                     var sourceViewId = parameters["sourceViewId"]?.Value<long>() ?? 0;
                     var targetViewIds = parameters["targetViewIds"] as JArray;
 
-                    var sourceView = doc.GetElement(new ElementId(sourceViewId)) as View;
+                    var sourceView = doc.GetElement(sourceViewId.ToElementId()) as View;
                     if (sourceView == null) throw new InvalidOperationException($"Source view {sourceViewId} not found");
                     if (targetViewIds == null || targetViewIds.Count == 0) throw new InvalidOperationException("targetViewIds required");
 
@@ -1021,7 +1021,7 @@ namespace BIMBotPlugin.Core
 
                     foreach (var tvid in targetViewIds)
                     {
-                        var targetView = doc.GetElement(new ElementId(tvid.Value<long>())) as View;
+                        var targetView = doc.GetElement((tvid.Value<long>()).ToElementId()) as View;
                         if (targetView == null) continue;
 
                         foreach (var filterId in filterIds)
@@ -1065,7 +1065,7 @@ namespace BIMBotPlugin.Core
                     var delta = parameters["delta"]?.Value<double>() ?? 0;
                     var end = parameters["end"]?.ToString()?.ToLower() ?? "end";
 
-                    var elem = doc.GetElement(new ElementId(elementId));
+                    var elem = doc.GetElement(elementId.ToElementId());
                     if (elem == null) throw new InvalidOperationException($"Element {elementId} not found");
 
                     // Try to get location curve

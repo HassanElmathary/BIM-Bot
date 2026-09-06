@@ -36,6 +36,23 @@ namespace BIMBotPlugin.Core
             if (string.IsNullOrWhiteSpace(code))
                 throw new InvalidOperationException("No code provided. The 'code' parameter is required.");
 
+            // Security gate: refuse the code outright before it is ever compiled.
+            // Preview() only warns; Execute() must actually block, otherwise the
+            // blacklist is advisory and send_code_to_revit is arbitrary RCE.
+            var blocked = FindBlacklistedPattern(code);
+            if (blocked != null)
+            {
+                Logger.Log($"⚠️ Blocked code execution - disallowed pattern '{blocked}' in: {description}");
+                return new JObject
+                {
+                    ["success"] = false,
+                    ["error"] = $"Security violation: execution blocked. Code contains disallowed pattern '{blocked}'.",
+                    ["blockedPattern"] = blocked,
+                    ["hint"] = "Code must stay inside Autodesk.Revit.DB / Autodesk.Revit.UI. Process control, "
+                             + "file deletion, registry and network access are not available to generated code."
+                };
+            }
+
             var doc = uiApp.ActiveUIDocument?.Document;
             var uidoc = uiApp.ActiveUIDocument;
 
@@ -348,6 +365,20 @@ public class DynamicRevitCode
         };
 
         /// <summary>
+        /// Returns the first blacklisted pattern present in the code, or null when clean.
+        /// Case-insensitive so `process.start` cannot slip past.
+        /// </summary>
+        private static string? FindBlacklistedPattern(string code)
+        {
+            foreach (var pattern in _blacklistedPatterns)
+            {
+                if (code.IndexOf(pattern, StringComparison.OrdinalIgnoreCase) >= 0)
+                    return pattern;
+            }
+            return null;
+        }
+
+        /// <summary>
         /// Compile C# code without executing it — dry-run validation.
         /// Returns compilation success/errors and safety warnings.
         /// </summary>
@@ -361,8 +392,22 @@ public class DynamicRevitCode
             var warnings = new JArray();
             foreach (var pattern in _blacklistedPatterns)
             {
-                if (code.Contains(pattern))
-                    warnings.Add($"⚠️ Potentially dangerous: code contains '{pattern}'");
+                if (code.IndexOf(pattern, StringComparison.OrdinalIgnoreCase) >= 0)
+                    warnings.Add($"⛔ Blocked: code contains '{pattern}' - send_code_to_revit will refuse this.");
+            }
+
+            // Mirror Execute()'s gate so preview_code never green-lights code that
+            // will subsequently be refused.
+            if (warnings.Count > 0)
+            {
+                return new JObject
+                {
+                    ["success"] = false,
+                    ["error"] = "Security violation: code contains disallowed patterns and will not execute.",
+                    ["warnings"] = warnings,
+                    ["warningCount"] = warnings.Count,
+                    ["hint"] = "Remove the flagged calls. Generated code must stay inside the Revit API."
+                };
             }
 
             try

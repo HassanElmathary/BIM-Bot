@@ -22,7 +22,8 @@ namespace BIMBotPlugin.Core
     public class SocketService
     {
         private TcpListener? _listener;
-        private readonly int _port;
+        private readonly int _preferredPort;
+        private int _port;
         private readonly ExternalEventManager _eventManager;
         private CancellationTokenSource? _cts;
         private readonly List<TcpClient> _clients = new List<TcpClient>();
@@ -30,19 +31,34 @@ namespace BIMBotPlugin.Core
         private const string ContentLengthHeader = "Content-Length: ";
         private const int MaxStartRetries = 5;
         private const int RetryDelayMs = 2000;
+        // How far past the preferred port we are willing to walk. 8080 is one of
+        // the most contested ports on Windows dev machines; refusing to move off
+        // it meant BIM-Bot simply did not work wherever something else had it.
+        private const int PortScanRange = 10;
 
         public bool IsRunning { get; private set; }
 
+        /// <summary>The port actually bound. Equals the preferred port unless it was taken.</summary>
+        public int Port => _port;
+
         public SocketService(int port, ExternalEventManager eventManager)
         {
+            _preferredPort = port;
             _port = port;
             _eventManager = eventManager;
         }
 
         /// <summary>
-        /// Start the TCP listener with automatic retry if the port is busy.
-        /// Retries up to 5 times with 2-second delays. Also kills stale
-        /// processes holding the port before each attempt.
+        /// Start the TCP listener, retrying if the preferred port is busy.
+        ///
+        /// The first pass insists on the preferred port, so a socket left in
+        /// TIME_WAIT by our own previous run gets a chance to clear. After that
+        /// we walk forward to the next free port and publish where we landed
+        /// (see <see cref="ServiceEndpoint"/>) — refusing to move meant BIM-Bot
+        /// simply did not work on any machine where another app owned 8080.
+        ///
+        /// Whoever holds the port is reported, never terminated: it may be
+        /// another Revit session, and killing it would destroy unsaved work.
         /// </summary>
         public void Start()
         {
@@ -53,34 +69,56 @@ namespace BIMBotPlugin.Core
 
             for (int attempt = 1; attempt <= MaxStartRetries; attempt++)
             {
-                try
+                // Pass 1 sticks to the preferred port so a socket left in
+                // TIME_WAIT by our own previous run gets a chance to clear.
+                // From attempt 2 we also walk forward to the next free port
+                // rather than failing outright when someone else owns 8080.
+                bool allowScan = attempt > 1;
+
+                if (attempt > 1)
                 {
-                    // Try to free the port if something stale is holding it
-                    if (attempt > 1)
+                    ReportStalePortHolder(_preferredPort);
+                    Thread.Sleep(RetryDelayMs);
+                }
+
+                int lastPort = allowScan ? _preferredPort + PortScanRange : _preferredPort;
+                for (int candidate = _preferredPort; candidate <= lastPort; candidate++)
+                {
+                    try
                     {
-                        TryKillStalePortHolder(_port);
-                        Thread.Sleep(RetryDelayMs);
+                        _listener = new TcpListener(IPAddress.Loopback, candidate);
+                        _listener.Start();
+                        _port = candidate;
+                        IsRunning = true;
+
+                        Task.Run(() => AcceptClientsWithWatchdogAsync(_cts.Token));
+                        if (candidate != _preferredPort)
+                        {
+                            Logger.Log($"Port {_preferredPort} was unavailable — socket service started on port {candidate} instead (attempt {attempt})");
+                        }
+                        else
+                        {
+                            Logger.Log($"Socket service started on port {candidate} (attempt {attempt})");
+                        }
+
+                        // Tell the MCP server where we actually landed.
+                        ServiceEndpoint.Publish(candidate, Application.Version);
+                        return; // Success
                     }
-
-                    _listener = new TcpListener(IPAddress.Loopback, _port);
-                    _listener.Start();
-                    IsRunning = true;
-
-                    Task.Run(() => AcceptClientsWithWatchdogAsync(_cts.Token));
-                    Logger.Log($"Socket service started on port {_port} (attempt {attempt})");
-                    return; // Success
+                    catch (SocketException ex)
+                    {
+                        lastException = ex;
+                        try { _listener?.Stop(); } catch { }
+                        _listener = null;
+                    }
                 }
-                catch (SocketException ex)
-                {
-                    lastException = ex;
-                    Logger.LogError($"Start attempt {attempt}/{MaxStartRetries} failed on port {_port}", ex);
-                    try { _listener?.Stop(); } catch { }
-                    _listener = null;
-                }
+
+                Logger.LogError($"Start attempt {attempt}/{MaxStartRetries} failed on ports {_preferredPort}-{lastPort}", lastException);
             }
 
             IsRunning = false;
-            Logger.LogError($"All {MaxStartRetries} start attempts failed on port {_port}");
+            _port = _preferredPort;
+            Logger.LogError($"All {MaxStartRetries} start attempts failed on ports {_preferredPort}-{_preferredPort + PortScanRange}");
             throw lastException ?? new SocketException((int)SocketError.AddressAlreadyInUse);
         }
 
@@ -101,6 +139,7 @@ namespace BIMBotPlugin.Core
 
             try { _listener?.Stop(); } catch { }
             IsRunning = false;
+            ServiceEndpoint.Clear();
             Logger.Log("Socket service stopped");
         }
 
@@ -116,9 +155,11 @@ namespace BIMBotPlugin.Core
         }
 
         /// <summary>
-        /// Kill any process holding our port. Best-effort — failures are silently ignored.
+        /// Diagnose (never kill) whatever is holding our port. Another Revit
+        /// instance, or any unrelated service, may legitimately own it — killing
+        /// it would destroy that process's unsaved work. We only report.
         /// </summary>
-        private static void TryKillStalePortHolder(int port)
+        private static void ReportStalePortHolder(int port)
         {
             try
             {
@@ -135,28 +176,30 @@ namespace BIMBotPlugin.Core
                 var output = proc.StandardOutput.ReadToEnd();
                 proc.WaitForExit(3000);
 
-                // Parse PID from netstat output (last column)
+                var currentPid = System.Diagnostics.Process.GetCurrentProcess().Id;
+
                 foreach (var line in output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
                 {
                     var parts = line.Trim().Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
                     if (parts.Length >= 5 && int.TryParse(parts[parts.Length - 1], out var pid) && pid > 0)
                     {
-                        // Don't kill the current process
-                        if (pid == System.Diagnostics.Process.GetCurrentProcess().Id) continue;
+                        if (pid == currentPid) continue;
 
-                        try
-                        {
-                            var stale = System.Diagnostics.Process.GetProcessById(pid);
-                            Logger.Log($"Killing stale process {pid} ({stale.ProcessName}) holding port {port}");
-                            stale.Kill();
-                        }
-                        catch { } // Process may have already exited
+                        string name;
+                        try { name = System.Diagnostics.Process.GetProcessById(pid).ProcessName; }
+                        catch { continue; } // Process already exited — port should free up on retry
+                        Logger.Log(
+                            "⚠️ " +
+                            $"Port {port} is held by process {pid} ({name}). BIM-Bot will not terminate it. " +
+                            (string.Equals(name, "Revit", StringComparison.OrdinalIgnoreCase)
+                                ? "Another Revit instance is already running BIM-Bot — only one instance can own the port."
+                                : $"Close that application or free port {port}, then start BIM-Bot from the ribbon."));
                     }
                 }
             }
             catch (Exception ex)
             {
-                Logger.LogError("TryKillStalePortHolder failed (non-critical)", ex);
+                Logger.LogError("ReportStalePortHolder failed (non-critical)", ex);
             }
         }
 

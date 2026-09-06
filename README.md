@@ -11,7 +11,7 @@
 
 ## ⚡ Quick Install
 
-1. Download **`BIMBot-Setup-2.3.0.exe`** from [GitHub Releases](https://github.com/HassanElmathary/BIM-Bot/releases)
+1. Download **`BIMBot-Setup-2.3.1.exe`** from [GitHub Releases](https://github.com/HassanElmathary/BIM-Bot/releases)
 2. Run the installer as **Administrator**
 3. Follow the wizard — it will:
    - ✅ Auto-detect your Revit versions (2020–2027)
@@ -111,22 +111,45 @@ The uninstaller will automatically:
 - **Power BI 3D Visual** — Custom Three.js visual for Revit geometry in Power BI dashboards
 - **Integrations** — Google Sheets, Excel, Notion, SQLite connectors
 - **Local AI Support** — Ollama integration for offline AI capabilities
-- **Revit 2020–2027** support (multi-target plugin: .NET 4.8 for 2020–2024, .NET 8 for 2025–2026, .NET 10 for 2027)
+- **Revit 2020–2027** support — one plugin build per Revit version, each compiled against that year's API
 - **Auto-updater** via GitHub Releases
 - **One-click installer** (.exe) with portable Node.js
 
 ## Supported Revit Versions
 
-| Revit Version | Framework | Status |
-|---------------|-----------|--------|
-| Revit 2020 | .NET Framework 4.8 | ✅ Supported |
-| Revit 2021 | .NET Framework 4.8 | ✅ Supported |
-| Revit 2022 | .NET Framework 4.8 | ✅ Supported |
-| Revit 2023 | .NET Framework 4.8 | ✅ Supported |
-| Revit 2024 | .NET Framework 4.8 | ✅ Supported |
-| Revit 2025 | .NET 8.0 | ✅ Supported |
-| Revit 2026 | .NET 8.0 | ✅ Supported |
-| Revit 2027 | .NET 10.0 | ✅ Supported |
+The plugin is built once per Revit version. Each build compiles against that
+year's Revit API, so a single binary is never loaded into a version it was not
+compiled for. Builds land in `bin\R<year>\` and install to
+`C:\Program Files\BIMBot\plugin\R<year>`.
+
+| Revit Version | Framework | Build band | Status |
+|---------------|-----------|------------|--------|
+| Revit 2020 | .NET Framework 4.7 | `R2020` | ✅ Supported — see limitations |
+| Revit 2021 | .NET Framework 4.8 | `R2021` | ✅ Supported — see limitations |
+| Revit 2022 | .NET Framework 4.8 | `R2022` | ✅ Supported |
+| Revit 2023 | .NET Framework 4.8 | `R2023` | ✅ Supported |
+| Revit 2024 | .NET Framework 4.8 | `R2024` | ✅ Supported |
+| Revit 2025 | .NET 8.0 | `R2025` | ✅ Supported |
+| Revit 2026 | .NET 8.0 | `R2026` | ✅ Supported |
+| Revit 2027 | .NET 10.0 | `R2027` | ✅ Supported |
+
+Build a single band with `dotnet build -c Release -p:RevitVersion=2023`, or all
+of them via `installer\build-installer.ps1`.
+
+### Limitations on Revit 2020 / 2021
+
+Three tools depend on Revit APIs that Autodesk only introduced in 2022. These
+are hard API gaps, not missing effort:
+
+| Feature | Behaviour on 2020/2021 | Reason |
+|---------|------------------------|--------|
+| Create ceiling | Reports "requires Revit 2022 or newer" | No ceiling-creation API exists |
+| Edit floor sketch | Reports "requires Revit 2022 or newer" | `Floor.SketchId` is 2022+ |
+| Export to PDF | Prints to an installed PDF printer instead | `PDFExportOptions` is 2022+ |
+| Deep purge (2020–2023) | Conservative sweep — may purge less | `Document.GetUnusedElements` is 2024+ |
+
+Everything else behaves identically across all eight versions. The API
+differences are isolated in `revit-mcp-plugin/BIMBotPlugin/Core/Compat/`.
 
 ## Architecture
 

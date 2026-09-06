@@ -112,7 +112,7 @@ namespace BIMBotPlugin.PowerBI
         {
             FinalizeCurrentElement();
 
-            _currentElementId = (int)(long)elementId.Value;
+            _currentElementId = (int)(long)elementId.Val();
             _currentMesh = new MeshData();
             _vertexOffset = 0;
 
@@ -230,7 +230,7 @@ namespace BIMBotPlugin.PowerBI
 
             foreach (var id in elementIds)
             {
-                var elem = _doc.GetElement(new ElementId(id));
+                var elem = _doc.GetElement(id.ToElementId());
                 if (elem == null) continue;
 
                 var category = elem.Category?.Name ?? "Unknown";

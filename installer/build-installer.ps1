@@ -19,18 +19,20 @@ $version = (Select-String -Path $issPath -Pattern '#define\s+MyAppVersion\s+"([^
 Write-Host "Version: $version"
 Write-Host ""
 
-# 1. Build plugin - both frameworks the installer bundles (net48 for Revit
-#    2020-2024, net8.0-windows for 2025+)
-Write-Host "[1/4] Building Revit Plugin (net48 + net8.0-windows)..."
+# 1. Build the plugin once per Revit version. Each band compiles against that
+#    year's Revit API with its own compat symbols — see BIMBotPlugin.csproj.
+$revitBands = @('2020', '2021', '2022', '2023', '2024', '2025', '2026', '2027')
+Write-Host "[1/4] Building Revit Plugin ($($revitBands.Count) bands: $($revitBands[0])-$($revitBands[-1]))..."
 Push-Location "$root\revit-mcp-plugin\BIMBotPlugin"
-# cmd /c keeps native stderr (warnings, notices) from becoming terminating
-# errors under Windows PowerShell 5.1 + ErrorActionPreference=Stop
-cmd /c "dotnet build -c Release -f net48 >nul 2>&1"
-if ($LASTEXITCODE -ne 0) { Pop-Location; Write-Host "FAILED to build plugin (net48)!"; exit 1 }
-cmd /c "dotnet build -c Release -f net8.0-windows >nul 2>&1"
-if ($LASTEXITCODE -ne 0) { Pop-Location; Write-Host "FAILED to build plugin (net8.0-windows)!"; exit 1 }
+foreach ($band in $revitBands) {
+  # cmd /c keeps native stderr (warnings, notices) from becoming terminating
+  # errors under Windows PowerShell 5.1 + ErrorActionPreference=Stop
+  cmd /c "dotnet build -c Release -p:RevitVersion=$band >nul 2>&1"
+  if ($LASTEXITCODE -ne 0) { Pop-Location; Write-Host "FAILED to build plugin for Revit $band!"; exit 1 }
+  Write-Host "  [OK] Revit $band"
+}
 Pop-Location
-Write-Host "  [OK] Plugin built"
+Write-Host "  [OK] All plugin bands built"
 
 # 2. Build MCP server
 Write-Host "[2/4] Building MCP Server..."

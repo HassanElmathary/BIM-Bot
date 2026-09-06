@@ -886,7 +886,7 @@ When no built-in tool fits, write C# code. You have access to:
 - Return a value to send results back (e.g., return new { count = 5, message = ""done"" })
 
 IMPORTANT API NOTES (Revit 2024+):
-- Use new ElementId((long)value) — NOT new ElementId((int)value) 
+- Use ((long)value).ToElementId() — NOT ((int)value).ToElementId() 
 - Use element.Id.Value — NOT element.Id.Value (deprecated)
 - Cast to long when creating ElementId from numbers
 

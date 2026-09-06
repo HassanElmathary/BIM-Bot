@@ -24,7 +24,7 @@ namespace BIMBotPlugin.Core
         {
             var idsArr = parameters["elementIds"] as JArray;
             if (idsArr == null || idsArr.Count == 0) return new JObject { ["error"] = "No element IDs" };
-            var elementIds = idsArr.Select(id => new ElementId(id.Value<int>())).ToList();
+            var elementIds = idsArr.Select(id => (id.Value<int>()).ToElementId()).ToList();
             int count = 0;
             using (var tx = new Transaction(doc, pin ? "Pin" : "Unpin"))
             {
@@ -51,11 +51,11 @@ namespace BIMBotPlugin.Core
         {
             var idsArr = parameters["elementIds"] as JArray;
             if (idsArr == null) return new JObject { ["error"] = "No element IDs" };
-            var elementIds = idsArr.Select(id => new ElementId(id.Value<int>())).ToList();
+            var elementIds = idsArr.Select(id => (id.Value<int>()).ToElementId()).ToList();
             var items = new JArray();
             foreach (var elem in new FilteredElementCollector(doc, elementIds))
             {
-                var item = new JObject { ["id"] = elem.Id.Value, ["name"] = elem.Name };
+                var item = new JObject { ["id"] = elem.Id.Val(), ["name"] = elem.Name };
                 if (doc.IsWorkshared) { var ws = elem.get_Parameter(BuiltInParameter.EDITED_BY); if (ws != null) item["editedBy"] = ws.AsString(); }
                 var ph = elem.get_Parameter(BuiltInParameter.PHASE_CREATED); if (ph != null) { var phase = doc.GetElement(ph.AsElementId()); item["phaseCreated"] = phase?.Name; }
                 items.Add(item);
@@ -67,7 +67,7 @@ namespace BIMBotPlugin.Core
         {
             var idsArr = parameters["elementIds"] as JArray;
             if (idsArr == null || idsArr.Count == 0) return new JObject { ["error"] = "No element IDs" };
-            var ids = idsArr.Select(id => new ElementId(id.Value<int>())).ToList();
+            var ids = idsArr.Select(id => (id.Value<int>()).ToElementId()).ToList();
             var firstElem = doc.GetElement(ids[0]);
             if (firstElem == null) return new JObject { ["error"] = "First element not found" };
             using (var tx = new Transaction(doc, "Create Assembly"))
@@ -77,7 +77,7 @@ namespace BIMBotPlugin.Core
                 var name = parameters["assemblyName"]?.ToString();
                 if (!string.IsNullOrEmpty(name)) assembly.AssemblyTypeName = name;
                 tx.Commit();
-                return new JObject { ["message"] = $"ðŸ“¦ Created assembly (ID: {assembly.Id.Value})", ["elementId"] = assembly.Id.Value };
+                return new JObject { ["message"] = $"ðŸ“¦ Created assembly (ID: {assembly.Id.Val()})", ["elementId"] = assembly.Id.Val() };
             }
         }
 
@@ -91,15 +91,15 @@ namespace BIMBotPlugin.Core
             using (var tx = new Transaction(doc, "Create Fill Pattern"))
             {
                 tx.Start(); var elem = FillPatternElement.Create(doc, pattern); tx.Commit();
-                return new JObject { ["message"] = $"ðŸŽ¨ Created fill pattern '{name}' (ID: {elem.Id.Value})", ["elementId"] = elem.Id.Value };
+                return new JObject { ["message"] = $"ðŸŽ¨ Created fill pattern '{name}' (ID: {elem.Id.Val()})", ["elementId"] = elem.Id.Val() };
             }
         }
 
         private static JToken GetElementGeometry(Document doc, JObject parameters)
         {
-            var elem = doc.GetElement(new ElementId(parameters["elementId"]?.Value<int>() ?? 0));
+            var elem = doc.GetElement((parameters["elementId"]?.Value<int>() ?? 0).ToElementId());
             if (elem == null) return new JObject { ["error"] = "Element not found" };
-            var result = new JObject { ["id"] = elem.Id.Value, ["name"] = elem.Name };
+            var result = new JObject { ["id"] = elem.Id.Val(), ["name"] = elem.Name };
             var bb = elem.get_BoundingBox(null);
             if (bb != null)
             {
@@ -144,7 +144,7 @@ namespace BIMBotPlugin.Core
             var result = new JObject
             {
                 ["message"] = $"ðŸ”„ Reloaded {reloaded}/{links.Count} links",
-                ["links"] = JArray.FromObject(links.Select(l => new { l.Name, id = l.Id.Value }))
+                ["links"] = JArray.FromObject(links.Select(l => new { l.Name, id = l.Id.Val() }))
             };
             if (errors.Count > 0) result["errors"] = errors;
             return result;
@@ -163,7 +163,7 @@ namespace BIMBotPlugin.Core
             return new JObject
             {
                 ["message"] = $"ðŸ“¤ Unloaded {unloaded}/{links.Count} links",
-                ["links"] = JArray.FromObject(links.Select(l => new { l.Name, id = l.Id.Value }))
+                ["links"] = JArray.FromObject(links.Select(l => new { l.Name, id = l.Id.Val() }))
             };
         }
 
@@ -178,7 +178,7 @@ namespace BIMBotPlugin.Core
             {
                 var linkInfo = new JObject
                 {
-                    ["id"] = link.Id.Value,
+                    ["id"] = link.Id.Val(),
                     ["name"] = link.Name,
                     ["isLoaded"] = RevitLinkType.IsLoaded(doc, link.Id),
                 };
@@ -250,7 +250,7 @@ namespace BIMBotPlugin.Core
         private static JToken EditFamily(UIApplication uiApp, Document doc, JObject parameters)
         {
             var elementId = parameters["elementId"]?.Value<int>() ?? 0;
-            var elem = doc.GetElement(new ElementId(elementId));
+            var elem = doc.GetElement(elementId.ToElementId());
             if (elem == null) throw new InvalidOperationException($"Element {elementId} not found");
 
             Family family = null;
@@ -322,7 +322,7 @@ namespace BIMBotPlugin.Core
                 return new JObject
                 {
                     ["message"] = $"ðŸ§± Created {(isSolid ? "solid" : "void")} extrusion with {points.Count} vertices, depth={depth}ft",
-                    ["elementId"] = extrusion.Id.Value,
+                    ["elementId"] = extrusion.Id.Val(),
                     ["vertexCount"] = points.Count,
                     ["depth"] = depth
                 };
@@ -386,7 +386,7 @@ namespace BIMBotPlugin.Core
                 {
                     ["message"] = $"ðŸ“¦ Loaded family '{family.Name}' from {System.IO.Path.GetFileName(filePath)}",
                     ["familyName"] = family.Name,
-                    ["familyId"] = family.Id.Value
+                    ["familyId"] = family.Id.Val()
                 };
             }
         }
@@ -396,14 +396,14 @@ namespace BIMBotPlugin.Core
         private static JToken GetSketch(Document doc, JObject parameters)
         {
             var elementId = parameters["elementId"]?.Value<int>() ?? 0;
-            var elem = doc.GetElement(new ElementId(elementId));
+            var elem = doc.GetElement(elementId.ToElementId());
             if (elem == null) throw new InvalidOperationException($"Element {elementId} not found");
 
             IList<CurveLoop> curveLoops = null;
 
             if (elem is Floor floor)
             {
-                var sketch2 = doc.GetElement(floor.SketchId) as Sketch;
+                var sketch2 = Compat.ElementApiCompat.GetFloorSketch(doc, floor);
                 if (sketch2 != null)
                 {
                     curveLoops = new List<CurveLoop>();
@@ -443,14 +443,14 @@ namespace BIMBotPlugin.Core
         {
             var elementId = parameters["elementId"]?.Value<int>() ?? 0;
             var action = parameters["action"]?.ToString() ?? "add_line";
-            var elem = doc.GetElement(new ElementId(elementId));
+            var elem = doc.GetElement(elementId.ToElementId());
             if (elem == null) throw new InvalidOperationException($"Element {elementId} not found");
 
             // Use send_code_to_revit for complex sketch editing via SketchEditScope
             return new JObject
             {
                 ["message"] = $"âœï¸ Use send_code_to_revit with SketchEditScope for '{action}' on element {elementId}",
-                ["hint"] = "var scope = new SketchEditScope(doc, \"Edit Sketch\"); scope.Start(new ElementId(" + elementId + ")); // modify sketch curves... scope.Commit(new FailuresPreprocessor());",
+                ["hint"] = "var scope = new SketchEditScope(doc, \"Edit Sketch\"); scope.Start((" + elementId + ").ToElementId()); // modify sketch curves... scope.Commit(new FailuresPreprocessor());",
                 ["action"] = action,
                 ["elementId"] = elementId
             };
@@ -463,7 +463,7 @@ namespace BIMBotPlugin.Core
             if (profilePts == null || profilePts.Count < 3)
                 throw new InvalidOperationException("At least 3 profile points are required.");
 
-            var elem = doc.GetElement(new ElementId(elementId));
+            var elem = doc.GetElement(elementId.ToElementId());
             if (elem == null) throw new InvalidOperationException($"Element {elementId} not found");
 
             // Build the hint code for SketchEditScope
@@ -491,7 +491,7 @@ namespace BIMBotPlugin.Core
 
             var viewId = parameters["viewId"]?.Value<int>();
             var view = viewId.HasValue
-                ? doc.GetElement(new ElementId(viewId.Value)) as View
+                ? doc.GetElement((viewId.Value).ToElementId()) as View
                 : uidoc.ActiveView;
             if (view == null) throw new InvalidOperationException("Invalid view.");
 
@@ -573,7 +573,7 @@ namespace BIMBotPlugin.Core
 
             var viewId = parameters["viewId"]?.Value<int>();
             var view = viewId.HasValue
-                ? doc.GetElement(new ElementId(viewId.Value)) as View
+                ? doc.GetElement((viewId.Value).ToElementId()) as View
                 : uidoc.ActiveView;
 
             using (var tx = new Transaction(doc, "Create Detail Arc"))
@@ -611,7 +611,7 @@ namespace BIMBotPlugin.Core
         {
             var viewId = parameters["viewId"]?.Value<int>();
             var view = viewId.HasValue
-                ? doc.GetElement(new ElementId(viewId.Value)) as View
+                ? doc.GetElement((viewId.Value).ToElementId()) as View
                 : uidoc.ActiveView;
             if (view == null) throw new InvalidOperationException("Invalid view.");
 
@@ -654,7 +654,7 @@ namespace BIMBotPlugin.Core
             var styleName = parameters["style"]?.ToString() ?? "Shaded";
             var viewId = parameters["viewId"]?.Value<int>();
             var view = viewId.HasValue
-                ? doc.GetElement(new ElementId(viewId.Value)) as View
+                ? doc.GetElement((viewId.Value).ToElementId()) as View
                 : uidoc.ActiveView;
             if (view == null) throw new InvalidOperationException("Invalid view");
 
@@ -712,7 +712,7 @@ namespace BIMBotPlugin.Core
 
             if (viewId.HasValue)
             {
-                var viewIds = new List<ElementId> { new ElementId(viewId.Value) };
+                var viewIds = new List<ElementId> { (viewId.Value).ToElementId() };
                 opts.SetViewsAndSheets(viewIds);
             }
 
@@ -1073,7 +1073,7 @@ namespace BIMBotPlugin.Core
             {
                 ["message"] = $"ðŸ“ Moved link '{instance.Name}' by ({moveX}, {moveY}, {moveZ})ft, rotated {rotationDeg}Â°",
                 ["linkName"] = instance.Name,
-                ["elementId"] = instance.Id.Value
+                ["elementId"] = instance.Id.Val()
             };
         }
 
@@ -1094,7 +1094,7 @@ namespace BIMBotPlugin.Core
         private static JToken ZoomToElement(UIDocument uidoc, Document doc, JObject parameters)
         {
             var elementId = parameters["elementId"]?.Value<long>() ?? 0;
-            var eid = new ElementId(elementId);
+            var eid = elementId.ToElementId();
 
             // ── Try host document first ──
             var elem = doc.GetElement(eid);
@@ -1153,7 +1153,7 @@ namespace BIMBotPlugin.Core
         private static JToken EditSchedule(Document doc, JObject parameters)
         {
             var scheduleId = parameters["scheduleId"]?.Value<int>() ?? 0;
-            var schedule = doc.GetElement(new ElementId(scheduleId)) as ViewSchedule;
+            var schedule = doc.GetElement(scheduleId.ToElementId()) as ViewSchedule;
             if (schedule == null)
                 throw new InvalidOperationException($"Schedule {scheduleId} not found.");
 
@@ -1391,7 +1391,7 @@ namespace BIMBotPlugin.Core
                     results.Add(new JObject
                     {
                         ["linkName"] = link.Name,
-                        ["elementId"] = link.Id.Value,
+                        ["elementId"] = link.Id.Val(),
                         ["status"] = "Skipped (Nested)"
                     });
                     continue;
@@ -1404,7 +1404,7 @@ namespace BIMBotPlugin.Core
                     results.Add(new JObject
                     {
                         ["linkName"] = link.Name,
-                        ["elementId"] = link.Id.Value,
+                        ["elementId"] = link.Id.Val(),
                         ["status"] = "Skipped (Unloaded)"
                     });
                     continue;
@@ -1455,7 +1455,7 @@ namespace BIMBotPlugin.Core
                 results.Add(new JObject
                 {
                     ["linkName"] = link.Name,
-                    ["elementId"] = link.Id.Value,
+                    ["elementId"] = link.Id.Val(),
                     ["status"] = status,
                     ["offsetX_mm"] = offsetXMm,
                     ["offsetY_mm"] = offsetYMm,

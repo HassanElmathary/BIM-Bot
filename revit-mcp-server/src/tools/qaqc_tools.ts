@@ -157,6 +157,7 @@ export function registerQAQCTools(server: McpServer) {
         "Get all active warnings in the Revit model. Useful for model cleanup and quality control.",
         {
             severity: z.enum(["All", "Error", "Warning"]).optional().describe("Filter by severity (default: All)"),
+            includeLinks: z.boolean().optional().describe("Include warnings from linked models"),
         },
         async (args) => {
             try {
@@ -272,11 +273,13 @@ export function registerQAQCTools(server: McpServer) {
     server.tool(
         "check_links_status",
         "Check the status of all linked models (loaded, unloaded, missing).",
-        {},
-        async () => {
+        {
+            includeLinks: z.boolean().optional().describe("Include sub-links from linked models"),
+        },
+        async (args) => {
             try {
                 const response = await withRevitConnection(async (client) =>
-                    client.sendCommand("check_links_status", {})
+                    client.sendCommand("check_links_status", args)
                 );
                 return { content: [{ type: "text", text: JSON.stringify(response, null, 2) }] };
             } catch (error) {

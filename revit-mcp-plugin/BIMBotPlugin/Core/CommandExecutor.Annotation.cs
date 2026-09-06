@@ -18,7 +18,7 @@ namespace BIMBotPlugin.Core
         {
             var pointsArr = parameters["points"] as JArray;
             var viewIdParam = parameters["viewId"]?.Value<int>();
-            var view = viewIdParam.HasValue ? doc.GetElement(new ElementId(viewIdParam.Value)) as View : uidoc.ActiveView;
+            var view = viewIdParam.HasValue ? doc.GetElement((viewIdParam.Value).ToElementId()) as View : uidoc.ActiveView;
             var regionType = new FilteredElementCollector(doc).OfClass(typeof(FilledRegionType)).FirstOrDefault() as FilledRegionType;
             if (regionType == null) return new JObject { ["error"] = "No filled region type found" };
             if (pointsArr == null || pointsArr.Count < 3) return new JObject { ["error"] = "Need at least 3 points" };
@@ -30,7 +30,7 @@ namespace BIMBotPlugin.Core
                 tx.Start();
                 var region = FilledRegion.Create(doc, regionType.Id, view.Id, new List<CurveLoop> { loop });
                 tx.Commit();
-                return new JObject { ["message"] = $"✏️ Created filled region (ID: {region.Id.Value})", ["elementId"] = region.Id.Value };
+                return new JObject { ["message"] = $"✏️ Created filled region (ID: {region.Id.Val()})", ["elementId"] = region.Id.Val() };
             }
         }
 
@@ -51,7 +51,7 @@ namespace BIMBotPlugin.Core
                 tx.Start();
                 var legend = ViewSchedule.CreateKeynoteLegend(doc);
                 tx.Commit();
-                return new JObject { ["message"] = $"📋 Created keynote legend (ID: {legend.Id.Value})", ["elementId"] = legend.Id.Value };
+                return new JObject { ["message"] = $"📋 Created keynote legend (ID: {legend.Id.Val()})", ["elementId"] = legend.Id.Val() };
             }
         }
 
@@ -65,14 +65,14 @@ namespace BIMBotPlugin.Core
                 tx.Start(); if (!symbol.IsActive) symbol.Activate();
                 var inst = doc.Create.NewFamilyInstance(new XYZ(parameters["x"]?.Value<double>() ?? 0, parameters["y"]?.Value<double>() ?? 0, 0), symbol, uidoc.ActiveView);
                 tx.Commit();
-                return new JObject { ["message"] = $"✏️ Placed detail component (ID: {inst.Id.Value})", ["elementId"] = inst.Id.Value };
+                return new JObject { ["message"] = $"✏️ Placed detail component (ID: {inst.Id.Val()})", ["elementId"] = inst.Id.Val() };
             }
         }
 
         private static JToken TagRoomsInView(Document doc, UIDocument uidoc, JObject parameters)
         {
             var viewIdParam = parameters["viewId"]?.Value<int>();
-            var view = viewIdParam.HasValue ? doc.GetElement(new ElementId(viewIdParam.Value)) as View : uidoc.ActiveView;
+            var view = viewIdParam.HasValue ? doc.GetElement((viewIdParam.Value).ToElementId()) as View : uidoc.ActiveView;
             var rooms = new FilteredElementCollector(doc, view.Id).OfCategory(BuiltInCategory.OST_Rooms).WhereElementIsNotElementType().Cast<SpatialElement>().Where(r => r.Area > 0).ToList();
             int tagged = 0;
             using (var tx = new Transaction(doc, "Tag Rooms"))
@@ -88,7 +88,7 @@ namespace BIMBotPlugin.Core
         private static JToken DimensionWalls(Document doc, UIDocument uidoc, JObject parameters)
         {
             var viewIdParam = parameters["viewId"]?.Value<int>();
-            var view = viewIdParam.HasValue ? doc.GetElement(new ElementId(viewIdParam.Value)) as View : uidoc.ActiveView;
+            var view = viewIdParam.HasValue ? doc.GetElement((viewIdParam.Value).ToElementId()) as View : uidoc.ActiveView;
             var walls = new FilteredElementCollector(doc, view.Id).OfCategory(BuiltInCategory.OST_Walls).WhereElementIsNotElementType().ToList();
             return new JObject { ["message"] = $"📏 Found {walls.Count} walls in '{view.Name}' for dimensioning", ["hint"] = "Use execute_code: create ReferenceArray from wall faces, then doc.Create.NewDimension(view, line, refs)" };
         }
