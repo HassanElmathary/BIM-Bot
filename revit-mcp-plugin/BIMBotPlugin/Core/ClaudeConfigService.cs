@@ -350,6 +350,7 @@ namespace BIMBotPlugin.Core
             sb.AppendLine($"  BIM-Bot service: {(running ? $"running on 127.0.0.1:{port}" : "STOPPED — click \"Start BIM-Bot\" on this ribbon")}");
             sb.AppendLine($"  Handshake:   {(File.Exists(ServiceEndpoint.FilePath) ? ServiceEndpoint.FilePath : "not written yet")}");
             sb.AppendLine($"  Log file:    {Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "BIMBot", "logs")}");
+            sb.AppendLine($"  Probe:       node \"<install>\\server\\scripts\\probe-revit.cjs\" (full Link-2 round-trip)");
 
             return sb.ToString().TrimEnd();
         }

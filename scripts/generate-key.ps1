@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     BIM-Bot License Key Generator — Admin tool for Hassan.
 

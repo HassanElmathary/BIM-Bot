@@ -1,8 +1,8 @@
 {
-  "version": "2.3.1",
-  "releaseUrl": "https://github.com/HassanElmathary/BIM-Bot/releases/tag/v2.3.1",
-  "downloadUrl": "https://github.com/HassanElmathary/BIM-Bot/releases/download/v2.3.1/BIMBot-Setup-2.3.1.exe",
-  "assetFileName": "BIMBot-Setup-2.3.1.exe",
-  "changelog": "BIM-Bot v2.3.1 — Fixes Claude auto-connect on every real installation. The plugin resolved the install root one folder above BIMBotPlugin.dll, but per-Revit-year builds put it two levels down, so \"Connect Claude\" and the startup self-heal could never find the MCP server and silently did nothing. The service also no longer depends on port 8080 being free: it moves to the next free port and publishes it, so Revit commands work on machines where another app owns 8080. Corrupt or BOM-prefixed client configs are now backed up and rebuilt instead of abandoned, Claude Desktop is configured even when installed after BIM-Bot, and Revit is detected on non-default drives. Adds scripts/bimbot-doctor.ps1 to diagnose and repair an install in one pass.",
+  "version": "2.4.0",
+  "releaseUrl": "https://github.com/HassanElmathary/BIM-Bot/releases/tag/v2.4.0",
+  "downloadUrl": "https://github.com/HassanElmathary/BIM-Bot/releases/download/v2.4.0/BIMBot-Setup-2.4.0.exe",
+  "assetFileName": "BIMBot-Setup-2.4.0.exe",
+  "changelog": "BIM-Bot v2.4.0 — Strict any-machine install. New installer/Install-Prerequisites.ps1 checks and auto-downloads every missing runtime (.NET 8 Desktop, WebView2, VC++ Redist via winget with direct-download fallback). Non-admin installer hardened: UTF-8-no-BOM writes (Claude rejected BOM files), bundled-Node-first resolution (GUI Claude cannot resolve bare 'node'), installed-vs-dev server path detection, MS-Store config path (AnthropicClaude*), backup + quarantine instead of wiping other MCP servers, shadow-manifest cleanup, and post-write verification. Revit side: no-document 'ping' command plus scripts/probe-revit.cjs for a true Link-2 round-trip test, so 'Claude green but Revit stopped' is diagnosable in seconds.",
   "minVersion": "1.0.0"
 }

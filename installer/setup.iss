@@ -8,7 +8,7 @@
 ; ============================================================
 
 #define MyAppName      "BIM-Bot"
-#define MyAppVersion   "2.3.1"
+#define MyAppVersion   "2.4.0"
 #define MyAppPublisher "Hassan Ahmed Elmathary"
 #define MyAppURL       "https://github.com/HassanElmathary/BIM-Bot"
 #define MyAppExeName   "Start MCP Server.bat"
@@ -104,6 +104,8 @@ Source: "..\revit-mcp-server\build\*"; DestDir: "{app}\server\build"; Flags: ign
 Source: "..\revit-mcp-server\node_modules\*"; DestDir: "{app}\server\node_modules"; Flags: ignoreversion recursesubdirs; Components: server
 Source: "..\revit-mcp-server\package.json"; DestDir: "{app}\server"; Flags: ignoreversion; Components: server
 Source: "..\revit-mcp-server\scripts\configure-claude.cjs"; DestDir: "{app}\server\scripts"; Flags: ignoreversion; Components: server
+Source: "..\revit-mcp-server\scripts\probe-revit.cjs"; DestDir: "{app}\server\scripts"; Flags: ignoreversion; Components: server
+Source: "..\installer\Install-Prerequisites.ps1"; DestDir: "{app}\server\scripts"; Flags: ignoreversion; Components: server
 
 ; Revit Plugin DLLs — one build per Revit version
 Source: "..\revit-mcp-plugin\BIMBotPlugin\bin\R2020\Release\net47\*"; DestDir: "{app}\plugin\R2020"; Flags: ignoreversion recursesubdirs; Components: plugin; Tasks: revit2020

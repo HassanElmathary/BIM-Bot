@@ -1,4 +1,4 @@
-# Deploy BIM-Bot Plugin to all installed Revit versions (2020-2027).
+﻿# Deploy BIM-Bot Plugin to all installed Revit versions (2020-2027).
 # Each Revit version gets its own build, compiled against that year's API:
 #   bin\R<year>\Release\<tfm>  ->  C:\Program Files\BIMBot\plugin\R<year>
 # Build them first with:  installer\build-installer.ps1  (or per band:

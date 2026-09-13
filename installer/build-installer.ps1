@@ -1,4 +1,4 @@
-# Build & Package the BIM-Bot Installer for distribution
+﻿# Build & Package the BIM-Bot Installer for distribution
 # Run: powershell -ExecutionPolicy Bypass -File installer\build-installer.ps1
 #
 # Output: installer\output\BIMBot-Setup-<version>.exe  (full Inno Setup installer:

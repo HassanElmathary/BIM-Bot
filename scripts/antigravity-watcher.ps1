@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Antigravity watcher — transparent JSON-RPC proxy to BIM-Bot.
     Polls %APPDATA%\BIMBot\antigravity\request.json every 500ms.

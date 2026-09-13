@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Sends a JSON-RPC 2.0 command to the BIM-Bot plugin via TCP.
 

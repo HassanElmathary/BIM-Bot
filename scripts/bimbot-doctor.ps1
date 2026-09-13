@@ -1,4 +1,4 @@
-# ============================================================
+﻿# ============================================================
 #  BIM-Bot Doctor — diagnose (and optionally repair) an install
 #
 #  Answers, in one pass, the questions that a failed install leaves

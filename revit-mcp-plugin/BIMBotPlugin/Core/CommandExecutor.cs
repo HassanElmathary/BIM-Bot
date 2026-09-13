@@ -21,6 +21,17 @@ namespace BIMBotPlugin.Core
     {
         public static JToken Execute(UIApplication uiApp, string command, JObject parameters)
         {
+            // Transport-level probe: must work with NO document open so
+            // scripts/probe-revit.cjs and the "Connect Claude" dialog can
+            // distinguish "service reachable" from "project open".
+            if (command == "ping")
+                return new JObject
+                {
+                    ["ok"] = true,
+                    ["pluginVersion"] = Application.Version,
+                    ["hasDocument"] = uiApp.ActiveUIDocument?.Document != null
+                };
+
             var doc = uiApp.ActiveUIDocument?.Document;
             var uidoc = uiApp.ActiveUIDocument;
 
