@@ -14,7 +14,7 @@
 `179 MCP Tools | 17 Categories | 7 Revit Versions`
 
 **Change to:**
-`187 MCP Tools | 19 Categories | 8 Revit Versions`
+`209 MCP Tools | 19 Categories | 8 Revit Versions`
 
 The correct category count is 19: Reading, Creating, Editing, Documentation, QA/QC, AI, Power Tools, Advanced, Drafting, Export, Extended, File Management, MEP, Power BI, Rendering, Settings, Sketch, Transactions, BIM Dashboard.
 
@@ -26,7 +26,7 @@ The correct category count is 19: Reading, Creating, Editing, Documentation, QA/
 `179 tools across 17 categories`
 
 **Change to:**
-`187 tools across 19 categories`
+`209 tools across 19 categories`
 
 ---
 
@@ -48,7 +48,7 @@ The correct category count is 19: Reading, Creating, Editing, Documentation, QA/
 #### Download BIM-Bot Installer
 
 Large CTA button:
- > **Download BIM-Bot v2.4.0** — `BIMBot-Setup-2.4.0.exe` (Windows)
+ > **Download BIM-Bot v2.5.0** — `BIMBot-Setup-2.5.0.exe` (Windows)
 
 Link to: `https://github.com/HassanElmathary/BIM-Bot/releases/latest`
 
@@ -211,6 +211,6 @@ Also add the new `validate_shared_coordinates` tool:
 - [x] What's the Discord server link? *(Not needed)*
 - [x] What's the new GitHub repo URL? *(Not adding at all)*
 - [x] Want to add a contact email to the footer? *(Yes: hassan.elmathary@gmail.com)*
-- [x] What's the installer filename for download? *(BIMBot-Setup-2.4.0.exe)*
+- [x] What's the installer filename for download? *(BIMBot-Setup-2.5.0.exe)*
 - [x] What's the Claude config key? *(`"BIM-Bot"` — capital casing)*
 - [x] What install methods to document? *(PowerShell one-liner, NPX, EXE Installer)*

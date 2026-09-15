@@ -1,4 +1,4 @@
-﻿# Build & Package the BIM-Bot Installer for distribution
+# Build & Package the BIM-Bot Installer for distribution
 # Run: powershell -ExecutionPolicy Bypass -File installer\build-installer.ps1
 #
 # Output: installer\output\BIMBot-Setup-<version>.exe  (full Inno Setup installer:
@@ -45,6 +45,7 @@ Write-Host "  [OK] MCP server built"
 # 3. Compile the Inno Setup installer (bundles plugin, server, nodejs, assets)
 Write-Host "[3/4] Compiling Inno Setup installer..."
 $iscc = "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe"
+if (-not (Test-Path $iscc)) { $iscc = "$env:LOCALAPPDATA\Programs\Inno\ISCC.exe" }
 if (-not (Test-Path $iscc)) { $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" }
 if (-not (Test-Path $iscc)) { Write-Host "FAILED: ISCC.exe not found - install Inno Setup 6"; exit 1 }
 & $iscc $issPath /Q

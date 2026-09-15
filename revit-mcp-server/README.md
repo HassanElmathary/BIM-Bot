@@ -3,7 +3,7 @@
 [![npm version](https://img.shields.io/npm/v/revit-mcp-server.svg)](https://www.npmjs.com/package/revit-mcp-server)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-> **MCP Server for Autodesk Revit** — 185 AI-powered tools for BIM automation.  
+> **MCP Server for Autodesk Revit** — 209 AI-powered tools for BIM automation.  
 > Works with Claude Desktop, Cursor, Windsurf, and any MCP client. Supports **Revit 2020–2027**.
 
 ## ⚡ Quick Start
@@ -51,14 +51,14 @@ This will:
 - ✅ Deploy the correct plugin for each version
 - ✅ Auto-configure Claude Desktop
 
-## 185 MCP Tools
+## 209 MCP Tools
 
 | Category | Count | Key Tools |
 |----------|-------|-----------|
 | 🔍 Reading | 19 | `get_elements`, `get_parameters`, `get_rooms`, `get_views` |
 | 🏗️ Creating | 15 | `create_wall`, `create_floor`, `create_roof`, `create_room` |
 | ✏️ Editing | 12 | `modify_parameter`, `move_element`, `rotate_element`, `batch_modify` |
-| 📄 Documentation | 8 | `create_sheet`, `place_viewport`, `export_dwg` |
+| 📄 Documentation | 14 | `create_sheet`, `place_viewport`, `export_dwg`, `transfer_annotations`, `export/import_annotations` |
 | ✅ QA/QC | 8 | `audit_model`, `check_naming`, `find_duplicates`, `purge_unused` |
 | 🤖 AI | 8 | `ai_chat`, `ai_generate_code`, `ai_analyze_model` |
 | ⚡ Power Tools | 29 | Batch operations, bulk processing, advanced queries |

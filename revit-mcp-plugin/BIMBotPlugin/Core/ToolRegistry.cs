@@ -1011,7 +1011,7 @@ namespace BIMBotPlugin.Core
                 ToolParam.Req("category", "string", "Category"),
                 ToolParam.Opt("spreadsheetId", "string", "Google Sheets spreadsheet ID"));
 
-            // ===================== PROJECT FILES (7 tools) =====================
+            // ===================== PROJECT FILES (9 tools) =====================
             R("list_project_files", "List all files in the project folder", ToolCategory.ProjectFiles,
                 new[] { "project files", "my files", "list files" },
                 ToolParam.Opt("filter", "string", "File extension filter (e.g. xlsx)"));
@@ -1050,6 +1050,14 @@ namespace BIMBotPlugin.Core
                 new[] { "import file", "import excel", "import csv" },
                 ToolParam.Opt("fileName", "string", "File name"),
                 ToolParam.Opt("search", "string", "Search term"));
+
+            R("list_open_documents", "List all documents open in Revit (title, path, active, linked)", ToolCategory.ProjectFiles,
+                new[] { "open documents", "list documents", "what projects are open" });
+
+            R("activate_document", "Make an open Revit document the active one", ToolCategory.ProjectFiles,
+                new[] { "activate document", "switch document", "switch project", "active document" },
+                ToolParam.Opt("documentTitle", "string", "Open document title (e.g. ProjectB.rvt)"),
+                ToolParam.Opt("filePath", "string", "Full file path (alternative to title)"));
 
             // ===================== EXCEL TOOLS (8 tools) =====================
             R("excel_create_workbook", "Create a new Excel .xlsx workbook with sheets and headers", ToolCategory.ProjectFiles,
@@ -1415,7 +1423,7 @@ namespace BIMBotPlugin.Core
                 new[] { "analytical model", "structural analysis" },
                 ToolParam.Opt("elementIds", "string", "Element IDs (comma-sep)"));
 
-            // ===================== ANNOTATION (7 tools) =====================
+            // ===================== ANNOTATION (10 tools) =====================
             R("create_filled_region", "Create a filled region in a view", ToolCategory.Annotation,
                 new[] { "filled region", "create filled region", "hatch region" },
                 ToolParam.Arr("points", "Boundary points [{x,y}] in ft", new JObject { ["type"] = "object", ["properties"] = new JObject { ["x"] = new JObject { ["type"] = "number" }, ["y"] = new JObject { ["type"] = "number" } } }),
@@ -1453,6 +1461,27 @@ namespace BIMBotPlugin.Core
                 new[] { "auto dimension", "dimension walls" },
                 ToolParam.Opt("viewId", "integer", "View ID (default: active)"),
                 ToolParam.Opt("mode", "string", "grid-to-grid/wall-to-wall/opening"));
+
+            R("export_annotations", "Export a view's annotations to a JSON transfer file", ToolCategory.Annotation,
+                new[] { "export annotations", "save annotations", "annotation transfer file" },
+                ToolParam.Opt("viewId", "integer", "Source view ID (default: active)"),
+                ToolParam.Opt("viewName", "string", "Source view name"),
+                ToolParam.Opt("documentTitle", "string", "Source document (default: active)"),
+                ToolParam.Opt("filePath", "string", "Output JSON path"));
+
+            R("import_annotations", "Recreate annotations from a transfer file in a target view", ToolCategory.Annotation,
+                new[] { "import annotations", "load annotations", "place annotations" },
+                ToolParam.Req("filePath", "string", "Transfer JSON file from export_annotations"),
+                ToolParam.Opt("targetDocumentTitle", "string", "Target document (default: active)"),
+                ToolParam.Opt("targetViewName", "string", "Target view name"),
+                ToolParam.Opt("targetViewId", "integer", "Target view ID"));
+
+            R("transfer_annotations", "Copy annotations between two open documents in one step", ToolCategory.Annotation,
+                new[] { "transfer annotations", "copy annotations", "move annotations between projects" },
+                ToolParam.Opt("sourceDocumentTitle", "string", "Source document (default: active)"),
+                ToolParam.Opt("sourceViewName", "string", "Source view name"),
+                ToolParam.Opt("targetDocumentTitle", "string", "Target document"),
+                ToolParam.Opt("targetViewName", "string", "Target view name (default: same as source)"));
 
             // ===================== ARCHITECTURE (7 tools) =====================
             R("create_stairs", "Create stairs between two levels", ToolCategory.Architecture,

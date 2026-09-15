@@ -35,6 +35,22 @@ namespace BIMBotPlugin.Core
             var doc = uiApp.ActiveUIDocument?.Document;
             var uidoc = uiApp.ActiveUIDocument;
 
+            // ===== MULTI-DOCUMENT / TRANSFER COMMANDS =====
+            // These resolve their own Document objects (source/target by title),
+            // so they must run before the active-document guard below — that is
+            // precisely what makes cross-document transfer possible with no
+            // manual focus-switching in the Revit UI.
+            if (command == "list_open_documents")
+                return ListOpenDocuments(uiApp);
+            if (command == "activate_document")
+                return ActivateDocument(uiApp, parameters);
+            if (command == "export_annotations")
+                return ExportAnnotations(uiApp, parameters);
+            if (command == "import_annotations")
+                return ImportAnnotations(uiApp, parameters);
+            if (command == "transfer_annotations")
+                return TransferAnnotations(uiApp, parameters);
+
             if (doc == null)
                 throw new InvalidOperationException("No active document. Please open a Revit project first.");
 

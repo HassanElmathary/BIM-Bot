@@ -5,13 +5,13 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Revit](https://img.shields.io/badge/Revit-2020--2027-blue.svg)](#)
 
-> BIM-Bot: Model Context Protocol (MCP) server + Revit plugin for AI-driven BIM automation with **187 tools**, built-in Gemini AI chat, and Power BI 3D export.
+> BIM-Bot: Model Context Protocol (MCP) server + Revit plugin for AI-driven BIM automation with **209 tools**, built-in Gemini AI chat, and Power BI 3D export.
 
 ---
 
 ## ⚡ Quick Install
 
- 1. Download **`BIMBot-Setup-2.4.0.exe`** from [GitHub Releases](https://github.com/HassanElmathary/BIM-Bot/releases)
+ 1. Download **`BIMBot-Setup-2.5.0.exe`** from [GitHub Releases](https://github.com/HassanElmathary/BIM-Bot/releases)
 2. Run the installer as **Administrator**
 3. Follow the wizard — it will:
    - ✅ Auto-detect your Revit versions (2020–2027)
@@ -85,11 +85,11 @@ The uninstaller will automatically:
 
 ## Features
 
-- **187 MCP Tools** across 19 categories:
+- **209 MCP Tools** across 19 categories:
   - 🔍 **Reading** (19): Views, elements, parameters, rooms, levels, sheets, families, schedules, linked models
   - 🏗️ **Creating** (15): Walls, floors, ceilings, roofs, levels, grids, rooms, views, sheets, tags
   - ✏️ **Editing** (13): Modify, move, rotate, copy, delete, mirror, align, group, batch modify, conditional bulk parameter edit
-  - 📄 **Documentation** (9): Sheets, viewports, exports, legends, revisions, tags
+  - 📄 **Documentation** (14): Sheets, viewports, exports, legends, revisions, tags, cross-document annotation transfer (`transfer_annotations`, `export/import_annotations`, `list/activate_document`)
   - ✅ **QA/QC** (8): Warnings, audits, compliance, naming, duplicates, purge, validation
   - 🤖 **AI** (8): Gemini chat, code generation, model analysis, Google OAuth
   - ⚡ **Power Tools** (29): Batch operations, bulk element processing, advanced queries
@@ -219,7 +219,7 @@ BIM-Bot/
 │       │   ├── excel-client.ts
 │       │   ├── notion-client.ts
 │       │   └── sqlite-client.ts
-│       ├── tools/                  # 187 MCP Tools (19 files)
+│       ├── tools/                  # 209 MCP Tools (29 files)
 │       │   ├── reading_tools.ts
 │       │   ├── creating_tools.ts
 │       │   ├── editing_tools.ts
@@ -238,7 +238,8 @@ BIM-Bot/
 │       │   ├── rendering_tools.ts
 │       │   ├── settings_tools.ts
 │       │   ├── sketch_tools.ts
-│       │   └── transaction_tools.ts
+│       │   ├── transaction_tools.ts
+│       │   └── transfer_tools.ts
 │       └── utils/
 │           ├── SocketClient.ts
 │           └── ConnectionManager.ts
@@ -294,7 +295,7 @@ BIM-Bot/
 | Reading | 19 | `get_elements`, `get_current_view_info`, `get_parameters`, `get_rooms`, `get_linked_models` |
 | Creating | 15 | `create_wall`, `create_floor`, `create_roof`, `create_room`, `create_sheet` |
 | Editing | 12 | `modify_parameter`, `move_element`, `rotate_element`, `copy_element`, `batch_modify` |
-| Documentation | 8 | `create_sheet`, `place_viewport`, `export_dwg`, `add_revision` |
+| Documentation | 14 | `create_sheet`, `place_viewport`, `export_dwg`, `add_revision`, `transfer_annotations`, `export/import_annotations` |
 | QA/QC | 8 | `audit_model`, `check_naming`, `find_duplicates`, `purge_unused` |
 | AI | 8 | `ai_chat`, `ai_generate_code`, `ai_analyze_model`, `google_oauth` |
 | Power Tools | 29 | Batch operations, bulk processing, advanced element queries |

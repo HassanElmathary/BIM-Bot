@@ -1,8 +1,8 @@
 {
-  "version": "2.4.0",
-  "releaseUrl": "https://github.com/HassanElmathary/BIM-Bot/releases/tag/v2.4.0",
-  "downloadUrl": "https://github.com/HassanElmathary/BIM-Bot/releases/download/v2.4.0/BIMBot-Setup-2.4.0.exe",
-  "assetFileName": "BIMBot-Setup-2.4.0.exe",
-  "changelog": "BIM-Bot v2.4.0 — Strict any-machine install. New installer/Install-Prerequisites.ps1 checks and auto-downloads every missing runtime (.NET 8 Desktop, WebView2, VC++ Redist via winget with direct-download fallback). Non-admin installer hardened: UTF-8-no-BOM writes (Claude rejected BOM files), bundled-Node-first resolution (GUI Claude cannot resolve bare 'node'), installed-vs-dev server path detection, MS-Store config path (AnthropicClaude*), backup + quarantine instead of wiping other MCP servers, shadow-manifest cleanup, and post-write verification. Revit side: no-document 'ping' command plus scripts/probe-revit.cjs for a true Link-2 round-trip test, so 'Claude green but Revit stopped' is diagnosable in seconds.",
+  "version": "2.5.0",
+  "releaseUrl": "https://github.com/HassanElmathary/BIM-Bot/releases/tag/v2.5.0",
+  "downloadUrl": "https://github.com/HassanElmathary/BIM-Bot/releases/download/v2.5.0/BIMBot-Setup-2.5.0.exe",
+  "assetFileName": "BIMBot-Setup-2.5.0.exe",
+  "changelog": "BIM-Bot v2.5.0 — Cross-document annotation transfer (209 MCP tools). New: transfer_annotations copies text notes, tags and dimensions directly between two open, unlinked projects in one step — no linking, no manual focus switching. New: export_annotations / import_annotations move annotations via a neutral JSON transfer file. New: list_open_documents / activate_document let the agent see and switch open documents itself. Text notes transfer exactly; tags re-attach by host UniqueId with a category+level+location fallback; dimensions recreate when references resolve. Every run reports created / skipped / failed with reasons — nothing is silently dropped.",
   "minVersion": "1.0.0"
 }

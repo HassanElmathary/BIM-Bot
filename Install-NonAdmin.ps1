@@ -1,4 +1,4 @@
-﻿# ============================================
+# ============================================
 # BIM-Bot User-Level (Non-Admin) Installer
 # ============================================
 
@@ -8,7 +8,7 @@ $ErrorActionPreference = "Stop"
 $scriptDir = $PSScriptRoot
 if (-not $scriptDir) { $scriptDir = Get-Location }
 
-# ── Strict Step 0: transcript + prerequisites (auto-download missing) ──
+# -- Strict Step 0: transcript + prerequisites (auto-download missing) --
 $transcriptPath = Join-Path $env:TEMP "BIMBot-install.log"
 try { Start-Transcript -Path $transcriptPath -Append -ErrorAction SilentlyContinue | Out-Null } catch {}
 function Write-Utf8NoBom($Path, $Text) {
@@ -22,11 +22,11 @@ if (Test-Path $prereqScript) {
     Write-Host "  [0/4] Checking prerequisites (auto-download missing)..." -ForegroundColor Yellow
     & powershell -ExecutionPolicy Bypass -File $prereqScript
     if ($LASTEXITCODE -ne 0) {
-        Write-Host "  [!] Prerequisites reported failures — continuing anyway, but see above." -ForegroundColor Yellow
+        Write-Host "  [!] Prerequisites reported failures - continuing anyway, but see above." -ForegroundColor Yellow
         Write-Host "      Full log: $transcriptPath" -ForegroundColor DarkGray
     }
 } else {
-    Write-Host "  [!] Prerequisite script not found ($prereqScript) — skipping checks." -ForegroundColor Yellow
+    Write-Host "  [!] Prerequisite script not found ($prereqScript) - skipping checks." -ForegroundColor Yellow
 }
 
 Write-Host ""
@@ -112,24 +112,46 @@ foreach ($year in $revitVersions) {
         Write-Host "    Cleaned up legacy $legacyDir" -ForegroundColor DarkGray
     }
     # Strict: a machine-wide manifest with the same ClientId shadows the
-    # per-user one — remove the stale scope so the new DLL actually loads.
+    # per-user one - remove the stale scope so the new DLL actually loads.
     $machineAddin = "$env:ProgramData\Autodesk\Revit\Addins\$year\BIMBot.addin"
     if (Test-Path $machineAddin) {
         try { Remove-Item $machineAddin -Force; Write-Host "    Removed shadowing machine-wide $machineAddin" -ForegroundColor DarkGray } catch {}
     }
 
+    # Framework mapping per Revit version
+    $bandTfm = @{
+        2020 = 'net47'; 2021 = 'net48'; 2022 = 'net48'; 2023 = 'net48'
+        2024 = 'net48'; 2025 = 'net8.0-windows'; 2026 = 'net8.0-windows'; 2027 = 'net10.0-windows'
+    }
+
+    $sourceYear = $null
+    if ($bandTfm.ContainsKey($year)) {
+        $candidateYear = Join-Path $scriptDir "revit-mcp-plugin\BIMBotPlugin\bin\R$year\Release\$($bandTfm[$year])"
+        if (Test-Path $candidateYear) { $sourceYear = $candidateYear }
+    }
+
     # Determine framework and dll name
-    if ($year -le 2024) {
-        # Net48 (using RevitMCPPlugin.dll from dist\RevitMCP\plugin\net48)
+    if ($sourceYear) {
+        Write-Host "    Using latest build from: $sourceYear" -ForegroundColor DarkGray
+        Copy-Item "$sourceYear\*" $pluginDestDir -Recurse -Force
+        $dllPath = Join-Path $pluginDestDir "BIMBotPlugin.dll"
+        $className = "BIMBotPlugin.Core.Application"
+    } elseif ($year -le 2024) {
+        # Net48 fallback (dist\RevitMCP\plugin\net48)
         if (-not (Test-Path $sourceNet48)) {
             Write-Host "    [WARN] Source Net48 folder not found: $sourceNet48. Skipping Revit $year." -ForegroundColor Red
             continue
         }
         Copy-Item "$sourceNet48\*" $pluginDestDir -Recurse -Force
-        $dllPath = Join-Path $pluginDestDir "RevitMCPPlugin.dll"
-        $className = "RevitMCPPlugin.Core.Application"
+        if (Test-Path (Join-Path $pluginDestDir "BIMBotPlugin.dll")) {
+            $dllPath = Join-Path $pluginDestDir "BIMBotPlugin.dll"
+            $className = "BIMBotPlugin.Core.Application"
+        } else {
+            $dllPath = Join-Path $pluginDestDir "RevitMCPPlugin.dll"
+            $className = "RevitMCPPlugin.Core.Application"
+        }
     } else {
-        # Net8 (using BIMBotPlugin.dll from dist\plugin\net8)
+        # Net8 fallback (dist\plugin\net8)
         if (-not (Test-Path $sourceNet8)) {
             Write-Host "    [WARN] Source Net8 folder not found: $sourceNet8. Skipping Revit $year." -ForegroundColor Red
             continue
@@ -157,12 +179,11 @@ foreach ($year in $revitVersions) {
     # Strict verify: manifest must parse and the DLL must exist.
     try {
         $asm = ([xml](Get-Content "$addinDestDir\BIMBot.addin" -Raw)).RevitAddIns.AddIn.Assembly
-        if (-not (Test-Path $asm)) { Write-Host "    [FAIL] Manifest points at missing DLL: $asm" -ForegroundColor Red }
-        else { Write-Host "    [OK] Deployed BIMBot.addin for Revit $year" -ForegroundColor Green }
+        if (-not (Test-Path $asm)) { Write-Host "    [FAIL] Manifest points at missing DLL: $asm" -ForegroundColor Red } else { Write-Host "    [OK] Deployed BIMBot.addin for Revit $year" -ForegroundColor Green }
     } catch { Write-Host "    [FAIL] BIMBot.addin is not valid XML: $($_.Exception.Message)" -ForegroundColor Red }
 }
 
-# 3. Configure Claude Desktop — STRICT: single writer (configure-claude.cjs).
+# 3. Configure Claude Desktop - STRICT: single writer (configure-claude.cjs).
 # The old inline JSON editing wrote a BOM, used a bare "node", missed the
 # MS-Store config path, and wiped other MCP servers on any parse error.
 # configure-claude.cjs does none of that (UTF-8-no-BOM, absolute paths,
@@ -177,8 +198,7 @@ foreach ($c in @((Join-Path $scriptDir "revit-mcp-server\scripts\configure-claud
 $claudeDone = $false
 if ($configureCjs -and (Test-Path $nodeCmd) -and $nodeCmd -ne "node") {
     & $nodeCmd $configureCjs --server $serverJs --node $nodeCmd
-    if ($LASTEXITCODE -eq 0) { $claudeDone = $true }
-    else { Write-Host "    [!] configure-claude.cjs exited $LASTEXITCODE — using hardened fallback." -ForegroundColor Yellow }
+    if ($LASTEXITCODE -eq 0) { $claudeDone = $true } else { Write-Host "    [!] configure-claude.cjs exited $LASTEXITCODE - using hardened fallback." -ForegroundColor Yellow }
 }
 if (-not $claudeDone) {
     # Hardened fallback: same guarantees as configure-claude.cjs, inline.
@@ -193,17 +213,15 @@ if (-not $claudeDone) {
             ForEach-Object { Join-Path $_.FullName "LocalCache\Roaming\Claude\claude_desktop_config.json" }
         foreach ($sp in $storePaths) { $claudePaths += $sp }
     }
-    $newConfig = @"
-{
-  "mcpServers": {
-    "BIM-Bot": {
-      "command": "$nodeCmdEscaped",
-      "args": ["$serverJsEscaped"],
-      "env": {}
-    }
-  }
-}
-"@
+    $newConfig = @{
+        mcpServers = @{
+            "BIM-Bot" = @{
+                command = $nodeCmd
+                args = @($serverJs)
+                env = @{}
+            }
+        }
+    } | ConvertTo-Json -Depth 5
     foreach ($claudeConfigPath in $claudePaths) {
         $claudeDir = Split-Path $claudeConfigPath
         if (-not (Test-Path $claudeDir)) { New-Item -ItemType Directory -Path $claudeDir -Force | Out-Null }
@@ -223,7 +241,7 @@ if (-not $claudeDone) {
             } catch {
                 $stamp = (Get-Date).ToString("yyyyMMdd-HHmmss")
                 Copy-Item $claudeConfigPath "$claudeConfigPath.broken-$stamp" -Force -ErrorAction SilentlyContinue
-                Write-Host "    [WARN] Old config was corrupt — quarantined, writing clean one." -ForegroundColor Yellow
+                Write-Host "    [WARN] Old config was corrupt - quarantined, writing clean one." -ForegroundColor Yellow
                 Write-Utf8NoBom $claudeConfigPath $newConfig
                 Write-Host "    [OK] Wrote new configuration." -ForegroundColor Green
             }
@@ -235,8 +253,7 @@ if (-not $claudeDone) {
         try {
             $v = [System.IO.File]::ReadAllText($claudeConfigPath) | ConvertFrom-Json
             $vc = $v.mcpServers.'BIM-Bot'.command; $va = $v.mcpServers.'BIM-Bot'.args[0]
-            if ((Test-Path $vc) -and (Test-Path $va)) { Write-Host "    [OK] Verified: $vc -> $va" -ForegroundColor Green }
-            else { Write-Host "    [FAIL] Entry written but paths missing: '$vc' / '$va'" -ForegroundColor Red }
+            if ((Test-Path $vc) -and (Test-Path $va)) { Write-Host "    [OK] Verified: $vc -> $va" -ForegroundColor Green } else { Write-Host "    [FAIL] Entry written but paths missing: '$vc' / '$va'" -ForegroundColor Red }
         } catch { Write-Host "    [FAIL] Written config does not parse: $($_.Exception.Message)" -ForegroundColor Red }
     }
 }
@@ -250,16 +267,14 @@ if (Test-Path $geminiDir) {
     
     $serverJsEscapedGem = $serverJs.Replace('\', '\\')
     $nodeCmdEscapedGem = $nodeCmd.Replace('\', '\\')
-    $geminiNewConfig = @"
-{
-  "mcpServers": {
-    "BIM-Bot": {
-      "command": "$nodeCmdEscapedGem",
-      "args": ["$serverJsEscapedGem"]
-    }
-  }
-}
-"@
+    $geminiNewConfig = @{
+        mcpServers = @{
+            "BIM-Bot" = @{
+                command = $nodeCmd
+                args = @($serverJs)
+            }
+        }
+    } | ConvertTo-Json -Depth 5
     
     if (Test-Path $geminiConfigPath) {
         $gRaw = Get-Content $geminiConfigPath -Raw
