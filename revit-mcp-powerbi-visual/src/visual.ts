@@ -83,6 +83,21 @@ export class Visual implements IVisual {
     private currentDataHash: string = "";
     private settings: VisualSettings = new VisualSettings();
 
+    // ── Cross-filter state ──
+    // Table dataViewMappings carry no per-row highlight payload, so inbound
+    // filtering is detected by comparing the current page's ElementId set
+    // against every ElementId seen since the last full (unfiltered) load.
+    private allElementIds: Set<number> = new Set();
+    private currentElementIds: Set<number> = new Set();
+    private currentSelections: { elementId: number; selectionId: ISelectionId }[] = [];
+    private selectedElementIds: Set<number> = new Set();
+    private loadingSegments: boolean = false;
+
+    // ── Interaction state ──
+    private downPos: { x: number; y: number } = { x: 0, y: 0 };
+    private lastInteraction: number = Date.now();
+    private disposed: boolean = false;
+
     // ── UI elements ──
     private container: HTMLDivElement;
     private hud: HTMLDivElement;
@@ -127,6 +142,11 @@ export class Visual implements IVisual {
 
         // Initialize Three.js
         this.initThreeJS();
+
+        // Fired when the selection changes in another visual (or is cleared).
+        this.selectionManager.registerOnSelectCallback((ids) => {
+            this.onExternalSelection(ids || []);
+        });
 
         // Mouse/touch event handlers for orbit control
         this.initOrbitControls();
@@ -179,7 +199,14 @@ export class Visual implements IVisual {
 
     private startRenderLoop(): void {
         const animate = () => {
+            if (this.disposed) return;
             this.animationId = requestAnimationFrame(animate);
+            // Idle auto-rotate (pauses for 4s after any interaction)
+            if (this.settings?.interaction?.autoRotate &&
+                Date.now() - this.lastInteraction > 4000) {
+                const speed = this.settings.interaction.autoRotateSpeed ?? 0.5;
+                this.spherical.theta += (speed * Math.PI) / 360;
+            }
             this.updateCameraFromSpherical();
             this.renderer.render(this.scene, this.camera);
         };
@@ -190,68 +217,86 @@ export class Visual implements IVisual {
     //  Manual Orbit Controls
     // ═══════════════════════════════════════════
 
+    // Bound event handlers (kept for destroy() cleanup)
+    private onMouseDown = (e: MouseEvent): void => {
+        if (!this.settings?.interaction?.enableOrbit && !this.settings?.interaction?.enableSelection) return;
+        this.isMouseDown = true;
+        this.mouseButton = e.button;
+        this.prevMouse = { x: e.clientX, y: e.clientY };
+        this.downPos = { x: e.clientX, y: e.clientY };
+        this.lastInteraction = Date.now();
+        e.preventDefault();
+    };
+
+    private onMouseMove = (e: MouseEvent): void => {
+        if (!this.isMouseDown) {
+            // Hover tooltip
+            this.handleHover(e);
+            return;
+        }
+
+        const dx = e.clientX - this.prevMouse.x;
+        const dy = e.clientY - this.prevMouse.y;
+        this.prevMouse = { x: e.clientX, y: e.clientY };
+        this.lastInteraction = Date.now();
+
+        if (!this.settings?.interaction?.enableOrbit) return;
+
+        if (this.mouseButton === 0) {
+            // Left button → orbit (rotate)
+            this.spherical.theta -= dx * 0.005;
+            this.spherical.phi -= dy * 0.005;
+            // Clamp phi to avoid flipping
+            this.spherical.phi = Math.max(0.05, Math.min(Math.PI - 0.05, this.spherical.phi));
+        } else if (this.mouseButton === 2 || this.mouseButton === 1) {
+            // Right/middle button → pan
+            const panSpeed = this.spherical.radius * 0.002;
+            const right = new THREE.Vector3();
+            const up = new THREE.Vector3(0, 1, 0);
+            right.crossVectors(
+                this.camera.getWorldDirection(new THREE.Vector3()),
+                up
+            ).normalize();
+            this.orbitTarget.addScaledVector(right, -dx * panSpeed);
+            this.orbitTarget.y += dy * panSpeed;
+        }
+    };
+
+    private onMouseUp = (e: MouseEvent): void => {
+        if (this.isMouseDown && this.mouseButton === 0) {
+            // Click = press and release within a few pixels (compare
+            // against the mousedown position, not the last mousemove).
+            const dx = Math.abs(e.clientX - this.downPos.x);
+            const dy = Math.abs(e.clientY - this.downPos.y);
+            if (dx < 5 && dy < 5) {
+                this.handleClick(e);
+            }
+        }
+        this.isMouseDown = false;
+        this.mouseButton = -1;
+    };
+
+    private onWheel = (e: WheelEvent): void => {
+        if (!this.settings?.interaction?.enableOrbit) return;
+        e.preventDefault();
+        this.lastInteraction = Date.now();
+        const zoomFactor = e.deltaY > 0 ? 1.1 : 0.9;
+        this.spherical.radius *= zoomFactor;
+        this.spherical.radius = Math.max(0.5, Math.min(5000, this.spherical.radius));
+    };
+
+    private onContextMenu = (e: Event): void => {
+        e.preventDefault();
+    };
+
     private initOrbitControls(): void {
         const canvas = this.renderer.domElement;
 
-        canvas.addEventListener("mousedown", (e: MouseEvent) => {
-            this.isMouseDown = true;
-            this.mouseButton = e.button;
-            this.prevMouse = { x: e.clientX, y: e.clientY };
-            e.preventDefault();
-        });
-
-        canvas.addEventListener("mousemove", (e: MouseEvent) => {
-            if (!this.isMouseDown) {
-                // Hover tooltip
-                this.handleHover(e);
-                return;
-            }
-
-            const dx = e.clientX - this.prevMouse.x;
-            const dy = e.clientY - this.prevMouse.y;
-            this.prevMouse = { x: e.clientX, y: e.clientY };
-
-            if (this.mouseButton === 0) {
-                // Left button → orbit (rotate)
-                this.spherical.theta -= dx * 0.005;
-                this.spherical.phi -= dy * 0.005;
-                // Clamp phi to avoid flipping
-                this.spherical.phi = Math.max(0.05, Math.min(Math.PI - 0.05, this.spherical.phi));
-            } else if (this.mouseButton === 2 || this.mouseButton === 1) {
-                // Right/middle button → pan
-                const panSpeed = this.spherical.radius * 0.002;
-                const right = new THREE.Vector3();
-                const up = new THREE.Vector3(0, 1, 0);
-                right.crossVectors(
-                    this.camera.getWorldDirection(new THREE.Vector3()),
-                    up
-                ).normalize();
-                this.orbitTarget.addScaledVector(right, -dx * panSpeed);
-                this.orbitTarget.y += dy * panSpeed;
-            }
-        });
-
-        canvas.addEventListener("mouseup", (e: MouseEvent) => {
-            if (this.isMouseDown && this.mouseButton === 0) {
-                // Check if it was a click (not a drag)
-                const dx = Math.abs(e.clientX - this.prevMouse.x);
-                const dy = Math.abs(e.clientY - this.prevMouse.y);
-                if (dx < 3 && dy < 3) {
-                    this.handleClick(e);
-                }
-            }
-            this.isMouseDown = false;
-            this.mouseButton = -1;
-        });
-
-        canvas.addEventListener("wheel", (e: WheelEvent) => {
-            e.preventDefault();
-            const zoomFactor = e.deltaY > 0 ? 1.1 : 0.9;
-            this.spherical.radius *= zoomFactor;
-            this.spherical.radius = Math.max(0.5, Math.min(5000, this.spherical.radius));
-        }, { passive: false });
-
-        canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+        canvas.addEventListener("mousedown", this.onMouseDown);
+        canvas.addEventListener("mousemove", this.onMouseMove);
+        canvas.addEventListener("mouseup", this.onMouseUp);
+        canvas.addEventListener("wheel", this.onWheel, { passive: false });
+        canvas.addEventListener("contextmenu", this.onContextMenu);
     }
 
     private updateCameraFromSpherical(): void {
@@ -270,16 +315,12 @@ export class Visual implements IVisual {
 
     public update(options: VisualUpdateOptions): void {
         const dataView = options.dataViews?.[0];
-        if (!dataView?.table?.rows?.length) {
-            this.showNoData(true);
-            return;
-        }
-        this.showNoData(false);
 
-        // Large models arrive in segments — keep fetching until Power BI
-        // has delivered every row (rows accumulate in the same dataView).
-        if (dataView.metadata.segment) {
-            this.host.fetchMoreData(true);
+        // Parse formatting-pane settings first (drives background, ghosting,
+        // orbit/selection gating even when there is no data).
+        if (dataView) {
+            this.settings = VisualSettings.parse<VisualSettings>(dataView);
+            this.applyBackground();
         }
 
         // Resize renderer to fit container
@@ -289,18 +330,54 @@ export class Visual implements IVisual {
         this.camera.aspect = width / height;
         this.camera.updateProjectionMatrix();
 
+        if (!dataView?.table?.rows?.length) {
+            // Empty page: initial load with no data → show the hint.
+            // Filtered-to-empty (we already have meshes) → keep the canvas
+            // and ghost everything so the user sees the filter effect.
+            if (this.meshes.size === 0) {
+                this.showNoData(true);
+            } else {
+                this.showNoData(false);
+                this.currentElementIds = new Set();
+                this.applyCrossFilter();
+                this.updateHUD([]);
+            }
+            return;
+        }
+        this.showNoData(false);
+
+        // Large models arrive in segments — keep fetching until Power BI
+        // has delivered every row (rows accumulate in the same dataView).
+        this.loadingSegments = !!dataView.metadata.segment;
+        if (this.loadingSegments) {
+            this.host.fetchMoreData(true);
+        }
+
         // Extract data from DataView
         const elements = this.extractData(dataView);
 
-        // Check if data changed → rebuild scene
+        // Track the current page vs everything seen (inbound filtering).
+        // A filtered page is a subset of the known ids; a disjoint page
+        // means a different model; overlap with new ids means more segments.
+        this.currentElementIds = new Set(elements.map((e) => e.elementId));
+        this.currentSelections = elements.map((e) => ({
+            elementId: e.elementId,
+            selectionId: e.selectionId,
+        }));
+        this.mergeKnownIds(this.currentElementIds);
+
+        // Check if data changed → rebuild scene.
         const newHash = this.computeDataHash(elements);
         if (newHash !== this.currentDataHash) {
             this.currentDataHash = newHash;
             this.rebuildScene(elements);
+        } else {
+            // Same data, settings may have changed (e.g. wireframe toggle).
+            this.applyWireframe();
         }
 
-        // Apply highlights (cross-filter from other visuals)
-        this.applyHighlights(dataView, elements);
+        // Apply inbound cross-filter / selection state from other visuals
+        this.applyCrossFilter();
 
         // Update HUD
         this.updateHUD(elements);
@@ -423,6 +500,7 @@ export class Visual implements IVisual {
                 side: THREE.DoubleSide,
                 flatShading: false,
                 shininess: 30,
+                wireframe: !!this.settings?.rendering?.showWireframe,
             });
 
             const mesh = new THREE.Mesh(geometry, material);
@@ -455,51 +533,95 @@ export class Visual implements IVisual {
     // ═══════════════════════════════════════════
 
     /**
-     * Inbound cross-filtering: When another visual highlights data,
-     * ghost (fade) non-highlighted elements.
+     * Inbound cross-filtering for table dataViewMappings.
+     *
+     * Table mappings carry no per-row highlight payload (highlights only
+     * exist on categorical value columns), so a filter from another visual
+     * shows up as a *smaller row set*: the current page is a strict subset
+     * of everything loaded so far. While segments are still streaming we
+     * never ghost (the page is incomplete by definition).
+     *
+     * An explicit multi-visual selection (tracked via the selection
+     * callback) takes precedence over the row-subset heuristic.
      */
-    private applyHighlights(dataView: DataView, elements: ElementData[]): void {
-        const table = dataView.table!;
-        const hasHighlights = table.columns?.some(
-            (col) => (col as any).highlights != null
-        ) ?? false;
+    private applyCrossFilter(): void {
+        if (this.selectedElementIds.size > 0) {
+            this.ghostExcept(this.selectedElementIds);
+            return;
+        }
 
-        // If no highlights, restore all meshes
-        if (!hasHighlights) {
+        if (this.loadingSegments) {
             this.restoreAllMeshes();
             return;
         }
 
-        // Build set of highlighted element IDs
-        const highlightedIds = new Set<number>();
-        const colIdx = this.findElementIdColumn(table);
+        if (this.currentElementIds.size > 0 &&
+            this.allElementIds.size > this.currentElementIds.size) {
+            this.ghostExcept(this.currentElementIds);
+            return;
+        }
 
-        if (colIdx >= 0 && table.rows) {
-            for (let r = 0; r < table.rows!.length; r++) {
-                const elementId = Number(table.rows![r][colIdx]);
-                if (elementId) highlightedIds.add(elementId);
+        this.restoreAllMeshes();
+    }
+
+    /**
+     * Called by Power BI when the selection changes in another visual.
+     * The callback delivers opaque selectionIds, so they are resolved back
+     * to ElementIds through the current page's (selectionId, elementId)
+     * pairs. Stale ids (from a previous page layout) fall back to the
+     * row-subset heuristic in applyCrossFilter().
+     */
+    private onExternalSelection(ids: powerbi.extensibility.ISelectionId[]): void {
+        const resolved = new Set<number>();
+        for (const id of ids) {
+            for (const entry of this.currentSelections) {
+                if (this.selectionIncludes(id, entry.selectionId)) {
+                    resolved.add(entry.elementId);
+                    break;
+                }
             }
         }
-
-        // If we couldn't determine highlights specifically, try basic approach
-        if (highlightedIds.size === 0) {
-            // Fallback: highlight based on selection manager
-            this.restoreAllMeshes();
-            return;
+        this.selectedElementIds = resolved;
+        // A cleared selection also resets the "everything seen" baseline so
+        // a subsequent filter compares against the full model again.
+        if (ids.length === 0 && this.currentElementIds.size > 0) {
+            for (const id of this.currentElementIds) {
+                this.allElementIds.add(id);
+            }
         }
+        this.applyCrossFilter();
+    }
 
-        const ghostOpacity = this.settings?.rendering?.ghostOpacity ?? 0.08;
+    private selectionIncludes(
+        a: powerbi.extensibility.ISelectionId,
+        b: ISelectionId
+    ): boolean {
+        try {
+            const includes = (a as unknown as { includes?: (o: unknown) => boolean }).includes;
+            if (typeof includes === "function") {
+                return includes.call(a, b) || a === b;
+            }
+        } catch {
+            // fall through to identity comparison
+        }
+        return a === b;
+    }
 
+    private ghostExcept(keepIds: Set<number>): void {
+        const hide = !!this.settings?.rendering?.hideUnselected;
+        const ghostOpacity = this.clampedGhostOpacity();
         for (const mesh of this.meshes.values()) {
             const mat = mesh.material as THREE.MeshPhongMaterial;
-            const isHighlighted = highlightedIds.has(mesh.userData.elementId);
-
-            if (isHighlighted) {
+            if (keepIds.has(mesh.userData.elementId)) {
+                mesh.visible = true;
                 mat.color.copy(mesh.userData.originalColor);
                 mat.opacity = 1.0;
                 mat.transparent = false;
                 mat.depthWrite = true;
+            } else if (hide) {
+                mesh.visible = false;
             } else {
+                mesh.visible = true;
                 mat.opacity = ghostOpacity;
                 mat.transparent = true;
                 mat.depthWrite = false;
@@ -507,9 +629,40 @@ export class Visual implements IVisual {
         }
     }
 
+    private mergeKnownIds(current: Set<number>): void {
+        if (this.allElementIds.size === 0) {
+            this.allElementIds = new Set(current);
+            return;
+        }
+        let overlap = false;
+        let hasNew = false;
+        for (const id of current) {
+            if (this.allElementIds.has(id)) overlap = true;
+            else hasNew = true;
+        }
+        if (!overlap && current.size > 0) {
+            // Disjoint page → different model. Reset baselines.
+            this.allElementIds = new Set(current);
+            this.selectedElementIds = new Set();
+        } else if (hasNew) {
+            // More segments arrived → accumulate.
+            for (const id of current) {
+                this.allElementIds.add(id);
+            }
+        }
+        // Pure subset → cross-filter; baselines stay untouched.
+    }
+
+    private clampedGhostOpacity(): number {
+        const v = this.settings?.rendering?.ghostOpacity ?? 0.08;
+        if (typeof v !== "number" || isNaN(v)) return 0.08;
+        return Math.max(0, Math.min(1, v));
+    }
+
     private restoreAllMeshes(): void {
         for (const mesh of this.meshes.values()) {
             const mat = mesh.material as THREE.MeshPhongMaterial;
+            mesh.visible = true;
             mat.color.copy(mesh.userData.originalColor);
             mat.opacity = 1.0;
             mat.transparent = false;
@@ -517,11 +670,18 @@ export class Visual implements IVisual {
         }
     }
 
-    private findElementIdColumn(table: powerbi.DataViewTable): number {
-        for (let i = 0; i < table.columns.length; i++) {
-            if (table.columns[i].roles?.["elementId"]) return i;
+    // ── Settings-driven appearance ──
+
+    private applyBackground(): void {
+        const color = this.settings?.rendering?.backgroundColor || "#1a1a2e";
+        this.scene.background = new THREE.Color(color);
+    }
+
+    private applyWireframe(): void {
+        const wireframe = !!this.settings?.rendering?.showWireframe;
+        for (const mesh of this.meshes.values()) {
+            (mesh.material as THREE.MeshPhongMaterial).wireframe = wireframe;
         }
-        return -1;
     }
 
     /**
@@ -529,49 +689,59 @@ export class Visual implements IVisual {
      * tell Power BI to filter other visuals.
      */
     private handleClick(event: MouseEvent): void {
+        if (!this.settings?.interaction?.enableSelection) return;
+
         const rect = this.renderer.domElement.getBoundingClientRect();
         this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
         this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
         this.raycaster.setFromCamera(this.mouse, this.camera);
         const intersects = this.raycaster.intersectObjects(
-            Array.from(this.meshes.values()),
+            this.visibleMeshes(),
             false
         );
 
         if (intersects.length > 0) {
             const mesh = intersects[0].object as RevitMesh;
             const selectionId = mesh.userData.selectionId;
+            const multi = event.ctrlKey || event.metaKey;
 
-            // Ctrl+click for multi-select
-            this.selectionManager.select(selectionId, event.ctrlKey || event.metaKey);
+            if (multi) {
+                if (this.selectedElementIds.has(mesh.userData.elementId)) {
+                    this.selectedElementIds.delete(mesh.userData.elementId);
+                } else {
+                    this.selectedElementIds.add(mesh.userData.elementId);
+                }
+            } else {
+                this.selectedElementIds = new Set([mesh.userData.elementId]);
+            }
 
-            // Visual feedback — highlight selected
-            this.highlightSelected(mesh);
+            this.selectionManager.select(selectionId, multi);
+
+            // Optimistic feedback for single select; multi-select and
+            // external changes are reconciled via onExternalSelection.
+            if (!multi) {
+                this.highlightSelected(mesh);
+            } else {
+                this.ghostExcept(this.selectedElementIds);
+            }
         } else {
             // Click on empty space → clear selection
+            this.selectedElementIds = new Set();
             this.selectionManager.clear();
-            this.restoreAllMeshes();
+            this.applyCrossFilter();
         }
     }
 
     private highlightSelected(selectedMesh: RevitMesh): void {
-        const ghostOpacity = this.settings?.rendering?.ghostOpacity ?? 0.08;
+        this.ghostExcept(new Set([selectedMesh.userData.elementId]));
+        const mat = selectedMesh.material as THREE.MeshPhongMaterial;
+        mat.color.set(0x00aaff); // Highlight blue
+    }
 
-        for (const mesh of this.meshes.values()) {
-            const mat = mesh.material as THREE.MeshPhongMaterial;
-            if (mesh === selectedMesh) {
-                mat.color.set(0x00aaff); // Highlight blue
-                mat.opacity = 1.0;
-                mat.transparent = false;
-                mat.depthWrite = true;
-            } else {
-                mat.color.copy(mesh.userData.originalColor);
-                mat.opacity = ghostOpacity;
-                mat.transparent = true;
-                mat.depthWrite = false;
-            }
-        }
+    /** Meshes currently shown (hidden ones never intercept clicks/hovers). */
+    private visibleMeshes(): RevitMesh[] {
+        return Array.from(this.meshes.values()).filter((m) => m.visible);
     }
 
     // ═══════════════════════════════════════════
@@ -585,7 +755,7 @@ export class Visual implements IVisual {
 
         this.raycaster.setFromCamera(this.mouse, this.camera);
         const intersects = this.raycaster.intersectObjects(
-            Array.from(this.meshes.values()),
+            this.visibleMeshes(),
             false
         );
 
@@ -630,6 +800,9 @@ export class Visual implements IVisual {
             `🏷️ ${categories.size} categories`,
             `🔺 ${this.formatNumber(totalTris)} triangles`,
         ];
+        if (this.meshes.size > 8000) {
+            stats.push(`⚠️ large model — filter via slicers for smooth orbit`);
+        }
         for (const text of stats) {
             const span = document.createElement("span");
             span.className = "stat";
@@ -657,13 +830,27 @@ export class Visual implements IVisual {
     }
 
     public destroy(): void {
+        this.disposed = true;
         if (this.animationId !== null) {
             cancelAnimationFrame(this.animationId);
+            this.animationId = null;
+        }
+        const canvas = this.renderer?.domElement;
+        if (canvas) {
+            canvas.removeEventListener("mousedown", this.onMouseDown);
+            canvas.removeEventListener("mousemove", this.onMouseMove);
+            canvas.removeEventListener("mouseup", this.onMouseUp);
+            canvas.removeEventListener("wheel", this.onWheel);
+            canvas.removeEventListener("contextmenu", this.onContextMenu);
         }
         for (const mesh of this.meshes.values()) {
             mesh.geometry.dispose();
             (mesh.material as THREE.Material).dispose();
         }
-        this.renderer.dispose();
+        this.meshes.clear();
+        this.renderer?.dispose();
+        if (this.container.parentElement === this.target) {
+            this.target.removeChild(this.container);
+        }
     }
 }

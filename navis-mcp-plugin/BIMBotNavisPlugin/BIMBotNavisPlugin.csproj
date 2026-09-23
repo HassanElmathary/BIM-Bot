@@ -1,0 +1,59 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    BIM-Bot Navisworks Manage plugin — ADDITIVE-ONLY, Revit plugin untouched.
+    Single net48 build: Navisworks Manage 2020-2025+ all run .NET Framework,
+    and compiling against the lowest API (2020) loads forward.
+    Build: dotnet build -c Release (requires Navisworks Manage API on machine,
+    or set $(NavisworksSDK) to the folder containing Autodesk.Navisworks.Api.dll).
+  -->
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <RootNamespace>BIMBotNavisPlugin</RootNamespace>
+    <AssemblyName>BIMBotNavisPlugin</AssemblyName>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <UseWPF>true</UseWPF>
+    <Version>2.6.0</Version>
+    <Authors>BIM-Bot</Authors>
+    <Description>BIM-Bot Plugin for Autodesk Navisworks Manage - AI-powered coordination (parallel to Revit plugin)</Description>
+    <CodePage>65001</CodePage>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <!-- Override on build machine without installed Navisworks:
+         dotnet build -p:NavisworksSDK="C:\SDK\Navis2020" -->
+    <NavisworksSDK Condition="'$(NavisworksSDK)' == ''">C:\Program Files\Autodesk\Navisworks Manage 2025</NavisworksSDK>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- ExcludeAssets=runtime equivalent: CopyLocal=false — Navisworks provides these at load time -->
+    <Reference Include="Autodesk.Navisworks.Api">
+      <HintPath>$(NavisworksSDK)\Autodesk.Navisworks.Api.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Autodesk.Navisworks.Automation">
+      <HintPath>$(NavisworksSDK)\Autodesk.Navisworks.Automation.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Autodesk.Navisworks.Controls">
+      <HintPath>$(NavisworksSDK)\Autodesk.Navisworks.Controls.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+  </ItemGroup>
+
+  <ItemGroup Condition="$(TargetFramework.StartsWith('net4'))">
+    <Reference Include="PresentationCore" />
+    <Reference Include="PresentationFramework" />
+    <Reference Include="WindowsBase" />
+    <Reference Include="System.Xaml" />
+    <Reference Include="System.Net.Http" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Drawing" />
+  </ItemGroup>
+
+</Project>

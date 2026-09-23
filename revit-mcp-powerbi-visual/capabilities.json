@@ -58,6 +58,52 @@
             }
         }
     ],
+    "objects": {
+        "rendering": {
+            "displayName": "Rendering",
+            "properties": {
+                "backgroundColor": {
+                    "displayName": "Background color",
+                    "type": { "fill": { "solid": { "color": true } } }
+                },
+                "ghostOpacity": {
+                    "displayName": "Dimmed opacity",
+                    "description": "Opacity of non-selected elements when cross-filtering (0 - 1)",
+                    "type": { "numeric": true }
+                },
+                "hideUnselected": {
+                    "displayName": "Hide filtered-out elements",
+                    "description": "On: hide non-selected elements completely. Off: dim them.",
+                    "type": { "bool": true }
+                },
+                "showWireframe": {
+                    "displayName": "Wireframe",
+                    "type": { "bool": true }
+                }
+            }
+        },
+        "interaction": {
+            "displayName": "Interaction",
+            "properties": {
+                "enableSelection": {
+                    "displayName": "Click to filter",
+                    "type": { "bool": true }
+                },
+                "enableOrbit": {
+                    "displayName": "Orbit controls",
+                    "type": { "bool": true }
+                },
+                "autoRotate": {
+                    "displayName": "Auto-rotate when idle",
+                    "type": { "bool": true }
+                },
+                "autoRotateSpeed": {
+                    "displayName": "Auto-rotate speed",
+                    "type": { "numeric": true }
+                }
+            }
+        }
+    },
     "privileges": [
         {
             "name": "WebAccess",

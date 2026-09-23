@@ -196,8 +196,8 @@ namespace BIMBotPlugin.UI
             // ====== Bottom buttons ======
             var buttonPanel = new StackPanel { Margin = new Thickness(28, 4, 28, 24) };
 
-            // Download button (primary)
-            _downloadBtn = CreateButton("⬇  Download & Update", true);
+            // Download button (primary) — per-user install, no admin password needed
+            _downloadBtn = CreateButton("⬇  Download & Update (no admin needed)", true);
             _downloadBtn.Click += OnDownloadClicked;
             buttonPanel.Children.Add(_downloadBtn);
 
@@ -235,6 +235,19 @@ namespace BIMBotPlugin.UI
                 try { Process.Start(_updateInfo.ReleaseUrl); } catch { }
             };
             buttonPanel.Children.Add(linkText);
+
+            // Non-admin note — reassures standard users they won't hit a UAC prompt
+            var adminNote = new TextBlock
+            {
+                Text = "No admin password needed — installs for the current user.\nPlease close Revit when the installer asks.",
+                FontSize = 11,
+                Foreground = DarkTheme.FgDim,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                TextAlignment = TextAlignment.Center,
+                Margin = new Thickness(0, 8, 0, 0),
+                TextWrapping = TextWrapping.Wrap
+            };
+            buttonPanel.Children.Add(adminNote);
 
             mainStack.Children.Add(buttonPanel);
 
@@ -311,12 +324,12 @@ namespace BIMBotPlugin.UI
                     var checker = new UpdateChecker();
                     var filePath = await checker.DownloadUpdateAsync(_updateInfo.DownloadUrl, _updateInfo.AssetFileName);
 
-                    _statusText.Text = "✅ Download complete! Opening installer...";
+                    _statusText.Text = "✅ Download complete! Opening installer (no admin needed)...";
                     _downloadBtn.Content = "✅  Downloaded!";
 
                     // Launch the installer / open the downloaded file
                     await Task.Delay(800);
-                    Process.Start(filePath);
+                    LaunchInstallerNonAdmin(filePath);
                     Close();
                 }
                 else
@@ -334,6 +347,46 @@ namespace BIMBotPlugin.UI
                 _statusText.Text = $"❌ Download failed: {ex.Message}";
                 _downloadBtn.Content = "⬇  Retry Download";
                 _downloadBtn.IsEnabled = true;
+            }
+        }
+
+        /// <summary>
+        /// Launches the downloaded Inno Setup installer in per-user mode so a
+        /// standard Windows account never hits a UAC admin-password prompt.
+        /// /CURRENTUSER forces the non-admin install mode even for installers
+        /// built before the default was changed to per-user.
+        /// </summary>
+        private void LaunchInstallerNonAdmin(string filePath)
+        {
+            try
+            {
+                var psi = new ProcessStartInfo
+                {
+                    FileName = filePath,
+                    Arguments = "/CURRENTUSER",
+                    UseShellExecute = true
+                };
+                Process.Start(psi);
+            }
+            catch (System.ComponentModel.Win32Exception win32ex)
+            {
+                // 1223 = "The operation was canceled by the user" (UAC dismissed).
+                // This should no longer happen in /CURRENTUSER mode, but if an
+                // old machine-wide install forces elevation, explain instead of
+                // leaving the user staring at a password box with no options.
+                Logger.LogError("Update installer launch failed", win32ex);
+                if (_statusText != null)
+                {
+                    _statusText.Foreground = DarkTheme.FgWarning;
+                    _statusText.Text = win32ex.NativeErrorCode == 1223
+                        ? "❌ Install cancelled. Re-run the update and choose \"Install for current user only\" (no admin needed)."
+                        : $"❌ Could not start installer: {win32ex.Message}";
+                }
+                if (_downloadBtn != null)
+                {
+                    _downloadBtn.Content = "⬇  Retry Download";
+                    _downloadBtn.IsEnabled = true;
+                }
             }
         }
 

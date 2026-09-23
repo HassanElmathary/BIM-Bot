@@ -156,7 +156,8 @@
         "fromTable": "Geometry",
         "fromColumn": "ElementId",
         "toTable": "Elements",
-        "toColumn": "ElementId"
+        "toColumn": "ElementId",
+        "crossFilteringBehavior": "bothDirections"
       },
       {
         "name": "parameters-to-elements",
@@ -171,7 +172,8 @@
         "fromTable": "Elements",
         "fromColumn": "Category",
         "toTable": "CategoryColors",
-        "toColumn": "Category"
+        "toColumn": "Category",
+        "crossFilteringBehavior": "bothDirections"
       }
     ],
     "annotations": [

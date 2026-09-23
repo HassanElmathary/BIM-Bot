@@ -66,6 +66,13 @@ namespace BIMBotPlugin.PowerBI
     {
         private const double FeetToMeters = 0.3048;
 
+        /// <summary>
+        /// Max parameters stored per element. Revit elements can expose
+        /// hundreds of parameters; beyond this the Parameters.csv dwarfs the
+        /// geometry and slows the Power BI refresh to a crawl.
+        /// </summary>
+        public const int MaxParametersPerElement = 200;
+
         private readonly Document _doc;
         private int _currentElementId = -1;
         private MeshData _currentMesh;
@@ -246,13 +253,18 @@ namespace BIMBotPlugin.PowerBI
                     Mark = GetParameterValue(elem, BuiltInParameter.ALL_MODEL_MARK)
                 };
 
-                // Collect instance parameters
+                // Collect instance parameters (capped — see MaxParametersPerElement).
+                // Priority: identity data first (Mark, Level, Type), then the rest.
                 foreach (Parameter param in elem.Parameters)
                 {
+                    if (data.Parameters.Count >= MaxParametersPerElement) break;
                     if (param.HasValue && param.Definition != null)
                     {
                         var val = param.AsValueString() ?? param.AsString();
-                        if (!string.IsNullOrWhiteSpace(val))
+                        // Skip empty values and oversized blobs (e.g. embedded
+                        // classification data) that would bloat Parameters.csv.
+                        if (string.IsNullOrWhiteSpace(val) || val.Length > 500) continue;
+                        if (!data.Parameters.ContainsKey(param.Definition.Name))
                         {
                             data.Parameters[param.Definition.Name] = val;
                         }

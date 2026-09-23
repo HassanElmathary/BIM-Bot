@@ -214,3 +214,28 @@ Also add the new `validate_shared_coordinates` tool:
 - [x] What's the installer filename for download? *(BIMBot-Setup-2.5.0.exe)*
 - [x] What's the Claude config key? *(`"BIM-Bot"` — capital casing)*
 - [x] What install methods to document? *(PowerShell one-liner, NPX, EXE Installer)*
+
+---
+
+# Website Update Brief — v2.6.0 (Navisworks + ChatGPT)
+**Date:** September 23, 2026
+
+## Changes Required
+
+### 1. Hero stats → `230 MCP Tools | 20 Categories | 8 Revit Versions + Navisworks`
+Was `209 MCP Tools | 19 Categories | 8 Revit Versions`. New total = 209 Revit + 21 Navisworks (`navis_*`) tools.
+
+### 2. Download button → **Download BIM-Bot v2.6.0** — `BIMBot-Setup-2.6.0.exe`
+Link: `https://github.com/HassanElmathary/BIM-Bot/releases/latest` (unchanged).
+System requirements: add `Navisworks Manage 2020+ (optional, for coordination tools)`.
+
+### 3. NEW: Navisworks feature blurb (Features section)
+> **Navisworks Manage support** — 21 new `navis_*` tools: model search, saved viewpoints, selection sets, Clash Detective (run tests, triage results, set status, export HTML/XML reports), append NWC/NWD/IFC, publish NWD, color/visibility overrides. Federated workflow: Revit `export_to_nwc` → `navis_append_file` → clash → AI triage, all from Claude or ChatGPT.
+
+### 4. NEW: ChatGPT MCP section (after Claude config section)
+Paste `revit-mcp-server/mcp-config.chatgpt.json` (key `"BIM-Bot-Navis"`). Note: same `build/index.js` serves both Revit (port 8080) and Navisworks (port 8091).
+
+### 5. Footer → `© 2026 BIM-Bot — Built by Hassan Elmathary`
+
+### 6. Publish `version.json` to `https://elmthary.space/version.json`
+New content (copy from repo root `version.json`): version `2.6.0`, downloadUrl `.../releases/download/v2.6.0/BIMBot-Setup-2.6.0.exe`. The in-Revit update checker reads this URL first, GitHub raw second — both must serve 2.6.0 or users won't be notified.

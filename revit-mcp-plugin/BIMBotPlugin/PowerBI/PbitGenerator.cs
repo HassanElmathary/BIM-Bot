@@ -44,6 +44,11 @@ namespace BIMBotPlugin.PowerBI
         /// </summary>
         public void Generate(string pbitPath, string dataFolder, string projectName)
         {
+            if (dataFolder.IndexOf('"') >= 0)
+                throw new InvalidOperationException(
+                    "The Power BI data folder path contains a double-quote character, which cannot " +
+                    "be embedded in the .pbit M queries. Please choose an outputFolder without quotes.");
+
             var schema = LoadTemplate(SchemaResourceSuffix)
                 .Replace("{{MODEL_GUID}}", Guid.NewGuid().ToString())
                 .Replace("{{DATA_FOLDER}}", JsonEscape(dataFolder.TrimEnd('\\')));
@@ -71,6 +76,65 @@ namespace BIMBotPlugin.PowerBI
 
                 EmbedCustomVisual(zip);
             }
+
+            VerifyPackage(pbitPath);
+        }
+
+        /// <summary>
+        /// Export contents checklist, verified on every generated file so a
+        /// broken template can never produce a .pbit that opens without the
+        /// 3D dashboard. Required parts:
+        ///   - package skeleton: Version, Settings, Metadata, DiagramLayout,
+        ///     DataModelSchema, Report/Layout, [Content_Types].xml
+        ///   - the BIM-Bot 3D Viewer custom visual (at least the package
+        ///     manifest + compiled JS under Report/CustomVisuals/&lt;guid&gt;/)
+        /// </summary>
+        public static readonly string[] RequiredParts = new[]
+        {
+            "Version",
+            "Settings",
+            "Metadata",
+            "DiagramLayout",
+            "DataModelSchema",
+            "Report/Layout",
+            "[Content_Types].xml",
+        };
+
+        private void VerifyPackage(string pbitPath)
+        {
+            var missing = new System.Collections.Generic.List<string>();
+            int visualFiles = 0;
+
+            using (var stream = new FileStream(pbitPath, FileMode.Open, FileAccess.Read))
+            using (var zip = new ZipArchive(stream, ZipArchiveMode.Read))
+            {
+                var names = new System.Collections.Generic.HashSet<string>(
+                    System.Linq.Enumerable.Select(zip.Entries, e => e.FullName),
+                    StringComparer.OrdinalIgnoreCase);
+
+                foreach (var part in RequiredParts)
+                {
+                    if (!names.Contains(part))
+                        missing.Add(part);
+                }
+
+                foreach (var entry in zip.Entries)
+                {
+                    if (entry.FullName.StartsWith(
+                        $"Report/CustomVisuals/{VisualGuid}/",
+                        StringComparison.OrdinalIgnoreCase) &&
+                        !string.IsNullOrEmpty(entry.Name))
+                        visualFiles++;
+                }
+            }
+
+            if (visualFiles == 0)
+                missing.Add($"Report/CustomVisuals/{VisualGuid}/ (3D Viewer visual missing)");
+
+            if (missing.Count > 0)
+                throw new InvalidOperationException(
+                    "Generated .pbit failed verification — missing: " +
+                    string.Join(", ", missing));
         }
 
         // ═══════════════════════════════════════════════════

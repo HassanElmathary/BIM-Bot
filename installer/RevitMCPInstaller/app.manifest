@@ -4,8 +4,8 @@
   <trustInfo xmlns="urn:schemas-microsoft-com:asm.v2">
     <security>
       <requestedPrivileges xmlns="urn:schemas-microsoft-com:asm.v3">
-        <!-- Require Administrator privileges to install to Program Files & ProgramData -->
-        <requestedExecutionLevel level="requireAdministrator" uiAccess="false" />
+        <!-- Run as the invoking user so standard accounts can install/update without a UAC admin prompt -->
+        <requestedExecutionLevel level="asInvoker" uiAccess="false" />
       </requestedPrivileges>
     </security>
   </trustInfo>

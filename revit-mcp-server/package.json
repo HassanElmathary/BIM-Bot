@@ -1,7 +1,7 @@
 {
   "name": "bim-bot-server",
-  "version": "2.5.0",
-  "description": "MCP Server for Autodesk Revit — 209 AI-powered tools for BIM automation. Works with Claude Desktop, Cursor, Windsurf, and any MCP client. Supports Revit 2020–2027.",
+  "version": "2.6.0",
+  "description": "MCP Server for Autodesk Revit + Navisworks Manage — 230 AI-powered tools for BIM automation. Works with Claude Desktop, ChatGPT, Cursor, Windsurf, and any MCP client. Supports Revit 2020–2027 and Navisworks Manage.",
   "main": "build/index.js",
   "type": "module",
   "bin": {

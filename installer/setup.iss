@@ -1,6 +1,6 @@
 ; ============================================================
 ;  BIM-Bot — Professional Installer (Inno Setup 6)
-;  AI-Powered BIM Automation • 209 MCP Tools • Revit 2020–2027
+;  AI-Powered BIM Automation • 230 MCP Tools • Revit 2020–2027 + Navisworks Manage
 ;  One plugin build per Revit version (plugin\R2020 .. plugin\R2027), each
 ;  compiled against that year's API. Do not point two years at one folder —
 ;  the ElementId/ForgeTypeId APIs differ across the range.
@@ -8,7 +8,7 @@
 ; ============================================================
 
 #define MyAppName      "BIM-Bot"
-#define MyAppVersion   "2.5.0"
+#define MyAppVersion   "2.6.0"
 #define MyAppPublisher "Hassan Ahmed Elmathary"
 #define MyAppURL       "https://github.com/HassanElmathary/BIM-Bot"
 #define MyAppExeName   "Start MCP Server.bat"
@@ -44,9 +44,12 @@ WizardSizePercent=100
 DisableWelcomePage=no
 DisableDirPage=no
 DisableProgramGroupPage=yes
-; Requirements — admin by default, but allow per-user install (no admin
-; rights needed; addins then go to the user's %APPDATA% Revit folder)
-PrivilegesRequired=admin
+; Requirements — per-user by default so updates launched from inside Revit
+; never hit a UAC admin-password prompt. Addins then go to the user's
+; %APPDATA% Revit folder. Users WITH admin rights can still pick
+; "Install for all users" in the install-mode dialog when they want a
+; machine-wide install.
+PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog commandline
 ArchitecturesInstallIn64BitMode=x64
 ; Info shown in Add/Remove Programs
@@ -64,7 +67,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Messages]
 WelcomeLabel1=Welcome to {#MyAppName}
-WelcomeLabel2=This will install {#MyAppName} v{#MyAppVersion} on your computer.%n%n{#MyAppName} provides 209 AI-powered MCP tools for Autodesk Revit, enabling intelligent BIM automation through Claude Desktop, Cursor, Windsurf, and any MCP client.%n%nSupports Revit 2020–2027.
+WelcomeLabel2=This will install {#MyAppName} v{#MyAppVersion} on your computer.%n%n{#MyAppName} provides 230 AI-powered MCP tools for Autodesk Revit and Navisworks Manage, enabling intelligent BIM automation through Claude Desktop, ChatGPT, Cursor, Windsurf, and any MCP client.%n%nSupports Revit 2020–2027.
 FinishedHeadingLabel=Installation Complete!
 FinishedLabel={#MyAppName} has been successfully installed.%n%nNext Steps:%n  1. Open Revit → look for the "BIM-Bot" tab in the ribbon%n  2. Open Claude Desktop → BIM-Bot tools are ready to use
 

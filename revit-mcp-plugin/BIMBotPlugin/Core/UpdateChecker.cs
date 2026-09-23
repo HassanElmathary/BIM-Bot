@@ -227,6 +227,10 @@ namespace BIMBotPlugin.Core
                     }
                 }
 
+                // Remove the Mark-of-the-Web (Zone.Identifier) so Windows doesn't
+                // show SmartScreen warnings or block a standard user from running it.
+                TryUnblockFile(filePath);
+
                 Logger.Log($"Update downloaded to: {filePath}");
                 return filePath;
             }
@@ -234,6 +238,24 @@ namespace BIMBotPlugin.Core
             {
                 Logger.LogError("Update download failed", ex);
                 throw new Exception($"Failed to download update: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Deletes the Zone.Identifier alternate data stream left by browsers /
+        /// HttpClient downloads. Best-effort: failures are logged, never thrown,
+        /// because the installer runs fine even when still "blocked".
+        /// </summary>
+        private static void TryUnblockFile(string filePath)
+        {
+            try
+            {
+                // Deleting "<file>:Zone.Identifier" removes the Mark-of-the-Web.
+                File.Delete(filePath + ":Zone.Identifier");
+            }
+            catch (Exception ex)
+            {
+                Logger.Log($"Could not unblock downloaded file (non-fatal): {ex.Message}");
             }
         }
 

@@ -48,6 +48,11 @@ namespace BIMBotPlugin.UI
 
             BuildUI();
             Loaded += async (s, e) => await InitializeAsync();
+            Closed += (s, e) =>
+            {
+                try { _webView?.Dispose(); } catch { }
+                _webView = null;
+            };
         }
 
         private void BuildUI()
@@ -355,8 +360,27 @@ namespace BIMBotPlugin.UI
         {
             var urlText = GetUrlBoxText();
 
-            if (!string.IsNullOrWhiteSpace(urlText) && Uri.TryCreate(urlText, UriKind.Absolute, out var uri))
+            if (!string.IsNullOrWhiteSpace(urlText))
             {
+                if (!Uri.TryCreate(urlText, UriKind.Absolute, out var uri) ||
+                    (uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp))
+                {
+                    SetStatus("Enter a valid http(s) Power BI embed URL, or select a workspace/report.");
+                    return;
+                }
+
+                // Sovereign clouds use different hosts (e.g. app.powerbigov.us),
+                // so only warn instead of blocking unknown hosts.
+                var host = uri.Host.ToLowerInvariant();
+                if (!host.Contains("powerbi") && !host.Contains("analysis.windows.net"))
+                    SetStatus($"Warning: '{uri.Host}' is not a known Power BI host — attempting to load anyway...");
+
+                if (_webView?.CoreWebView2 == null)
+                {
+                    SetStatus("Browser is still initializing — please try again in a moment.");
+                    return;
+                }
+
                 SetStatus($"Loading: {uri.Host}...");
                 _webView.Source = uri;
                 return;

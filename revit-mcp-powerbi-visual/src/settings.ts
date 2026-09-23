@@ -17,11 +17,14 @@ export class RenderingSettings {
     /** Opacity of non-highlighted (ghosted) elements (0.0 - 1.0) */
     public ghostOpacity: number = 0.08;
 
+    /**
+     * When true, cross-filtered-out elements are hidden completely instead
+     * of dimmed. Toggle in Format → Rendering → "Hide filtered-out elements".
+     */
+    public hideUnselected: boolean = false;
+
     /** Show wireframe overlay */
     public showWireframe: boolean = false;
-
-    /** Enable ambient occlusion effect */
-    public enableAO: boolean = true;
 }
 
 export class InteractionSettings {

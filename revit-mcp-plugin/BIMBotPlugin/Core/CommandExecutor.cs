@@ -5947,6 +5947,12 @@ namespace BIMBotPlugin.Core
                 meshData = filteredMesh;
             }
 
+            if (elements.Count == 0 || meshData.Count == 0)
+                throw new InvalidOperationException(
+                    "No exportable 3D geometry found" +
+                    (categoryFilter != null ? $" for categories: {categoriesStr}." : $" in view '{exportView.Name}'.") +
+                    " Open a 3D view with visible model elements or use exportScope='allModel'.");
+
             // Step 3: Get category colors
             var categories = elements.Select(e => e.Category).Distinct();
             var colors = context.GetCategoryColors(categories);

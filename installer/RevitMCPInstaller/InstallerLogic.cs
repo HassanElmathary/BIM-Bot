@@ -14,8 +14,11 @@ namespace RevitMCPInstaller
         public string ServerSourceDir { get; set; } = "";
         public string NodeSourceDir { get; set; } = "";
 
+        // Per-user install dir — writable without elevation so updates launched
+        // from inside Revit never hit a UAC admin-password prompt.
         public static string InstallDir => Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "BIMBot");
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "Programs", "BIMBot");
 
         public event Action<string>? OnProgress;
         public event Action<int>? OnPercentChanged;

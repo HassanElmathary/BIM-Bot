@@ -99,6 +99,18 @@ export function registerPowerBITools(server: McpServer) {
                         "",
                         "Done — double-click the .pbit file to open the interactive 3D dashboard in Power BI Desktop.",
                         "The 3D viewer, slicers (Category, Level, Family, Parameters), and KPI cards are already wired up.",
+                        "",
+                        "Export contents checklist (verified at generation time):",
+                        "☑️ 3D Dashboard page with the BIM-Bot 3D Viewer (orbit: drag to rotate, wheel to zoom)",
+                        "☑️ Slicers: Category, Level, Family, Parameter, Parameter Value — all cross-filter the 3D view",
+                        "☑️ KPI cards (element + category counts) and Elements-by-Category bar chart",
+                        "☑️ Tables: Elements, Parameters, Geometry (chunked MeshJSON), CategoryColors, ModelInfo",
+                        "☑️ 3D Viewer custom visual embedded — no separate .pbiviz import needed",
+                        "",
+                        "Fully offline: no internet needed to open or use the dashboard.",
+                        "For a single portable file: open once, then File → Save As .pbix (data + visual embed).",
+                        "In the 3D visual, Format → Rendering → 'Hide filtered-out elements' switches",
+                        "cross-filtering between dimming the rest (default) and hiding them.",
                     );
                 }
 
