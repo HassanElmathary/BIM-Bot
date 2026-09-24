@@ -25,6 +25,11 @@ AppUpdatesURL={#MyAppURL}/releases
 DefaultDirName={autopf}\BIMBot
 DefaultGroupName={#MyAppName}
 AllowNoIcons=yes
+; Never inherit the previous install dir across scopes. Without this, a
+; per-user update (/CURRENTUSER) reuses the old Program Files path from a
+; machine-wide install and Windows shows a UAC admin-password prompt just to
+; write files. Per-user updates must default to the user profile instead.
+UsePreviousAppDir=no
 ; License
 LicenseFile=..\LICENSE
 ; Output
@@ -464,14 +469,30 @@ end;
 const
   UninstallRegKey = 'SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}_is1';
 
-function GetUninstallString(): string;
+function GetUninstallStringForScope(AdminScope: Boolean): string;
 var
   UninstallStr: string;
 begin
   Result := '';
-  if not RegQueryStringValue(HKLM, UninstallRegKey, 'UninstallString', UninstallStr) then
-    RegQueryStringValue(HKCU, UninstallRegKey, 'UninstallString', UninstallStr);
-  Result := RemoveQuotes(UninstallStr);
+  if AdminScope then
+  begin
+    if RegQueryStringValue(HKLM, UninstallRegKey, 'UninstallString', UninstallStr) then
+      Result := RemoveQuotes(UninstallStr);
+  end
+  else
+  begin
+    if RegQueryStringValue(HKCU, UninstallRegKey, 'UninstallString', UninstallStr) then
+      Result := RemoveQuotes(UninstallStr);
+  end;
+end;
+
+function GetUninstallString(): string;
+begin
+  // Scope-aware: per-user installs only see HKCU, admin installs only HKLM.
+  // The old version checked HKLM first from a per-user (/CURRENTUSER) setup
+  // and Exec'd the machine-wide uninstaller, which is exactly what raised
+  // the Windows admin-password (UAC) prompt on every update.
+  Result := GetUninstallStringForScope(IsAdminInstallMode);
 end;
 
 function GetInstalledVersion(): string;
@@ -479,10 +500,23 @@ var
   Version: string;
 begin
   Result := 'unknown';
-  if not RegQueryStringValue(HKLM, UninstallRegKey, 'DisplayVersion', Version) then
-    RegQueryStringValue(HKCU, UninstallRegKey, 'DisplayVersion', Version);
-  if Version <> '' then
-    Result := Version;
+  if IsAdminInstallMode then
+  begin
+    if RegQueryStringValue(HKLM, UninstallRegKey, 'DisplayVersion', Version) and (Version <> '') then
+      Result := Version;
+  end
+  else
+  begin
+    if RegQueryStringValue(HKCU, UninstallRegKey, 'DisplayVersion', Version) and (Version <> '') then
+      Result := Version;
+  end;
+end;
+
+function HasAdminInstall(): Boolean;
+var
+  Dummy: string;
+begin
+  Result := RegQueryStringValue(HKLM, UninstallRegKey, 'UninstallString', Dummy);
 end;
 
 function InitializeSetup(): Boolean;
@@ -494,9 +528,26 @@ var
 begin
   Result := True;
 
+  // Per-user update (/CURRENTUSER): never touch the machine-wide install.
+  // Exec'ing the HKLM uninstaller from here is what forced the UAC
+  // admin-password prompt. The per-user .addin shadows the old one via
+  // RemoveShadowAddins, so the update succeeds with no elevation.
+  // The orphaned Program Files copy can be removed later, once, by someone
+  // with admin rights — it is not required for the update to work.
+  if (not IsAdminInstallMode) and HasAdminInstall() then
+  begin
+    Log('Machine-wide install detected; per-user update continues without uninstalling it (no UAC).');
+    MsgBox(
+      'An older machine-wide BIM-Bot install was found.' + #13#10 + #13#10 +
+      'This update will install v{#MyAppVersion} for the current user only — no admin password needed.' + #13#10 + #13#10 +
+      'The old Program Files copy will simply be ignored. You can remove it later with admin rights if you wish.',
+      mbInformation, MB_OK);
+    Exit;
+  end;
+
   UninstallStr := GetUninstallString();
   if UninstallStr = '' then
-    Exit; // Not installed — proceed with fresh install
+    Exit; // Not installed in this scope — proceed with fresh install
 
   InstalledVersion := GetInstalledVersion();
 
