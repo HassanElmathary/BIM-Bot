@@ -8,7 +8,7 @@
 ; ============================================================
 
 #define MyAppName      "BIM-Bot"
-#define MyAppVersion   "2.6.0"
+#define MyAppVersion   "2.6.1"
 #define MyAppPublisher "Hassan Ahmed Elmathary"
 #define MyAppURL       "https://github.com/HassanElmathary/BIM-Bot"
 #define MyAppExeName   "Start MCP Server.bat"
@@ -105,25 +105,30 @@ Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription:
 Source: "assets\bimbot.ico"; DestDir: "{app}"; Flags: ignoreversion
 
 ; Node.js portable runtime
-Source: "nodejs\*"; DestDir: "{app}\nodejs"; Flags: ignoreversion recursesubdirs; Components: nodejs
+; uninsrestartdelete: Revit locks BIMBotPlugin.dll while open and a running
+; "Start MCP Server" holds node.exe/server files. Without this flag a locked
+; file silently survives uninstall and the whole folder on C: is left behind;
+; with it Windows deletes the file on the next reboot instead.
+Source: "nodejs\*"; DestDir: "{app}\nodejs"; Flags: ignoreversion recursesubdirs uninsrestartdelete; Components: nodejs
 
 ; MCP Server
-Source: "..\revit-mcp-server\build\*"; DestDir: "{app}\server\build"; Flags: ignoreversion recursesubdirs; Components: server
-Source: "..\revit-mcp-server\node_modules\*"; DestDir: "{app}\server\node_modules"; Flags: ignoreversion recursesubdirs; Components: server
+Source: "..\revit-mcp-server\build\*"; DestDir: "{app}\server\build"; Flags: ignoreversion recursesubdirs uninsrestartdelete; Components: server
+Source: "..\revit-mcp-server\node_modules\*"; DestDir: "{app}\server\node_modules"; Flags: ignoreversion recursesubdirs uninsrestartdelete; Components: server
 Source: "..\revit-mcp-server\package.json"; DestDir: "{app}\server"; Flags: ignoreversion; Components: server
 Source: "..\revit-mcp-server\scripts\configure-claude.cjs"; DestDir: "{app}\server\scripts"; Flags: ignoreversion; Components: server
 Source: "..\revit-mcp-server\scripts\probe-revit.cjs"; DestDir: "{app}\server\scripts"; Flags: ignoreversion; Components: server
 Source: "..\installer\Install-Prerequisites.ps1"; DestDir: "{app}\server\scripts"; Flags: ignoreversion; Components: server
 
 ; Revit Plugin DLLs — one build per Revit version
-Source: "..\revit-mcp-plugin\BIMBotPlugin\bin\R2020\Release\net47\*"; DestDir: "{app}\plugin\R2020"; Flags: ignoreversion recursesubdirs; Components: plugin; Tasks: revit2020
-Source: "..\revit-mcp-plugin\BIMBotPlugin\bin\R2021\Release\net48\*"; DestDir: "{app}\plugin\R2021"; Flags: ignoreversion recursesubdirs; Components: plugin; Tasks: revit2021
-Source: "..\revit-mcp-plugin\BIMBotPlugin\bin\R2022\Release\net48\*"; DestDir: "{app}\plugin\R2022"; Flags: ignoreversion recursesubdirs; Components: plugin; Tasks: revit2022
-Source: "..\revit-mcp-plugin\BIMBotPlugin\bin\R2023\Release\net48\*"; DestDir: "{app}\plugin\R2023"; Flags: ignoreversion recursesubdirs; Components: plugin; Tasks: revit2023
-Source: "..\revit-mcp-plugin\BIMBotPlugin\bin\R2024\Release\net48\*"; DestDir: "{app}\plugin\R2024"; Flags: ignoreversion recursesubdirs; Components: plugin; Tasks: revit2024
-Source: "..\revit-mcp-plugin\BIMBotPlugin\bin\R2025\Release\net8.0-windows\*"; DestDir: "{app}\plugin\R2025"; Flags: ignoreversion recursesubdirs; Components: plugin; Tasks: revit2025
-Source: "..\revit-mcp-plugin\BIMBotPlugin\bin\R2026\Release\net8.0-windows\*"; DestDir: "{app}\plugin\R2026"; Flags: ignoreversion recursesubdirs; Components: plugin; Tasks: revit2026
-Source: "..\revit-mcp-plugin\BIMBotPlugin\bin\R2027\Release\net10.0-windows\*"; DestDir: "{app}\plugin\R2027"; Flags: ignoreversion recursesubdirs; Components: plugin; Tasks: revit2027
+; uninsrestartdelete for the same Revit-file-lock reason as above.
+Source: "..\revit-mcp-plugin\BIMBotPlugin\bin\R2020\Release\net47\*"; DestDir: "{app}\plugin\R2020"; Flags: ignoreversion recursesubdirs uninsrestartdelete; Components: plugin; Tasks: revit2020
+Source: "..\revit-mcp-plugin\BIMBotPlugin\bin\R2021\Release\net48\*"; DestDir: "{app}\plugin\R2021"; Flags: ignoreversion recursesubdirs uninsrestartdelete; Components: plugin; Tasks: revit2021
+Source: "..\revit-mcp-plugin\BIMBotPlugin\bin\R2022\Release\net48\*"; DestDir: "{app}\plugin\R2022"; Flags: ignoreversion recursesubdirs uninsrestartdelete; Components: plugin; Tasks: revit2022
+Source: "..\revit-mcp-plugin\BIMBotPlugin\bin\R2023\Release\net48\*"; DestDir: "{app}\plugin\R2023"; Flags: ignoreversion recursesubdirs uninsrestartdelete; Components: plugin; Tasks: revit2023
+Source: "..\revit-mcp-plugin\BIMBotPlugin\bin\R2024\Release\net48\*"; DestDir: "{app}\plugin\R2024"; Flags: ignoreversion recursesubdirs uninsrestartdelete; Components: plugin; Tasks: revit2024
+Source: "..\revit-mcp-plugin\BIMBotPlugin\bin\R2025\Release\net8.0-windows\*"; DestDir: "{app}\plugin\R2025"; Flags: ignoreversion recursesubdirs uninsrestartdelete; Components: plugin; Tasks: revit2025
+Source: "..\revit-mcp-plugin\BIMBotPlugin\bin\R2026\Release\net8.0-windows\*"; DestDir: "{app}\plugin\R2026"; Flags: ignoreversion recursesubdirs uninsrestartdelete; Components: plugin; Tasks: revit2026
+Source: "..\revit-mcp-plugin\BIMBotPlugin\bin\R2027\Release\net10.0-windows\*"; DestDir: "{app}\plugin\R2027"; Flags: ignoreversion recursesubdirs uninsrestartdelete; Components: plugin; Tasks: revit2027
 
 ; License
 Source: "..\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
@@ -143,9 +148,22 @@ Filename: "{app}\Start MCP Server.bat"; Description: "Start MCP Server now"; Fla
 Filename: "{#MyAppURL}"; Description: "Visit documentation"; Flags: nowait postinstall skipifsilent unchecked shellexec
 
 [UninstallDelete]
+; Installed trees (tracked by [Files], but a locked file aborts the whole
+; tree delete — filesandordirs retries as much as possible).
 Type: filesandordirs; Name: "{app}\server"
 Type: filesandordirs; Name: "{app}\nodejs"
 Type: filesandordirs; Name: "{app}\plugin"
+; Files GENERATED at install time by [Code] (CreateLauncherScript /
+; CreateMcpConfigReference). Inno only auto-deletes files listed in [Files],
+; so without these entries they — and therefore {app} itself — survive every
+; uninstall and the folder on C: is left behind. This was the main residue.
+Type: files; Name: "{app}\Start MCP Server.bat"
+Type: files; Name: "{app}\mcp-config.json"
+Type: files; Name: "{app}\bimbot.ico"
+Type: files; Name: "{app}\LICENSE"
+; Remove the app folder itself when empty. If Revit/node still holds a lock,
+; uninsrestartdelete on [Files] schedules the locked file for reboot removal.
+Type: dirifempty; Name: "{app}"
 
 [Code]
 // ── Revit Detection ─────────────────────────────────────────
@@ -204,12 +222,27 @@ end;
 
 // ── Addin File Management ───────────────────────────────────
 
-procedure RemoveAddinAt(Dir: string);
+// Delete every BIM-Bot / legacy RevitMCP trace inside one Addins dir:
+// both manifest names and all three plugin-folder names ever deployed
+// (BIMBot ← Inno Setup/current, BIMBotPlugin ← WPF + NonAdmin installers,
+//  RevitMCP ← legacy product name).
+procedure RemoveAddinFilesInDir(Dir: string);
 begin
   if FileExists(Dir + '\BIMBot.addin') then
     DeleteFile(Dir + '\BIMBot.addin');
+  if FileExists(Dir + '\RevitMCP.addin') then
+    DeleteFile(Dir + '\RevitMCP.addin');
+  if DirExists(Dir + '\BIMBot') then
+    DelTree(Dir + '\BIMBot', True, True, True);
   if DirExists(Dir + '\BIMBotPlugin') then
     DelTree(Dir + '\BIMBotPlugin', True, True, True);
+  if DirExists(Dir + '\RevitMCP') then
+    DelTree(Dir + '\RevitMCP', True, True, True);
+end;
+
+procedure RemoveAddinAt(Dir: string);
+begin
+  RemoveAddinFilesInDir(Dir);
 end;
 
 // A manifest left behind in the other install scope shadows the one we are
@@ -274,25 +307,40 @@ begin
   Log('Installed .addin for Revit ' + Year + ' (' + PluginFolder + ')');
 end;
 
-procedure RemoveAddinForRevit(Year: string);
+// Uninstall-time: remove the manifest + copied DLLs from BOTH scopes.
+// The old version only cleaned GetRevitAddInsDir(Year) — the scope of the
+// uninstaller — so a per-user uninstall left the machine-wide manifest
+// behind (and vice versa), and Revit kept loading a DLL that points at a
+// deleted folder. Clean both scopes, always.
+procedure RemoveAddinEverywhere(Year: string);
 var
-  AddinPath: string;
-  PluginDir: string;
+  UsersRoot: string;
+  FR: TFindRec;
 begin
-  AddinPath := GetRevitAddInsDir(Year) + '\BIMBot.addin';
-  if FileExists(AddinPath) then
-    DeleteFile(AddinPath);
-  // Also remove plugin directory from addins
-  PluginDir := GetRevitAddInsDir(Year) + '\BIMBot';
-  if DirExists(PluginDir) then
-    DelTree(PluginDir, True, True, True);
-  // Legacy cleanup: remove old RevitMCP files too
-  AddinPath := GetRevitAddInsDir(Year) + '\RevitMCP.addin';
-  if FileExists(AddinPath) then
-    DeleteFile(AddinPath);
-  PluginDir := GetRevitAddInsDir(Year) + '\RevitMCP';
-  if DirExists(PluginDir) then
-    DelTree(PluginDir, True, True, True);
+  RemoveAddinFilesInDir(ExpandConstant('{userappdata}\Autodesk\Revit\Addins\' + Year));
+  RemoveAddinFilesInDir(ExpandConstant('{commonappdata}\Autodesk\Revit\Addins\' + Year));
+  // Machine-wide uninstall: also sweep every real user profile, so a
+  // per-user install from another account does not survive.
+  if IsAdminInstallMode then
+  begin
+    UsersRoot := ExpandConstant('{sd}\Users');
+    if FindFirst(UsersRoot + '\*', FR) then
+    try
+      repeat
+        if (FR.Attributes and FILE_ATTRIBUTE_DIRECTORY <> 0)
+           and (FR.Name <> '.') and (FR.Name <> '..') then
+          RemoveAddinFilesInDir(UsersRoot + '\' + FR.Name +
+            '\AppData\Roaming\Autodesk\Revit\Addins\' + Year);
+      until not FindNext(FR);
+    finally
+      FindClose(FR);
+    end;
+  end;
+end;
+
+procedure RemoveAddinForRevit(Year: string);
+begin
+  RemoveAddinEverywhere(Year);
 end;
 
 // ── Claude Configuration ────────────────────────────────────
@@ -402,13 +450,196 @@ begin
   ConfigureClaudeDesktopFallback();
 end;
 
-procedure RemoveClaudeDesktopConfig();
+// ── MCP Client Config Cleanup (uninstall) ───────────────────
+//
+// Install wrote a "BIM-Bot" entry into up to 8 client configs per profile
+// (see configure-claude.cjs: Claude Desktop (+MS Store), Claude Code,
+// Cursor, Windsurf, Gemini CLI, VS Code, VS Code Insiders). The old
+// uninstaller only logged "left for manual cleanup", leaving every client
+// pointing at a deleted node.exe/index.js — Claude then shows a dead server
+// on every start. Removal preserves all other servers in each file and
+// backs the file up to *.bimbot-backup first.
+//
+// Primary path: configure-claude.cjs --remove (real JSON parse, same client
+// list as install). Runs while {app} files still exist.
+// Fallback: generated PowerShell script with the same semantics, for when
+// the bundled Node runtime is already gone.
+
+procedure RemoveMcpConfigsViaNode();
 var
-  ClaudeConfig: string;
+  NodeExe: string;
+  Script: string;
+  Params: string;
+  ResultCode: Integer;
 begin
-  ClaudeConfig := ExpandConstant('{userappdata}\Claude\claude_desktop_config.json');
-  if FileExists(ClaudeConfig) then
-    Log('Claude Desktop config found — BIM-Bot entry left for manual cleanup');
+  // Runs during usUninstall, while {app} files are still present.
+  NodeExe := ExpandConstant('{app}\nodejs\node.exe');
+  Script := ExpandConstant('{app}\server\scripts\configure-claude.cjs');
+  if (not FileExists(NodeExe)) or (not FileExists(Script)) then
+  begin
+    Log('Bundled node/configure script gone — PowerShell fallback will clean MCP configs');
+    Exit;
+  end;
+  Params := '"' + Script + '" --remove';
+  if IsAdminInstallMode then
+    Params := Params + ' --all-users';
+  if Exec(NodeExe, Params, '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+    Log('configure-claude.cjs --remove exited with code ' + IntToStr(ResultCode))
+  else
+    Log('Failed to execute node for --remove — PowerShell fallback will clean MCP configs');
+end;
+
+procedure RemoveMcpConfigsFallback();
+var
+  Lines: TArrayOfString;
+  PsPath: string;
+  Params: string;
+  ResultCode: Integer;
+begin
+  SetArrayLength(Lines, 60);
+  Lines[0] := 'param([switch]$AllUsers)';
+  Lines[1] := '$ErrorActionPreference = ''SilentlyContinue''';
+  Lines[2] := 'function Get-BimBotHomes {';
+  Lines[3] := '  $list = @()';
+  Lines[4] := '  if ($env:USERPROFILE) { $list += $env:USERPROFILE }';
+  Lines[5] := '  if ($AllUsers -and $env:USERPROFILE) {';
+  Lines[6] := '    $root = Split-Path $env:USERPROFILE';
+  Lines[7] := '    Get-ChildItem $root -Directory | ForEach-Object {';
+  Lines[8] := '      $p = $_.FullName';
+  Lines[9] := '      if (($list -notcontains $p) -and (Test-Path (Join-Path $p ''AppData\Roaming''))) { $list += $p }';
+  Lines[10] := '    }';
+  Lines[11] := '  }';
+  Lines[12] := '  return $list | Select-Object -Unique';
+  Lines[13] := '}';
+  Lines[14] := 'function Remove-BimBotEntry($File, $Key) {';
+  Lines[15] := '  if (-not (Test-Path $File)) { return $false }';
+  Lines[16] := '  try { $raw = [System.IO.File]::ReadAllText($File) } catch { return $false }';
+  Lines[17] := '  if ($raw.Length -gt 0 -and $raw[0] -eq [char]0xFEFF) { $raw = $raw.Substring(1) }';
+  Lines[18] := '  try { $cfg = $raw | ConvertFrom-Json } catch { return $false }';
+  Lines[19] := '  $section = $cfg.$Key';
+  Lines[20] := '  if (-not $section) { return $false }';
+  Lines[21] := '  if ($section -isnot [PSCustomObject]) { return $false }';
+  Lines[22] := '  if (-not $section.PSObject.Properties[''BIM-Bot'']) { return $false }';
+  Lines[23] := '  $section.PSObject.Properties.Remove(''BIM-Bot'')';
+  Lines[24] := '  try {';
+  Lines[25] := '    Copy-Item $File ($File + ''.bimbot-backup'') -Force';
+  Lines[26] := '    $utf8 = New-Object System.Text.UTF8Encoding $false';
+  Lines[27] := '    [System.IO.File]::WriteAllText($File, ($cfg | ConvertTo-Json -Depth 10), $utf8)';
+  Lines[28] := '    return $true';
+  Lines[29] := '  } catch { return $false }';
+  Lines[30] := '}';
+  Lines[31] := 'Get-CimInstance Win32_Process -Filter ''Name=''''node.exe'''''' | ForEach-Object {';
+  Lines[32] := '  $cmd = $_.CommandLine';
+  Lines[33] := '  if ($cmd -like ''*BIMBot*'' -or $cmd -like ''*bim-bot*'' -or $cmd -like ''*BIM-Bot*'') {';
+  Lines[34] := '    try { Stop-Process -Id $_.ProcessId -Force } catch { }';
+  Lines[35] := '  }';
+  Lines[36] := '}';
+  Lines[37] := 'foreach ($prof in Get-BimBotHomes) {';
+  Lines[38] := '  $roam = Join-Path $prof ''AppData\Roaming''';
+  Lines[39] := '  Remove-BimBotEntry (Join-Path $roam ''Claude\claude_desktop_config.json'') ''mcpServers'' | Out-Null';
+  Lines[40] := '  Remove-BimBotEntry (Join-Path $prof ''.claude.json'') ''mcpServers'' | Out-Null';
+  Lines[41] := '  Remove-BimBotEntry (Join-Path $prof ''.cursor\mcp.json'') ''mcpServers'' | Out-Null';
+  Lines[42] := '  Remove-BimBotEntry (Join-Path $prof ''.codeium\windsurf\mcp_config.json'') ''mcpServers'' | Out-Null';
+  Lines[43] := '  Remove-BimBotEntry (Join-Path $prof ''.gemini\settings.json'') ''mcpServers'' | Out-Null';
+  Lines[44] := '  Remove-BimBotEntry (Join-Path $roam ''Code\User\mcp.json'') ''servers'' | Out-Null';
+  Lines[45] := '  Remove-BimBotEntry (Join-Path $roam ''Code - Insiders\User\mcp.json'') ''servers'' | Out-Null';
+  Lines[46] := '  $pkgs = Join-Path $prof ''AppData\Local\Packages''';
+  Lines[47] := '  Get-ChildItem $pkgs -Directory | ForEach-Object {';
+  Lines[48] := '    if ($_.Name -like ''Claude_*'' -or $_.Name -like ''AnthropicClaude*'') {';
+  Lines[49] := '      Remove-BimBotEntry (Join-Path $_.FullName ''LocalCache\Roaming\Claude\claude_desktop_config.json'') ''mcpServers'' | Out-Null';
+  Lines[50] := '    }';
+  Lines[51] := '  }';
+  Lines[52] := '}';
+  Lines[53] := '';
+
+  PsPath := ExpandConstant('{tmp}\bimbot-uninstall-cleanup.ps1');
+  if not SaveStringsToFile(PsPath, Lines, False) then
+  begin
+    Log('Could not write uninstall cleanup script — MCP configs left for manual cleanup');
+    Exit;
+  end;
+  Params := '-NoProfile -ExecutionPolicy Bypass -File "' + PsPath + '"';
+  if IsAdminInstallMode then
+    Params := Params + ' -AllUsers';
+  Exec('powershell.exe', Params, '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Log('MCP config PowerShell fallback exited with code ' + IntToStr(ResultCode));
+  DeleteFile(PsPath);
+end;
+
+// Runtime data the plugin writes while Revit runs (logs, settings, license,
+// ProjectData, auth tokens, theme) plus the server handshake/cache files.
+// Without this, %APPDATA%\BIMBot and %LOCALAPPDATA%\BIMBot survive every
+// uninstall. This also covers the install.ps1 per-user app layout, which
+// lives at %LOCALAPPDATA%\BIMBot.
+procedure RemoveRuntimeDataDirs();
+var
+  UsersRoot: string;
+  FR: TFindRec;
+  Profile: string;
+begin
+  if DirExists(ExpandConstant('{userappdata}\BIMBot')) then
+    DelTree(ExpandConstant('{userappdata}\BIMBot'), True, True, True);
+  if DirExists(ExpandConstant('{localappdata}\BIMBot')) then
+    DelTree(ExpandConstant('{localappdata}\BIMBot'), True, True, True);
+  // Machine-wide uninstall: sweep other users too.
+  if IsAdminInstallMode then
+  begin
+    UsersRoot := ExpandConstant('{sd}\Users');
+    if FindFirst(UsersRoot + '\*', FR) then
+    try
+      repeat
+        if (FR.Attributes and FILE_ATTRIBUTE_DIRECTORY <> 0)
+           and (FR.Name <> '.') and (FR.Name <> '..') then
+        begin
+          Profile := UsersRoot + '\' + FR.Name;
+          if DirExists(Profile + '\AppData\Roaming\BIMBot') then
+            DelTree(Profile + '\AppData\Roaming\BIMBot', True, True, True);
+          if DirExists(Profile + '\AppData\Local\BIMBot') then
+            DelTree(Profile + '\AppData\Local\BIMBot', True, True, True);
+        end;
+      until not FindNext(FR);
+    finally
+      FindClose(FR);
+    end;
+  end;
+end;
+
+// Legacy product folder from the RevitMCP era (admin scope only).
+procedure RemoveLegacyAppDirs();
+begin
+  if IsAdminInstallMode then
+  begin
+    if DirExists(ExpandConstant('{pf}\RevitMCP')) then
+      DelTree(ExpandConstant('{pf}\RevitMCP'), True, True, True);
+  end;
+end;
+
+function InitializeUninstall(): Boolean;
+var
+  ResultCode: Integer;
+  RevitCount: Integer;
+begin
+  Result := True;
+  // Free file locks BEFORE any deletion: "Start MCP Server" consoles run
+  // node from {app} and Revit holds the plugin DLL open. Without this the
+  // locked files (and their folders) silently survive uninstall.
+  Exec('taskkill.exe', '/F /FI "WINDOWTITLE eq BIM-Bot*"', '', SW_HIDE,
+    ewWaitUntilTerminated, ResultCode);
+  // Count running Revit instances via the PowerShell exit code (0 = none).
+  if Exec('powershell.exe', '-NoProfile -ExecutionPolicy Bypass -Command "exit (@(Get-Process Revit -ErrorAction SilentlyContinue).Count)"',
+    '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+    RevitCount := ResultCode
+  else
+    RevitCount := 0;
+  if RevitCount > 0 then
+  begin
+    if MsgBox('Revit is still running and locks the BIM-Bot plugin files.' + #13#10 + #13#10 +
+      'Please close Revit first for a complete uninstall.' + #13#10 + #13#10 +
+      'YES = continue now (locked files are removed on reboot)' + #13#10 +
+      'NO = cancel so you can close Revit first (recommended)',
+      mbConfirmation, MB_YESNO) = IDNO then
+      Result := False;
+  end;
 end;
 
 // ── Start MCP Server Batch File ─────────────────────────────
@@ -627,6 +858,10 @@ var
 begin
   if CurUninstallStep = usUninstall then
   begin
+    // {app} files still present here: run the Node remover first, then
+    // remove every Revit manifest/DLL copy in both scopes.
+    RemoveMcpConfigsViaNode();
+
     Years[0] := '2020';
     Years[1] := '2021';
     Years[2] := '2022';
@@ -637,8 +872,16 @@ begin
     Years[7] := '2027';
 
     for i := 0 to 7 do
-      RemoveAddinForRevit(Years[i]);
+      RemoveAddinEverywhere(Years[i]);
 
-    RemoveClaudeDesktopConfig();
+    RemoveLegacyAppDirs();
+  end
+  else if CurUninstallStep = usPostUninstall then
+  begin
+    // {app} files are gone here: PowerShell fallback (also stops leftover
+    // BIM-Bot node servers), then runtime data dirs. Covers the case where
+    // the bundled Node runtime was already missing.
+    RemoveMcpConfigsFallback();
+    RemoveRuntimeDataDirs();
   end;
 end;

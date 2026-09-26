@@ -14,7 +14,7 @@
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <UseWPF>true</UseWPF>
-    <Version>2.6.0</Version>
+    <Version>2.6.1</Version>
     <Authors>BIM-Bot</Authors>
     <Description>BIM-Bot Plugin for Autodesk Navisworks Manage - AI-powered coordination (parallel to Revit plugin)</Description>
     <CodePage>65001</CodePage>

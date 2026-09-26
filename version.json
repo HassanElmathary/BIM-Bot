@@ -1,8 +1,8 @@
 {
-  "version": "2.6.0",
-  "releaseUrl": "https://github.com/HassanElmathary/BIM-Bot/releases/tag/v2.6.0",
-  "downloadUrl": "https://github.com/HassanElmathary/BIM-Bot/releases/download/v2.6.0/BIMBot-Setup-2.6.0.exe",
-  "assetFileName": "BIMBot-Setup-2.6.0.exe",
-  "changelog": "BIM-Bot v2.6.0 — Navisworks Manage support (230 MCP tools) + no-admin updates. NEW: 21 navis_* tools for Navisworks Manage (model search, viewpoints, selection sets, Clash Detective run/results/status/report, append NWC/NWD, NWD export, color overrides) over a parallel direct plugin service alongside Autodesk Revit. NEW: Claude Desktop + ChatGPT MCP configs (mcp-config.claude.json / mcp-config.chatgpt.json) and in-Navisworks AI chat using the same API-key providers as Revit. FIX: in-Revit updates no longer trigger a Windows admin-password (UAC) prompt — per-user install default with /CURRENTUSER updates. Note: Navisworks plugin DLL is built separately on a full Manage install (see NAVIS_SETUP.md); this installer ships the Revit plugin + MCP server with navis_* tools ready.",
+  "version": "2.6.1",
+  "releaseUrl": "https://github.com/HassanElmathary/BIM-Bot/releases/tag/v2.6.1",
+  "downloadUrl": "https://github.com/HassanElmathary/BIM-Bot/releases/download/v2.6.1/BIMBot-Setup-2.6.1.exe",
+  "assetFileName": "BIMBot-Setup-2.6.1.exe",
+  "changelog": "BIM-Bot v2.6.1 — total uninstall. FIX: uninstall now removes everything: the app folder (generated launcher/config files are deleted so the folder on C: no longer survives), Revit manifests + copied DLLs in both per-user and machine scopes for 2020-2027 (all folder names: BIMBot, BIMBotPlugin, RevitMCP), %APPDATA%/%LOCALAPPDATA% BIMBot runtime data (logs, settings, license, ProjectData, handshake), and the BIM-Bot entry in all 8 MCP client configs (Claude Desktop incl. MS Store, Claude Code, Cursor, Windsurf, Gemini CLI, VS Code, VS Code Insiders) with .bimbot-backup. NEW: configure-claude.cjs --remove mode. Locked files are removed on reboot instead of lingering, and uninstall warns if Revit is still open.",
   "minVersion": "1.0.0"
 }

@@ -10,6 +10,11 @@
  * Usage:
  *   node configure-claude.cjs [--node <path-to-node.exe>] [--server <path-to-index.js>]
  *                             [--home <profile-dir>] [--all-users]
+ *   node configure-claude.cjs --remove [--home <profile-dir>] [--all-users]
+ *
+ * --remove deletes the BIM-Bot entry from every supported MCP client config
+ * instead of adding it. Used by the uninstaller so no dead entry pointing at
+ * a deleted folder is left behind. Other servers in the same file are kept.
  *
  * With no args, paths are derived from this script's location:
  *   installed layout:  {app}\server\scripts\configure-claude.cjs
@@ -39,12 +44,16 @@ function parseArgs() {
         else if (args[i] === "--server") out.server = args[++i];
         else if (args[i] === "--home") out.home = args[++i];
         else if (args[i] === "--all-users") out.allUsers = true;
+        else if (args[i] === "--remove") out.remove = true;
     }
     return out;
 }
 
 function resolvePaths() {
     const opts = parseArgs();
+    // --remove never needs node/server paths — the uninstaller runs it when
+    // the bundled runtime may already be gone.
+    if (opts.remove) return { nodeExe: null, indexJs: null };
     const serverDir = path.dirname(__dirname); // scripts/ → server root
 
     let indexJs = opts.server || path.join(serverDir, "build", "index.js");
@@ -196,6 +205,79 @@ function configureProfile(home, nodeExe, indexJs, { scanningAllProfiles = false 
 }
 
 /**
+ * Remove the BIM-Bot entry from one config file. Returns a status string.
+ * Never deletes the file itself and never touches other servers.
+ */
+function removeEntry(label, configPath, opts = {}) {
+    const serversKey = opts.serversKey || "mcpServers";
+    if (!fs.existsSync(configPath)) {
+        return `${label}: no config file — skipped`;
+    }
+    let config;
+    try {
+        const raw = fs.readFileSync(configPath, "utf8");
+        config = JSON.parse(raw.charCodeAt(0) === 0xfeff ? raw.slice(1) : raw);
+    } catch (err) {
+        return `${label}: config is not valid JSON (${err.message}) — left untouched: ${configPath}`;
+    }
+    const servers = config[serversKey];
+    if (!servers || typeof servers !== "object" || !(SERVER_KEY in servers)) {
+        return `${label}: no BIM-Bot entry — skipped`;
+    }
+    delete servers[SERVER_KEY];
+    try {
+        fs.copyFileSync(configPath, configPath + ".bimbot-backup");
+        fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+    } catch (err) {
+        return `${label}: failed to write config (${err.message}): ${configPath}`;
+    }
+    return `${label}: removed BIM-Bot entry`;
+}
+
+/**
+ * Remove the BIM-Bot entry from every supported MCP client in one profile.
+ * Returns the number of files changed.
+ */
+function removeFromProfile(home) {
+    const appData = path.join(home, "AppData", "Roaming");
+    const localAppData = path.join(home, "AppData", "Local");
+    let removed = 0;
+
+    const report = (line) => {
+        console.log(`  ${line}`);
+        if (/: removed BIM-Bot entry/.test(line)) removed++;
+    };
+
+    report(removeEntry("Claude Desktop",
+        path.join(appData, "Claude", "claude_desktop_config.json")));
+    // MS-Store Claude keeps its config under Packages\...\LocalCache\Roaming.
+    try {
+        const packages = path.join(localAppData, "..", "Local", "Packages");
+        if (fs.existsSync(packages)) {
+            for (const name of fs.readdirSync(packages)) {
+                if (/^(Claude_|AnthropicClaude)/i.test(name)) {
+                    report(removeEntry("Claude Desktop (MS Store)",
+                        path.join(packages, name, "LocalCache", "Roaming",
+                            "Claude", "claude_desktop_config.json")));
+                }
+            }
+        }
+    } catch { /* non-fatal */ }
+    report(removeEntry("Claude Code", path.join(home, ".claude.json")));
+    report(removeEntry("Cursor", path.join(home, ".cursor", "mcp.json")));
+    report(removeEntry("Windsurf",
+        path.join(home, ".codeium", "windsurf", "mcp_config.json")));
+    // Gemini CLI uses the same schema.
+    report(removeEntry("Gemini CLI", path.join(home, ".gemini", "settings.json")));
+    for (const [label, dirName] of [["VS Code", "Code"], ["VS Code Insiders", "Code - Insiders"]]) {
+        report(removeEntry(label,
+            path.join(appData, dirName, "User", "mcp.json"),
+            { serversKey: "servers" }));
+    }
+    return removed;
+}
+
+/**
  * Every real user profile on the machine. Built-in/service profiles have no
  * AppData\Roaming (or are explicitly excluded), so they are filtered out.
  */
@@ -226,6 +308,24 @@ function enumerateUserProfiles() {
 
 function main() {
     const opts = parseArgs();
+    if (opts.remove) {
+        // Uninstall path: no node/server resolution needed.
+        const profiles = opts.home
+            ? [opts.home]
+            : opts.allUsers
+                ? enumerateUserProfiles()
+                : [process.env.USERPROFILE || require("os").homedir()];
+
+        let totalRemoved = 0;
+        for (const home of profiles) {
+            console.log(`Profile: ${home}`);
+            totalRemoved += removeFromProfile(home);
+        }
+        console.log(totalRemoved === 0
+            ? "\nNo BIM-Bot entries found — nothing to remove."
+            : `\nDone — removed ${totalRemoved} BIM-Bot entr${totalRemoved === 1 ? "y" : "ies"}.`);
+        return;
+    }
     const { nodeExe, indexJs } = resolvePaths();
     console.log(`BIM-Bot MCP setup\n  node:   ${nodeExe}\n  server: ${indexJs}\n`);
 

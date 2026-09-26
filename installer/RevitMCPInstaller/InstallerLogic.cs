@@ -284,29 +284,237 @@ pause
         }
 
         /// <summary>
-        /// Uninstall everything.
+        /// Uninstall everything this product ever created, in every scope:
+        /// Revit manifests + copied DLLs (both Addins scopes, all folder names
+        /// ever used), the app folder, per-user runtime data, and the BIM-Bot
+        /// entry in every supported MCP client config. Files locked by a
+        /// running Revit/node are scheduled for deletion on reboot so no
+        /// residue survives.
         /// </summary>
         public static void Uninstall()
         {
+            StopBimBotServers();
+
+            // 1. MCP client configs FIRST (Node remover needs InstallDir files).
+            RemoveMcpConfigsViaNode();
+            RemoveMcpClientEntries();
+
+            // 2. Revit addins: both scopes + both manifest names + all three
+            //    plugin folder names (BIMBot, BIMBotPlugin, RevitMCP).
+            var addinRoots = new List<string>();
+            try
+            {
+                addinRoots.Add(Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                    "Autodesk", "Revit", "Addins"));
+                var common = Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData);
+                if (!string.IsNullOrEmpty(common))
+                    addinRoots.Add(Path.Combine(common, "Autodesk", "Revit", "Addins"));
+                // Other users' per-user addins (best effort, admin only matters).
+                var usersRoot = Path.GetDirectoryName(
+                    Environment.GetFolderPath(Environment.SpecialFolder.UserProfile));
+                if (!string.IsNullOrEmpty(usersRoot) && Directory.Exists(usersRoot))
+                {
+                    foreach (var dir in Directory.GetDirectories(usersRoot))
+                    {
+                        var roaming = Path.Combine(dir, "AppData", "Roaming",
+                            "Autodesk", "Revit", "Addins");
+                        if (Directory.Exists(roaming) && !addinRoots.Contains(roaming))
+                            addinRoots.Add(roaming);
+                    }
+                }
+            }
+            catch { }
+
+            string[] manifests = { "BIMBot.addin", "RevitMCP.addin" };
+            string[] pluginDirs = { "BIMBot", "BIMBotPlugin", "RevitMCP" };
             for (int year = 2020; year <= 2027; year++)
             {
+                foreach (var root in addinRoots)
+                {
+                    try
+                    {
+                        var yearDir = Path.Combine(root, year.ToString());
+                        if (!Directory.Exists(yearDir)) continue;
+                        foreach (var m in manifests)
+                        {
+                            var f = Path.Combine(yearDir, m);
+                            if (File.Exists(f)) DeleteFileOrSchedule(f);
+                        }
+                        foreach (var d in pluginDirs)
+                        {
+                            var dir = Path.Combine(yearDir, d);
+                            if (Directory.Exists(dir)) DeleteDirOrSchedule(dir);
+                        }
+                    }
+                    catch { }
+                }
+            }
+
+            // 3. App folders: this installer's per-user dir + the legacy
+            //    install.ps1 per-user layout + runtime data dirs.
+            var localApp = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            var roamingApp = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+            DeleteDirOrSchedule(InstallDir);
+            if (!string.IsNullOrEmpty(localApp))
+                DeleteDirOrSchedule(Path.Combine(localApp, "BIMBot"));
+            if (!string.IsNullOrEmpty(roamingApp))
+                DeleteDirOrSchedule(Path.Combine(roamingApp, "BIMBot"));
+
+            // 4. Legacy product folder (admin scope only, best effort).
+            try
+            {
+                var pf = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+                var legacy = Path.Combine(pf, "RevitMCP");
+                if (Directory.Exists(legacy)) DeleteDirOrSchedule(legacy);
+            }
+            catch { }
+        }
+
+        /// <summary>
+        /// Stop BIM-Bot node servers started from our InstallDir so their
+        /// files are not locked during deletion. Only touches node processes
+        /// whose executable lives under InstallDir.
+        /// </summary>
+        private static void StopBimBotServers()
+        {
+            try
+            {
+                foreach (var proc in System.Diagnostics.Process.GetProcessesByName("node"))
+                {
+                    try
+                    {
+                        var file = proc.MainModule?.FileName ?? "";
+                        if (file.StartsWith(InstallDir, StringComparison.OrdinalIgnoreCase))
+                            proc.Kill();
+                    }
+                    catch { /* access denied / already exited */ }
+                }
+            }
+            catch { }
+        }
+
+        /// <summary>
+        /// Run the bundled configure-claude.cjs --remove before InstallDir is
+        /// deleted. Falls through silently — the managed JSON cleanup below
+        /// covers a missing runtime.
+        /// </summary>
+        private static void RemoveMcpConfigsViaNode()
+        {
+            try
+            {
+                var nodeExe = Path.Combine(InstallDir, "nodejs", "node.exe");
+                var script = Path.Combine(InstallDir, "server", "scripts", "configure-claude.cjs");
+                if (!File.Exists(nodeExe) || !File.Exists(script)) return;
+                var psi = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = nodeExe,
+                    Arguments = $"\"{script}\" --remove",
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                };
+                var proc = System.Diagnostics.Process.Start(psi);
+                proc?.WaitForExit(15000);
+            }
+            catch { }
+        }
+
+        /// <summary>
+        /// Remove the BIM-Bot entry from every supported MCP client config in
+        /// the current profile. Other servers are preserved; each touched file
+        /// is backed up to *.bimbot-backup first.
+        /// </summary>
+        private static void RemoveMcpClientEntries()
+        {
+            try
+            {
+                var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+                var userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+                var localApp = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+
+                RemoveMcpEntry(Path.Combine(appData, "Claude", "claude_desktop_config.json"), "mcpServers");
+                RemoveMcpEntry(Path.Combine(userProfile, ".claude.json"), "mcpServers");
+                RemoveMcpEntry(Path.Combine(userProfile, ".cursor", "mcp.json"), "mcpServers");
+                RemoveMcpEntry(Path.Combine(userProfile, ".codeium", "windsurf", "mcp_config.json"), "mcpServers");
+                RemoveMcpEntry(Path.Combine(userProfile, ".gemini", "settings.json"), "mcpServers");
+                RemoveMcpEntry(Path.Combine(appData, "Code", "User", "mcp.json"), "servers");
+                RemoveMcpEntry(Path.Combine(appData, "Code - Insiders", "User", "mcp.json"), "servers");
+
+                // MS-Store Claude variants.
                 try
                 {
-                    var addinPath = Path.Combine(GetAddinsDir(year), "BIMBot.addin");
-                    if (File.Exists(addinPath)) File.Delete(addinPath);
-
-                    var mcpDir = Path.Combine(GetAddinsDir(year), "BIMBot");
-                    if (Directory.Exists(mcpDir)) Directory.Delete(mcpDir, true);
+                    var pkgs = Path.Combine(localApp, "Packages");
+                    if (Directory.Exists(pkgs))
+                    {
+                        foreach (var dir in Directory.GetDirectories(pkgs))
+                        {
+                            var name = Path.GetFileName(dir);
+                            if (name.StartsWith("Claude_", StringComparison.OrdinalIgnoreCase) ||
+                                name.StartsWith("AnthropicClaude", StringComparison.OrdinalIgnoreCase))
+                            {
+                                RemoveMcpEntry(Path.Combine(dir, "LocalCache", "Roaming",
+                                    "Claude", "claude_desktop_config.json"), "mcpServers");
+                            }
+                        }
+                    }
                 }
                 catch { }
             }
+            catch { }
+        }
 
+        private static void RemoveMcpEntry(string configPath, string serversKey)
+        {
             try
             {
-                if (Directory.Exists(InstallDir))
-                    Directory.Delete(InstallDir, true);
+                if (!File.Exists(configPath)) return;
+                var raw = File.ReadAllText(configPath);
+                if (raw.Length > 0 && raw[0] == '\uFEFF')
+                    raw = raw.Substring(1);
+                var config = Newtonsoft.Json.Linq.JObject.Parse(raw);
+                var servers = config[serversKey] as Newtonsoft.Json.Linq.JObject;
+                if (servers == null || servers["BIM-Bot"] == null) return;
+                servers.Remove("BIM-Bot");
+                try { File.Copy(configPath, configPath + ".bimbot-backup", true); } catch { }
+                File.WriteAllText(configPath,
+                    config.ToString(Newtonsoft.Json.Formatting.Indented),
+                    new System.Text.UTF8Encoding(false));
             }
-            catch { }
+            catch { /* corrupt config: leave untouched */ }
+        }
+
+        private static void DeleteFileOrSchedule(string file)
+        {
+            try { File.Delete(file); }
+            catch { ScheduleDeleteOnReboot(file); }
+        }
+
+        private static void DeleteDirOrSchedule(string dir)
+        {
+            if (!Directory.Exists(dir)) return;
+            try { Directory.Delete(dir, true); }
+            catch
+            {
+                // Best effort: delete what we can, schedule the rest. Files
+                // that are individually locked are scheduled one by one.
+                try
+                {
+                    foreach (var f in Directory.GetFiles(dir, "*", SearchOption.AllDirectories))
+                    {
+                        try { File.Delete(f); } catch { ScheduleDeleteOnReboot(f); }
+                    }
+                    Directory.Delete(dir, true);
+                }
+                catch { ScheduleDeleteOnReboot(dir); }
+            }
+        }
+
+        [System.Runtime.InteropServices.DllImport("kernel32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode, SetLastError = true)]
+        private static extern bool MoveFileEx(string existing, string @new, int flags);
+
+        private static void ScheduleDeleteOnReboot(string path)
+        {
+            try { MoveFileEx(path, null, 0x4); } catch { } // MOVEFILE_DELAY_UNTIL_REBOOT
         }
 
         /// <summary>
