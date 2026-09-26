@@ -8,7 +8,7 @@
 ; ============================================================
 
 #define MyAppName      "BIM-Bot"
-#define MyAppVersion   "2.6.1"
+#define MyAppVersion   "2.7.0"
 #define MyAppPublisher "Hassan Ahmed Elmathary"
 #define MyAppURL       "https://github.com/HassanElmathary/BIM-Bot"
 #define MyAppExeName   "Start MCP Server.bat"
@@ -74,7 +74,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 WelcomeLabel1=Welcome to {#MyAppName}
 WelcomeLabel2=This will install {#MyAppName} v{#MyAppVersion} on your computer.%n%n{#MyAppName} provides 230 AI-powered MCP tools for Autodesk Revit and Navisworks Manage, enabling intelligent BIM automation through Claude Desktop, ChatGPT, Cursor, Windsurf, and any MCP client.%n%nSupports Revit 2020–2027.
 FinishedHeadingLabel=Installation Complete!
-FinishedLabel={#MyAppName} has been successfully installed.%n%nNext Steps:%n  1. Open Revit → look for the "BIM-Bot" tab in the ribbon%n  2. Open Claude Desktop → BIM-Bot tools are ready to use
+FinishedLabel={#MyAppName} has been successfully installed.%n%nNext Steps:%n  1. Open Revit → look for the "BIM-Bot" tab in the ribbon%n  2. Open Claude Desktop or ChatGPT Desktop → BIM-Bot tools are ready to use
 
 [Types]
 Name: "full"; Description: "Full installation (recommended)"
@@ -85,7 +85,7 @@ Name: "custom"; Description: "Custom installation"; Flags: iscustom
 Name: "server"; Description: "MCP Server (Node.js) — 209 AI tools for BIM automation"; Types: full server custom; Flags: fixed
 Name: "nodejs"; Description: "Portable Node.js Runtime (v20 LTS)"; Types: full server custom; Flags: fixed
 Name: "plugin"; Description: "Revit Plugin — connects Revit to the MCP Server"; Types: full custom
-Name: "claude"; Description: "Auto-configure Claude Desktop"; Types: full custom
+Name: "claude"; Description: "Auto-connect Claude Desktop, ChatGPT Desktop & other MCP clients"; Types: full custom
 
 [Tasks]
 ; Auto-detect installed Revit versions — only show those found.
@@ -452,9 +452,9 @@ end;
 
 // ── MCP Client Config Cleanup (uninstall) ───────────────────
 //
-// Install wrote a "BIM-Bot" entry into up to 8 client configs per profile
+// Install wrote a "BIM-Bot" entry into up to 9 client configs per profile
 // (see configure-claude.cjs: Claude Desktop (+MS Store), Claude Code,
-// Cursor, Windsurf, Gemini CLI, VS Code, VS Code Insiders). The old
+// Cursor, Windsurf, Gemini CLI, VS Code, VS Code Insiders, ChatGPT Desktop). The old
 // uninstaller only logged "left for manual cleanup", leaving every client
 // pointing at a deleted node.exe/index.js — Claude then shows a dead server
 // on every start. Removal preserves all other servers in each file and
@@ -496,7 +496,7 @@ var
   Params: string;
   ResultCode: Integer;
 begin
-  SetArrayLength(Lines, 60);
+  SetArrayLength(Lines, 63);
   Lines[0] := 'param([switch]$AllUsers)';
   Lines[1] := '$ErrorActionPreference = ''SilentlyContinue''';
   Lines[2] := 'function Get-BimBotHomes {';
@@ -549,8 +549,19 @@ begin
   Lines[49] := '      Remove-BimBotEntry (Join-Path $_.FullName ''LocalCache\Roaming\Claude\claude_desktop_config.json'') ''mcpServers'' | Out-Null';
   Lines[50] := '    }';
   Lines[51] := '  }';
-  Lines[52] := '}';
-  Lines[53] := '';
+  // ChatGPT Desktop / Codex: TOML, so drop the [mcp_servers.BIM-Bot] table
+  // (and sub-tables) line-wise, keeping every other line as-is.
+  Lines[52] := '  $toml = Join-Path $prof ''.codex\config.toml''';
+  Lines[53] := '  if (Test-Path $toml) {';
+  Lines[54] := '    $own = $false; $changed = $false; $out = @()';
+  Lines[55] := '    foreach ($l in [System.IO.File]::ReadAllLines($toml)) {';
+  Lines[56] := '      if ($l -match ''^\s*\[\[?\s*mcp_servers\s*\.\s*[\x22\x27]?BIM-Bot[\x22\x27]?\s*[\.\]]'') { $own = $true } elseif ($l -match ''^\s*\[\[?\s*[A-Za-z0-9_\x22\x27-]'') { $own = $false }';
+  Lines[57] := '      if ($own) { $changed = $true } else { $out += $l }';
+  Lines[58] := '    }';
+  Lines[59] := '    if ($changed) { Copy-Item $toml ($toml + ''.bimbot-backup'') -Force; [System.IO.File]::WriteAllLines($toml, [string[]]$out, (New-Object System.Text.UTF8Encoding $false)) }';
+  Lines[60] := '  }';
+  Lines[61] := '}';
+  Lines[62] := '';
 
   PsPath := ExpandConstant('{tmp}\bimbot-uninstall-cleanup.ps1');
   if not SaveStringsToFile(PsPath, Lines, False) then

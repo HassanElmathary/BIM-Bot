@@ -8,7 +8,8 @@ using Newtonsoft.Json.Linq;
 namespace BIMBotPlugin.Core
 {
     /// <summary>
-    /// Ensures Claude Desktop and Claude Code are configured to launch the
+    /// Ensures Claude Desktop, Claude Code, ChatGPT Desktop and other MCP
+    /// clients are configured to launch the
     /// BIM-Bot MCP server, and — critically — repairs stale entries whose
     /// paths no longer exist (e.g. after the repo or install folder moved).
     ///
@@ -254,6 +255,227 @@ namespace BIMBotPlugin.Core
         }
 
         // ────────────────────────────────────────────────────────
+        // ChatGPT Desktop (TOML)
+        // ────────────────────────────────────────────────────────
+        //
+        // ChatGPT Desktop runs local stdio MCP servers from the Codex config it
+        // shares with the Codex CLI: %USERPROFILE%\.codex\config.toml (or
+        // $CODEX_HOME\config.toml), table [mcp_servers.<name>]. The file holds
+        // many settings the app owns, so it is edited line-wise: only the
+        // BIM-Bot table (and its sub-tables) is replaced. Mirrors
+        // revit-mcp-server/scripts/configure-claude.cjs — keep them in step.
+
+        /// <summary>Key parts of a TOML table header line, or null if not a header.</summary>
+        private static List<string>? TomlHeaderParts(string line)
+        {
+            var m = System.Text.RegularExpressions.Regex.Match(line, @"^\s*\[\[?(.+?)\]\]?\s*(#.*)?$");
+            if (!m.Success) return null;
+            var src = m.Groups[1].Value;
+            var parts = new List<string>();
+            int i = 0;
+            while (i < src.Length)
+            {
+                while (i < src.Length && (src[i] == ' ' || src[i] == '\t')) i++;
+                var part = new System.Text.StringBuilder();
+                if (i < src.Length && src[i] == '"')
+                {
+                    i++;
+                    while (i < src.Length && src[i] != '"')
+                    {
+                        if (src[i] == '\\' && i + 1 < src.Length) { part.Append(src[i + 1]); i += 2; }
+                        else part.Append(src[i++]);
+                    }
+                    i++;
+                }
+                else if (i < src.Length && src[i] == '\'')
+                {
+                    i++;
+                    while (i < src.Length && src[i] != '\'') part.Append(src[i++]);
+                    i++;
+                }
+                else
+                {
+                    while (i < src.Length && (char.IsLetterOrDigit(src[i]) && src[i] < 128 || src[i] == '_' || src[i] == '-'))
+                        part.Append(src[i++]);
+                    if (part.Length == 0) return null; // not a key — e.g. an array value line
+                }
+                parts.Add(part.ToString());
+                while (i < src.Length && (src[i] == ' ' || src[i] == '\t')) i++;
+                if (i < src.Length)
+                {
+                    if (src[i] != '.') return null;
+                    i++;
+                }
+            }
+            return parts;
+        }
+
+        /// <summary>
+        /// Split a TOML document into the BIM-Bot block and everything else.
+        /// Inline forms (BIM-Bot = {...} under [mcp_servers], or root-level
+        /// mcp_servers.BIM-Bot dotted keys) count as ours too, so the table we
+        /// append can never collide with a duplicate key.
+        /// </summary>
+        private static void SplitTomlBlock(string text, List<string> keep, List<string> own)
+        {
+            var inlineKey = new System.Text.RegularExpressions.Regex($"^\\s*([\"']?){ServerKey}\\1\\s*=");
+            var rootDotted = new System.Text.RegularExpressions.Regex($"^\\s*mcp_servers\\s*\\.\\s*([\"']?){ServerKey}\\1\\s*[.=]");
+            var table = new List<string>();
+            bool inOwn = false;
+            foreach (var line in text.Replace("\r\n", "\n").Split('\n'))
+            {
+                var parts = TomlHeaderParts(line);
+                if (parts != null)
+                {
+                    table = parts;
+                    inOwn = parts.Count >= 2 && parts[0] == "mcp_servers" && parts[1] == ServerKey;
+                }
+                if (inOwn) { own.Add(line); continue; }
+                if (parts == null && table.Count == 1 && table[0] == "mcp_servers" && inlineKey.IsMatch(line)) { own.Add(line); continue; }
+                if (parts == null && table.Count == 0 && rootDotted.IsMatch(line)) { own.Add(line); continue; }
+                keep.Add(line);
+            }
+        }
+
+        private static string TomlString(string value)
+        {
+            // Literal strings need no escaping — ideal for Windows paths.
+            if (value.IndexOfAny(new[] { '\'', '\r', '\n' }) < 0) return "'" + value + "'";
+            return JsonConvert.ToString(value); // valid TOML basic string for plain text
+        }
+
+        private static string? ReadTomlString(string? src)
+        {
+            if (string.IsNullOrEmpty(src)) return null;
+            if (src![0] == '\'') return src.Substring(1, src.Length - 2);
+            try { return JsonConvert.DeserializeObject<string>(src); } catch { return null; }
+        }
+
+        private static bool IsTomlBlockValid(List<string> own)
+        {
+            var text = string.Join("\n", own);
+            const string str = "(\"(?:[^\"\\\\]|\\\\.)*\"|'[^']*')";
+            var cmd = System.Text.RegularExpressions.Regex.Match(text, @"^\s*command\s*=\s*" + str,
+                System.Text.RegularExpressions.RegexOptions.Multiline);
+            var arg = System.Text.RegularExpressions.Regex.Match(text, @"^\s*args\s*=\s*\[\s*" + str,
+                System.Text.RegularExpressions.RegexOptions.Multiline);
+            var entry = new JObject
+            {
+                ["command"] = ReadTomlString(cmd.Success ? cmd.Groups[1].Value : null),
+                ["args"] = new JArray { ReadTomlString(arg.Success ? arg.Groups[1].Value : null) }
+            };
+            return IsEntryValid(entry);
+        }
+
+        private static string CodexHome()
+        {
+            var env = Environment.GetEnvironmentVariable("CODEX_HOME");
+            if (!string.IsNullOrWhiteSpace(env)) return env!;
+            return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".codex");
+        }
+
+        /// <summary>
+        /// ChatGPT Desktop ships as an MSIX package (OpenAI.Codex_* /
+        /// OpenAI.ChatGPT*); the Codex CLI leaves ~/.codex. Either means
+        /// someone will read config.toml.
+        /// </summary>
+        private static bool ChatGptSeen(string codexDir)
+        {
+            if (Directory.Exists(codexDir)) return true;
+            try
+            {
+                var packages = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Packages");
+                foreach (var dir in Directory.GetDirectories(packages, "OpenAI.*"))
+                {
+                    var name = Path.GetFileName(dir);
+                    if (name.StartsWith("OpenAI.Codex", StringComparison.OrdinalIgnoreCase) ||
+                        name.StartsWith("OpenAI.ChatGPT", StringComparison.OrdinalIgnoreCase))
+                        return true;
+                }
+            }
+            catch { /* no Packages folder */ }
+            return false;
+        }
+
+        private static ConfigureResult EnsureTomlConfigFile(
+            string target, string configPath, string nodeExe, string indexJs, bool createIfMissing)
+        {
+            var result = new ConfigureResult { Target = target };
+
+            string raw = "";
+            bool hadBom = false;
+            if (File.Exists(configPath))
+            {
+                try { raw = File.ReadAllText(configPath); }
+                catch (Exception ex)
+                {
+                    result.Detail = $"Failed to read config: {ex.Message}";
+                    return result;
+                }
+                if (raw.Length > 0 && raw[0] == '﻿')
+                {
+                    raw = raw.Substring(1);
+                    hadBom = true;
+                }
+            }
+            else if (!createIfMissing)
+            {
+                result.Detail = "Not installed (ChatGPT Desktop not found) — skipped.";
+                return result;
+            }
+
+            var eol = raw.Contains("\r\n") ? "\r\n" : "\n";
+            var keep = new List<string>();
+            var own = new List<string>();
+            SplitTomlBlock(raw, keep, own);
+
+            if (own.Count > 0 && IsTomlBlockValid(own) && !hadBom)
+            {
+                result.Configured = true;
+                result.Detail = "Already configured correctly.";
+                return result;
+            }
+
+            while (keep.Count > 0 && keep[keep.Count - 1].Trim().Length == 0) keep.RemoveAt(keep.Count - 1);
+            var block = new[]
+            {
+                $"[mcp_servers.{ServerKey}]",
+                $"command = {TomlString(nodeExe)}",
+                $"args = [{TomlString(indexJs)}]",
+                // First launch of node can exceed the 10 s default while
+                // antivirus scans it; long Revit operations exceed the 60 s one.
+                "startup_timeout_sec = 30",
+                "tool_timeout_sec = 300",
+            };
+            var output = (keep.Count > 0 ? string.Join(eol, keep) + eol + eol : "") +
+                         string.Join(eol, block) + eol;
+
+            try
+            {
+                if (File.Exists(configPath))
+                    File.Copy(configPath, configPath + ".bimbot-backup", overwrite: true);
+                var dir = Path.GetDirectoryName(configPath);
+                if (dir != null) Directory.CreateDirectory(dir);
+                File.WriteAllText(configPath, output,
+                    new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+
+                result.Configured = true;
+                result.Changed = true;
+                result.Detail = hadBom
+                    ? "Rewrote config without the UTF-8 BOM that was breaking it."
+                    : own.Count == 0
+                        ? "Added BIM-Bot entry."
+                        : "Repaired stale BIM-Bot entry (old path no longer existed).";
+            }
+            catch (Exception ex)
+            {
+                result.Detail = $"Failed to write config: {ex.Message}";
+            }
+            return result;
+        }
+
+        // ────────────────────────────────────────────────────────
         // Public API
         // ────────────────────────────────────────────────────────
 
@@ -324,6 +546,12 @@ namespace BIMBotPlugin.Core
                     createIfMissing: Directory.Exists(codeRoot),
                     serversKey: "servers", stdioType: true));
             }
+
+            // ChatGPT Desktop (and Codex CLI, which shares the file) — TOML.
+            // Created once ChatGPT/Codex shows up for this user.
+            var codexDir = CodexHome();
+            results.Add(EnsureTomlConfigFile("ChatGPT Desktop", Path.Combine(codexDir, "config.toml"),
+                nodeExe, indexJs, createIfMissing: ChatGptSeen(codexDir)));
 
             return results;
         }

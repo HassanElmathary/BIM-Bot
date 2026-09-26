@@ -233,7 +233,7 @@ System requirements: add `Navisworks Manage 2020+ (optional, for coordination to
 > **Navisworks Manage support** — 21 new `navis_*` tools: model search, saved viewpoints, selection sets, Clash Detective (run tests, triage results, set status, export HTML/XML reports), append NWC/NWD/IFC, publish NWD, color/visibility overrides. Federated workflow: Revit `export_to_nwc` → `navis_append_file` → clash → AI triage, all from Claude or ChatGPT.
 
 ### 4. NEW: ChatGPT MCP section (after Claude config section)
-Paste `revit-mcp-server/mcp-config.chatgpt.json` (key `"BIM-Bot-Navis"`). Note: same `build/index.js` serves both Revit (port 8080) and Navisworks (port 8091).
+Automatic: installer + Revit plugin write `[mcp_servers.BIM-Bot]` into `%USERPROFILE%\.codex\config.toml` (ChatGPT Desktop reads MCP servers from there). Manual sample: `revit-mcp-server/mcp-config.chatgpt.toml`. Note: same `build/index.js` serves both Revit (port 8080) and Navisworks (port 8091).
 
 ### 5. Footer → `© 2026 BIM-Bot — Built by Hassan Elmathary`
 

@@ -39,14 +39,14 @@ namespace BIMBotPlugin.Commands
                     if (anyChanged)
                     {
                         sb.AppendLine("To apply the changes:");
-                        sb.AppendLine("1. Fully restart the configured client (Claude/Cursor/Windsurf/VS Code — File → Exit, then reopen)");
+                        sb.AppendLine("1. Fully restart the configured client (Claude/ChatGPT/Cursor/Windsurf/VS Code — File → Exit, then reopen)");
                         sb.AppendLine("2. Keep Revit open — the BIM-Bot service starts automatically");
                         sb.AppendLine("3. Ask it: \"Use BIM-Bot to list the walls in the model\"");
                     }
                     else
                     {
                         sb.AppendLine("Everything is already set up — no changes were needed.");
-                        sb.AppendLine("If Claude still can't see BIM-Bot, fully restart the Claude app.");
+                        sb.AppendLine("If Claude or ChatGPT still can't see BIM-Bot, fully restart that app.");
                     }
                 }
 

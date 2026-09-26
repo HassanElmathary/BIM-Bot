@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * configure-claude.cjs — register (or repair) the BIM-Bot MCP server in
- * Claude Desktop and Claude Code configs.
+ * Claude Desktop, Claude Code, ChatGPT Desktop, Cursor, Windsurf and VS Code.
  *
  * Unlike a naive "skip if BIM-Bot exists" check, this validates that the
  * configured node/server paths actually exist and repairs stale entries
@@ -148,6 +148,199 @@ function ensureConfig(label, configPath, nodeExe, indexJs, createIfMissing, opts
     return `${label}: ${wasStale ? "repaired stale entry" : "added BIM-Bot entry"}`;
 }
 
+// ── ChatGPT Desktop (TOML) ───────────────────────────────────
+//
+// ChatGPT Desktop runs local stdio MCP servers from the Codex config it
+// shares with the Codex CLI: %USERPROFILE%\.codex\config.toml (or
+// $CODEX_HOME\config.toml), table [mcp_servers.<name>]. It is TOML, not JSON,
+// and the file is full of settings the app owns (model, projects, plugins...),
+// so it is edited line-wise: only the BIM-Bot table (and its sub-tables) is
+// replaced; every other byte is preserved.
+
+// Parse a TOML table header line into its key parts, or null if the line is
+// not a header. Handles bare, "basic" and 'literal' key segments.
+function tomlHeaderParts(line) {
+    const m = /^\s*\[\[?(.+?)\]\]?\s*(#.*)?$/.exec(line);
+    if (!m) return null;
+    const src = m[1];
+    const parts = [];
+    let i = 0;
+    while (i < src.length) {
+        while (src[i] === " " || src[i] === "\t") i++;
+        let part = "";
+        if (src[i] === '"') {
+            i++;
+            while (i < src.length && src[i] !== '"') {
+                if (src[i] === "\\" && i + 1 < src.length) { part += src[i + 1]; i += 2; }
+                else part += src[i++];
+            }
+            i++;
+        } else if (src[i] === "'") {
+            i++;
+            while (i < src.length && src[i] !== "'") part += src[i++];
+            i++;
+        } else {
+            while (i < src.length && /[A-Za-z0-9_-]/.test(src[i])) part += src[i++];
+            if (!part) return null; // not a key — e.g. an array value line
+        }
+        parts.push(part);
+        while (src[i] === " " || src[i] === "\t") i++;
+        if (i < src.length) {
+            if (src[i] !== ".") return null;
+            i++;
+        }
+    }
+    return parts;
+}
+
+function isOwnTomlTable(parts) {
+    return !!parts && parts.length >= 2 && parts[0] === "mcp_servers" && parts[1] === SERVER_KEY;
+}
+
+// Split a TOML document into the BIM-Bot block and everything else.
+// Also drops inline forms (`BIM-Bot = {...}` under [mcp_servers], or
+// `mcp_servers.BIM-Bot... =` dotted keys at the root) so the table we append
+// can never collide with a duplicate key.
+function splitTomlBlock(text) {
+    const lines = text.split(/\r?\n/);
+    const keep = [];
+    const own = [];
+    let table = [];          // key parts of the current table ([] = root)
+    let inOwn = false;
+    const inlineKey = new RegExp(`^\\s*(["']?)${SERVER_KEY}\\1\\s*=`);
+    const rootDotted = new RegExp(`^\\s*mcp_servers\\s*\\.\\s*(["']?)${SERVER_KEY}\\1\\s*[.=]`);
+    for (const line of lines) {
+        const parts = tomlHeaderParts(line);
+        if (parts) {
+            table = parts;
+            inOwn = isOwnTomlTable(parts);
+        }
+        if (inOwn) { own.push(line); continue; }
+        if (!parts && table.length === 1 && table[0] === "mcp_servers" && inlineKey.test(line)) { own.push(line); continue; }
+        if (!parts && table.length === 0 && rootDotted.test(line)) { own.push(line); continue; }
+        keep.push(line);
+    }
+    return { keep, own };
+}
+
+function tomlString(value) {
+    // Literal strings need no escaping — ideal for Windows paths.
+    if (!/['\r\n]/.test(value)) return `'${value}'`;
+    return JSON.stringify(value); // valid TOML basic string for plain text
+}
+
+function readTomlString(src) {
+    if (!src) return null;
+    if (src[0] === "'") return src.slice(1, -1);
+    try { return JSON.parse(src); } catch { return null; }
+}
+
+function isTomlBlockValid(ownLines) {
+    const text = ownLines.join("\n");
+    const cmd = /^\s*command\s*=\s*("(?:[^"\\]|\\.)*"|'[^']*')/m.exec(text);
+    const arg = /^\s*args\s*=\s*\[\s*("(?:[^"\\]|\\.)*"|'[^']*')/m.exec(text);
+    return isEntryValid({
+        command: readTomlString(cmd && cmd[1]),
+        args: [readTomlString(arg && arg[1])],
+    });
+}
+
+function buildTomlBlock(nodeExe, indexJs) {
+    return [
+        `[mcp_servers.${SERVER_KEY}]`,
+        `command = ${tomlString(nodeExe)}`,
+        `args = [${tomlString(indexJs)}]`,
+        // First launch of node from Program Files can exceed the 10 s default
+        // while antivirus scans it; long Revit operations exceed the 60 s one.
+        "startup_timeout_sec = 30",
+        "tool_timeout_sec = 300",
+    ];
+}
+
+function codexHome(home, isCurrentProfile) {
+    if (isCurrentProfile && process.env.CODEX_HOME) return process.env.CODEX_HOME;
+    return path.join(home, ".codex");
+}
+
+// ChatGPT Desktop ships as an MSIX package (OpenAI.Codex_* / OpenAI.ChatGPT*);
+// the Codex CLI leaves ~/.codex. Either means someone will read config.toml.
+function chatGptSeen(home, codexDir) {
+    if (fs.existsSync(codexDir)) return true;
+    try {
+        const packages = path.join(home, "AppData", "Local", "Packages");
+        return fs.readdirSync(packages).some((n) => /^OpenAI\.(Codex|ChatGPT)/i.test(n));
+    } catch {
+        return false;
+    }
+}
+
+function ensureTomlConfig(label, configPath, nodeExe, indexJs, createIfMissing) {
+    let raw = "";
+    let hadBom = false;
+    if (fs.existsSync(configPath)) {
+        try {
+            raw = fs.readFileSync(configPath, "utf8");
+        } catch (err) {
+            return `${label}: failed to read config (${err.message}): ${configPath}`;
+        }
+        hadBom = raw.charCodeAt(0) === 0xfeff;
+        if (hadBom) raw = raw.slice(1);
+    } else if (!createIfMissing) {
+        return `${label}: not installed (no config file) — skipped`;
+    }
+
+    const eol = raw.includes("\r\n") ? "\r\n" : "\n";
+    const { keep, own } = splitTomlBlock(raw);
+    if (own.length && isTomlBlockValid(own) && !hadBom) {
+        return `${label}: already configured correctly`;
+    }
+
+    while (keep.length && keep[keep.length - 1].trim() === "") keep.pop();
+    const out = (keep.length ? keep.join(eol) + eol + eol : "") +
+        buildTomlBlock(nodeExe, indexJs).join(eol) + eol;
+
+    try {
+        if (fs.existsSync(configPath)) {
+            fs.copyFileSync(configPath, configPath + ".bimbot-backup");
+        }
+        fs.mkdirSync(path.dirname(configPath), { recursive: true });
+        fs.writeFileSync(configPath, out);
+    } catch (err) {
+        return `${label}: failed to write config (${err.message}): ${configPath}`;
+    }
+    if (hadBom) return `${label}: rewrote config without UTF-8 BOM (breaks some parsers)`;
+    return `${label}: ${own.length ? "repaired stale entry" : "added BIM-Bot entry"}`;
+}
+
+function removeTomlEntry(label, configPath) {
+    if (!fs.existsSync(configPath)) {
+        return `${label}: no config file — skipped`;
+    }
+    let raw;
+    try {
+        raw = fs.readFileSync(configPath, "utf8");
+    } catch (err) {
+        return `${label}: failed to read config (${err.message}): ${configPath}`;
+    }
+    if (raw.charCodeAt(0) === 0xfeff) raw = raw.slice(1);
+    const eol = raw.includes("\r\n") ? "\r\n" : "\n";
+    const { keep, own } = splitTomlBlock(raw);
+    if (!own.length) return `${label}: no BIM-Bot entry — skipped`;
+    while (keep.length && keep[keep.length - 1].trim() === "") keep.pop();
+    try {
+        fs.copyFileSync(configPath, configPath + ".bimbot-backup");
+        fs.writeFileSync(configPath, keep.length ? keep.join(eol) + eol : "");
+    } catch (err) {
+        return `${label}: failed to write config (${err.message}): ${configPath}`;
+    }
+    return `${label}: removed BIM-Bot entry`;
+}
+
+function isCurrentHome(home) {
+    const current = process.env.USERPROFILE || require("os").homedir();
+    return home.toLowerCase() === current.toLowerCase();
+}
+
 /**
  * Configure every supported MCP client inside one user profile.
  * Returns the number of clients that ended up configured.
@@ -200,6 +393,12 @@ function configureProfile(home, nodeExe, indexJs, { scanningAllProfiles = false 
         report(ensureConfig(label, path.join(codeRoot, "User", "mcp.json"),
             nodeExe, indexJs, fs.existsSync(codeRoot), { serversKey: "servers", stdioType: true }));
     }
+
+    // ChatGPT Desktop (and Codex CLI, which shares the file) — TOML config.
+    // Created once ChatGPT/Codex shows up in the profile.
+    const codexDir = codexHome(home, isCurrentHome(home));
+    report(ensureTomlConfig("ChatGPT Desktop", path.join(codexDir, "config.toml"),
+        nodeExe, indexJs, chatGptSeen(home, codexDir)));
 
     return configured;
 }
@@ -274,6 +473,8 @@ function removeFromProfile(home) {
             path.join(appData, dirName, "User", "mcp.json"),
             { serversKey: "servers" }));
     }
+    report(removeTomlEntry("ChatGPT Desktop",
+        path.join(codexHome(home, isCurrentHome(home)), "config.toml")));
     return removed;
 }
 
@@ -351,7 +552,7 @@ function main() {
             "and click \"Connect Claude\" on the BIM-Bot ribbon (or re-run this script).");
     } else {
         console.log(`\nDone — ${totalConfigured} client config(s) in place. ` +
-            "Fully quit and reopen your MCP client (Claude, Cursor, Windsurf, VS Code) for changes to take effect.");
+            "Fully quit and reopen your MCP client (Claude, ChatGPT, Cursor, Windsurf, VS Code) for changes to take effect.");
     }
 }
 

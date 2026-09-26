@@ -203,6 +203,36 @@ foreach ($c in $clients) {
     }
 }
 
+# ChatGPT Desktop keeps MCP servers in the Codex TOML config, not JSON.
+$codexHome = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { "$env:USERPROFILE\.codex" }
+$toml = Join-Path $codexHome "config.toml"
+if (Test-Path $toml) {
+    $anyClient = $true
+    $own = $false; $block = @()
+    foreach ($l in Get-Content $toml -Encoding UTF8) {
+        if ($l -match '^\s*\[\[?\s*mcp_servers\s*\.\s*["'']?BIM-Bot["'']?\s*[\.\]]') { $own = $true }
+        elseif ($l -match '^\s*\[\[?\s*[A-Za-z0-9_"''-]') { $own = $false }
+        if ($own) { $block += $l }
+    }
+    $tomlStr = { param($s) if (-not $s) { $null } elseif ($s.StartsWith("'")) { $s.Trim("'") } else { $s | ConvertFrom-Json } }
+    $cmdM = $block | Select-String -Pattern '^\s*command\s*=\s*("(?:[^"\\]|\\.)*"|''[^'']*'')' | Select-Object -First 1
+    $argM = $block | Select-String -Pattern '^\s*args\s*=\s*\[\s*("(?:[^"\\]|\\.)*"|''[^'']*'')' | Select-Object -First 1
+    $cmd = if ($cmdM) { & $tomlStr $cmdM.Matches[0].Groups[1].Value } else { $null }
+    $arg = if ($argM) { & $tomlStr $argM.Matches[0].Groups[1].Value } else { $null }
+    if (-not $block) {
+        Write-Bad "ChatGPT Desktop: no BIM-Bot entry in $toml"
+        Write-Info "Run this script with -Fix, or click 'Connect Claude' on the BIM-Bot ribbon."
+    } elseif (-not $cmd -or -not (Test-Path $cmd)) {
+        Write-Bad "ChatGPT Desktop: BIM-Bot entry points at a missing command: '$cmd'"
+        Write-Info "Run this script with -Fix."
+    } elseif (-not $arg -or -not (Test-Path $arg)) {
+        Write-Bad "ChatGPT Desktop: BIM-Bot entry points at a missing server script: '$arg'"
+        Write-Info "Run this script with -Fix."
+    } else {
+        Write-Ok "ChatGPT Desktop: configured -> $arg"
+    }
+}
+
 if (-not $anyClient) {
     Write-Warn "No MCP client config found for this user."
     Write-Info "Install Claude Desktop, then run this script with -Fix."

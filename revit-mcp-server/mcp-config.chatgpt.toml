@@ -1,0 +1,7 @@
+# ChatGPT Desktop — append to %USERPROFILE%\.codex\config.toml, then restart ChatGPT.
+# The BIM-Bot installer and the Revit plugin write this automatically.
+[mcp_servers.BIM-Bot]
+command = 'C:\Program Files\BIMBot\nodejs\node.exe'
+args = ['C:\Program Files\BIMBot\server\build\index.js']
+startup_timeout_sec = 30
+tool_timeout_sec = 300

@@ -1,8 +1,8 @@
 {
-  "version": "2.6.1",
-  "releaseUrl": "https://github.com/HassanElmathary/BIM-Bot/releases/tag/v2.6.1",
-  "downloadUrl": "https://github.com/HassanElmathary/BIM-Bot/releases/download/v2.6.1/BIMBot-Setup-2.6.1.exe",
-  "assetFileName": "BIMBot-Setup-2.6.1.exe",
-  "changelog": "BIM-Bot v2.6.1 — total uninstall. FIX: uninstall now removes everything: the app folder (generated launcher/config files are deleted so the folder on C: no longer survives), Revit manifests + copied DLLs in both per-user and machine scopes for 2020-2027 (all folder names: BIMBot, BIMBotPlugin, RevitMCP), %APPDATA%/%LOCALAPPDATA% BIMBot runtime data (logs, settings, license, ProjectData, handshake), and the BIM-Bot entry in all 8 MCP client configs (Claude Desktop incl. MS Store, Claude Code, Cursor, Windsurf, Gemini CLI, VS Code, VS Code Insiders) with .bimbot-backup. NEW: configure-claude.cjs --remove mode. Locked files are removed on reboot instead of lingering, and uninstall warns if Revit is still open.",
+  "version": "2.7.0",
+  "releaseUrl": "https://github.com/HassanElmathary/BIM-Bot/releases/tag/v2.7.0",
+  "downloadUrl": "https://github.com/HassanElmathary/BIM-Bot/releases/download/v2.7.0/BIMBot-Setup-2.7.0.exe",
+  "assetFileName": "BIMBot-Setup-2.7.0.exe",
+  "changelog": "BIM-Bot v2.7.0 — ChatGPT Desktop auto-connect. NEW: the installer, every Revit start, and the 'Connect Claude' ribbon button now register BIM-Bot in ChatGPT Desktop automatically (%USERPROFILE%\\.codex\\config.toml, [mcp_servers.BIM-Bot]) — no manual setup; all 230 tools appear in ChatGPT after a restart. Only the BIM-Bot table is edited (other ChatGPT settings untouched, .bimbot-backup written first); stale paths are repaired; longer startup/tool timeouts for large Revit operations. Uninstall removes the ChatGPT entry too (now 9 MCP client configs). bimbot-doctor.ps1 checks the ChatGPT entry. The mcp-config.chatgpt.json sample is replaced by mcp-config.chatgpt.toml (ChatGPT reads TOML, not JSON).",
   "minVersion": "1.0.0"
 }
