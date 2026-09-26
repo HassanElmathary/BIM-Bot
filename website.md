@@ -239,3 +239,31 @@ Paste `revit-mcp-server/mcp-config.chatgpt.json` (key `"BIM-Bot-Navis"`). Note: 
 
 ### 6. Publish `version.json` to `https://elmthary.space/version.json`
 New content (copy from repo root `version.json`): version `2.6.0`, downloadUrl `.../releases/download/v2.6.0/BIMBot-Setup-2.6.0.exe`. The in-Revit update checker reads this URL first, GitHub raw second — both must serve 2.6.0 or users won't be notified.
+
+---
+
+# Website Update Brief — v2.6.1 (total uninstall)
+**Date:** September 26, 2026
+
+## Changes Required
+
+### 1. Download button → **Download BIM-Bot v2.6.1** — `BIMBot-Setup-2.6.1.exe`
+Link: `https://github.com/HassanElmathary/BIM-Bot/releases/latest` (unchanged).
+
+### 2. UPDATE: Uninstall section — "What it removes"
+Replace the list with (uninstall is now total — v2.6.1):
+- 🧹 App folder (`C:\Program Files\BIMBot` or `%LOCALAPPDATA%\Programs\BIMBot`) — including generated launcher + config files, so nothing is left on C:
+- 🧹 Revit plugin (`.addin` files + DLLs) from **both** per-user and machine scopes, all Revit versions 2020–2027
+- 🧹 Runtime data (`%APPDATA%\BIMBot`, `%LOCALAPPDATA%\BIMBot` — logs, settings, license, ProjectData)
+- 🧹 `BIM-Bot` entry from **all** MCP client configs: Claude Desktop (incl. MS Store), Claude Code, Cursor, Windsurf, Gemini CLI, VS Code, VS Code Insiders (+ legacy `revit-mcp` / `bim-bot` keys)
+
+Add note: *"Close Revit first for a clean uninstall — the uninstaller warns if Revit is open, and any file still locked is removed on reboot."*
+
+**Manual uninstall steps** (collapsible) — replace with:
+1. Delete `%APPDATA%\Autodesk\Revit\Addins\20XX\BIMBot.addin` **and** `%PROGRAMDATA%\Autodesk\Revit\Addins\20XX\BIMBot.addin` for each Revit version (plus `BIMBot` / `BIMBotPlugin` / `RevitMCP` subfolders)
+2. Remove the `"BIM-Bot"` block from each MCP client config (`%APPDATA%\Claude\claude_desktop_config.json`, `~/.claude.json`, `~/.cursor/mcp.json`, `~/.codeium/windsurf/mcp_config.json`, `~/.gemini/settings.json`, VS Code `mcp.json`)
+3. Delete the app folder (`C:\Program Files\BIMBot` or `%LOCALAPPDATA%\Programs\BIMBot`) and the data folders (`%APPDATA%\BIMBot`, `%LOCALAPPDATA%\BIMBot`)
+4. Restart Revit and Claude Desktop
+
+### 3. Publish `version.json` to `https://elmthary.space/version.json`
+New content (copy from repo root `version.json`): version `2.6.1`, downloadUrl `.../releases/download/v2.6.1/BIMBot-Setup-2.6.1.exe`. Do this **together with** creating the GitHub release `v2.6.1` (with `BIMBot-Setup-2.6.1.exe` attached) — the in-Revit update checker reads the site URL first, GitHub raw second; publishing the JSON before the release asset exists would point users at a 404.
