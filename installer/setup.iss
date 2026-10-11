@@ -235,10 +235,16 @@ end;
 //
 // One net48 DLL (plugin-navis\BIMBotNavisPlugin.dll) serves every Manage
 // year: it is copied into <Manage install>\Plugins\BIMBot\, which Navisworks
-// scans at startup. That folder lives under Program Files, so per-user
-// (non-admin) installs skip the copy with a log line instead of failing —
-// the MCP configs (incl. BIM-Bot-Navis) are still written, and copying the
-// single DLL by hand later is enough to light Navisworks up.
+// scans at startup. That folder lives under Program Files, so a non-admin
+// install retries the copy/delete elevated (one UAC prompt) instead of
+// silently skipping it — otherwise Navisworks never loads the plugin and
+// the navis_* MCP tools have nothing to talk to.
+
+var
+  // Dirs (semicolon-separated) whose Navisworks plugin copy/delete needs
+  // admin rights. They are handled with a single elevated call so the user
+  // only ever sees one UAC prompt per install/uninstall.
+  NavisCleanupDirs: string;
 
 function GetNavisInstallDir(Year: string): string;
 var
@@ -267,6 +273,55 @@ begin
   Result := GetNavisInstallDir(Year) <> '';
 end;
 
+// Run one elevated PowerShell that creates every dir in Dirs and copies
+// SrcDll into each as BIMBotNavisPlugin.dll. Dirs is semicolon-separated.
+// Returns True when the DLL exists in every dir afterwards.
+function InstallNavisPluginElevated(SrcDll, Dirs: string): Boolean;
+var
+  Params, Dir, Dll: string;
+  ResultCode: Integer;
+  p, q: Integer;
+  Rest: string;
+begin
+  Result := True;
+  Params := '-NoProfile -NonInteractive -Command "';
+  Rest := Dirs;
+  while Rest <> '' do
+  begin
+    p := Pos(';', Rest);
+    if p = 0 then begin Dir := Rest; Rest := ''; end
+    else begin Dir := Copy(Rest, 1, p - 1); Rest := Copy(Rest, p + 1, Length(Rest)); end;
+    if Dir = '' then Continue;
+    Params := Params + 'New-Item -ItemType Directory -Force ''' + Dir + ''' | Out-Null; ' +
+      'Copy-Item ''' + SrcDll + ''' ''' + Dir + '\BIMBotNavisPlugin.dll'' -Force; ';
+  end;
+  Params := Params + '"';
+  // runas = UAC prompt. If the user declines, ShellExec returns False and we
+  // fall through to the manual-copy hint below.
+  if not ShellExec('runas', 'powershell.exe', Params, '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+  begin
+    Log('Navisworks: elevated copy declined or failed to launch');
+    Result := False;
+    Exit;
+  end;
+  Rest := Dirs;
+  while Rest <> '' do
+  begin
+    q := Pos(';', Rest);
+    if q = 0 then begin Dir := Rest; Rest := ''; end
+    else begin Dir := Copy(Rest, 1, q - 1); Rest := Copy(Rest, q + 1, Length(Rest)); end;
+    if Dir = '' then Continue;
+    Dll := Dir + '\BIMBotNavisPlugin.dll';
+    if FileExists(Dll) then
+      Log('Installed Navisworks plugin (elevated) in ' + Dir)
+    else
+    begin
+      Log('Navisworks: elevated copy did not produce ' + Dll + ' — copy BIMBotNavisPlugin.dll there by hand');
+      Result := False;
+    end;
+  end;
+end;
+
 procedure InstallNavisPlugin(Year: string);
 var
   TargetDir: string;
@@ -279,15 +334,20 @@ begin
     Log('Navisworks ' + Year + ': plugin DLL missing from install (' + SrcDll + ') — skipped');
     Exit;
   end;
-  if not ForceDirectories(TargetDir) then
+  // Fast path: we can already write there (admin install).
+  if ForceDirectories(TargetDir) then
   begin
-    Log('Navisworks ' + Year + ': cannot write ' + TargetDir + ' (needs admin?) — copy BIMBotNavisPlugin.dll there by hand');
-    Exit;
+    if FileCopy(SrcDll, TargetDir + '\BIMBotNavisPlugin.dll', False) then
+    begin
+      Log('Installed Navisworks plugin for Manage ' + Year + ' (' + TargetDir + ')');
+      Exit;
+    end;
   end;
-  if FileCopy(SrcDll, TargetDir + '\BIMBotNavisPlugin.dll', False) then
-    Log('Installed Navisworks plugin for Manage ' + Year + ' (' + TargetDir + ')')
-  else
-    Log('Navisworks ' + Year + ': copy failed (needs admin?) — copy BIMBotNavisPlugin.dll to ' + TargetDir + ' by hand');
+  // Slow path: queue for the single elevated copy (one UAC prompt for all
+  // years — see the end of CurStepChanged's Navisworks block).
+  if Pos(TargetDir + ';', NavisCleanupDirs) = 0 then
+    NavisCleanupDirs := NavisCleanupDirs + TargetDir + ';';
+  Log('Navisworks ' + Year + ': queued elevated copy into ' + TargetDir);
 end;
 
 procedure RemoveNavisPlugin(Year: string);
@@ -307,8 +367,43 @@ begin
       Dll := Dir + '\BIMBotNavisPlugin.dll';
       if FileExists(Dll) then DeleteFile(Dll);
       if DirExists(Dir) then RemoveDir(Dir);
+      // Anything left behind needs admin rights: queue it for the single
+      // elevated cleanup at the end of the uninstall step.
+      if FileExists(Dll) or DirExists(Dir) then
+      begin
+        if Pos(Dir + ';', NavisCleanupDirs) = 0 then
+          NavisCleanupDirs := NavisCleanupDirs + Dir + ';';
+        Log('Navisworks: queued elevated removal of ' + Dir);
+      end;
     end;
   end;
+end;
+
+// One elevated PowerShell removing every queued Navisworks plugin dir.
+// Single UAC prompt for the whole uninstall.
+procedure RemoveNavisPluginElevated();
+var
+  Params, Dir, Rest: string;
+  ResultCode: Integer;
+  p: Integer;
+begin
+  if NavisCleanupDirs = '' then Exit;
+  Params := '-NoProfile -NonInteractive -Command "';
+  Rest := NavisCleanupDirs;
+  while Rest <> '' do
+  begin
+    p := Pos(';', Rest);
+    if p = 0 then begin Dir := Rest; Rest := ''; end
+    else begin Dir := Copy(Rest, 1, p - 1); Rest := Copy(Rest, p + 1, Length(Rest)); end;
+    if Dir = '' then Continue;
+    Params := Params + 'Remove-Item -LiteralPath ''' + Dir + ''' -Recurse -Force -ErrorAction SilentlyContinue; ';
+  end;
+  Params := Params + '"';
+  if ShellExec('runas', 'powershell.exe', Params, '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+    Log('Navisworks: elevated removal attempted for queued plugin dirs')
+  else
+    Log('Navisworks: elevated removal declined — plugin copies may remain under Program Files');
+  NavisCleanupDirs := '';
 end;
 
 procedure RemoveNavisPluginEverywhere(Year: string);
@@ -975,6 +1070,15 @@ begin
     if WizardIsTaskSelected('navis2025') then InstallNavisPlugin('2025');
     if WizardIsTaskSelected('navis2026') then InstallNavisPlugin('2026');
 
+    // Flush any Navisworks copies that needed admin rights: one elevated
+    // PowerShell (single UAC prompt) handles every queued year at once.
+    if NavisCleanupDirs <> '' then
+    begin
+      if not InstallNavisPluginElevated(ExpandConstant('{app}\plugin-navis\BIMBotNavisPlugin.dll'), NavisCleanupDirs) then
+        Log('Navisworks: some plugin copies still missing — copy BIMBotNavisPlugin.dll from {app}\plugin-navis by hand');
+      NavisCleanupDirs := '';
+    end;
+
     // Auto-configure Claude Desktop
     if WizardIsComponentSelected('claude') then
       ConfigureClaudeDesktop();
@@ -1019,6 +1123,10 @@ begin
     RemoveNavisPluginEverywhere('2024');
     RemoveNavisPluginEverywhere('2025');
     RemoveNavisPluginEverywhere('2026');
+
+    // Flush anything the non-elevated uninstall could not delete (Program
+    // Files copies): one UAC prompt for all of it.
+    RemoveNavisPluginElevated();
 
     RemoveLegacyAppDirs();
   end
