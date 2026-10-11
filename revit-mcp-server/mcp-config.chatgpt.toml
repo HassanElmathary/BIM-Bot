@@ -5,3 +5,12 @@ command = 'C:\Program Files\BIMBot\nodejs\node.exe'
 args = ['C:\Program Files\BIMBot\server\build\index.js']
 startup_timeout_sec = 30
 tool_timeout_sec = 300
+
+# Navisworks side of BIM-Bot (same server binary; navis_* tools route via
+# BIMBOT_NAVIS_PORT to the Navisworks plugin on 8091). Also written automatically.
+[mcp_servers.BIM-Bot-Navis]
+command = 'C:\Program Files\BIMBot\nodejs\node.exe'
+args = ['C:\Program Files\BIMBot\server\build\index.js']
+env = { BIMBOT_NAVIS_PORT = "8091" }
+startup_timeout_sec = 30
+tool_timeout_sec = 300

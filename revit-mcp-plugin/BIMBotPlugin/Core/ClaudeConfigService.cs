@@ -19,6 +19,11 @@ namespace BIMBotPlugin.Core
     public static class ClaudeConfigService
     {
         private const string ServerKey = "BIM-Bot";
+        private const string NavisServerKey = "BIM-Bot-Navis";
+        // Navisworks MCP endpoint: the Navis plugin listens on 8091 (+scan) and
+        // publishes %LOCALAPPDATA%\BIMBot\service-navis.json. The env pin wins over
+        // the handshake file (see navisEndpoint.ts); the plain BIM-Bot entry keeps
+        // working for Revit on 8080 either way.
 
         public class ConfigureResult
         {
@@ -132,13 +137,17 @@ namespace BIMBotPlugin.Core
             return true;
         }
 
-        private static JObject BuildEntry(string nodeExe, string indexJs, bool stdioType)
+        private static JObject BuildEntry(string nodeExe, string indexJs, bool stdioType,
+            IDictionary<string, string>? env = null)
         {
+            var envObj = new JObject();
+            if (env != null)
+                foreach (var kv in env) envObj[kv.Key] = kv.Value;
             var entry = new JObject
             {
                 ["command"] = nodeExe,
                 ["args"] = new JArray { indexJs },
-                ["env"] = new JObject()
+                ["env"] = envObj
             };
             // VS Code requires an explicit transport type on each server entry.
             if (stdioType) entry["type"] = "stdio";
@@ -212,8 +221,13 @@ namespace BIMBotPlugin.Core
                 config[serversKey] = mcpServers;
             }
 
+            // Both entries: BIM-Bot (Revit, port 8080) and BIM-Bot-Navis
+            // (Navisworks, BIMBOT_NAVIS_PORT=8091). Same server binary — the
+            // navis_* tools route via withNavisConnection.
+            var navisEnv = new Dictionary<string, string> { ["BIMBOT_NAVIS_PORT"] = "8091" };
             var existing = mcpServers[ServerKey] as JObject;
-            if (IsEntryValid(existing) && !hadBom)
+            var existingNavis = mcpServers[NavisServerKey] as JObject;
+            if (IsEntryValid(existing) && IsEntryValid(existingNavis) && !hadBom)
             {
                 result.Configured = true;
                 result.Detail = "Already configured correctly.";
@@ -221,7 +235,7 @@ namespace BIMBotPlugin.Core
             }
 
             // Missing, stale, BOM-prefixed, or rebuilt from a broken file →
-            // write the correct entry (backup first).
+            // write the correct entries (backup first).
             try
             {
                 if (File.Exists(configPath))
@@ -231,6 +245,7 @@ namespace BIMBotPlugin.Core
                 if (dir != null) Directory.CreateDirectory(dir);
 
                 mcpServers[ServerKey] = BuildEntry(nodeExe, indexJs, stdioType);
+                mcpServers[NavisServerKey] = BuildEntry(nodeExe, indexJs, stdioType, navisEnv);
                 // UTF-8 without BOM — Claude Desktop chokes on a BOM.
                 File.WriteAllText(configPath, config.ToString(Formatting.Indented),
                     new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
@@ -239,8 +254,8 @@ namespace BIMBotPlugin.Core
                 result.Changed = true;
                 if (rebuiltFromBroken)
                     result.Detail = "Config was corrupt (invalid JSON) — backed it up and rebuilt it.";
-                else if (existing == null)
-                    result.Detail = "Added BIM-Bot entry.";
+                else if (existing == null && existingNavis == null)
+                    result.Detail = "Added BIM-Bot + BIM-Bot-Navis entries.";
                 else if (hadBom)
                     result.Detail = "Rewrote config without the UTF-8 BOM that was breaking it.";
                 else
@@ -316,10 +331,11 @@ namespace BIMBotPlugin.Core
         /// mcp_servers.BIM-Bot dotted keys) count as ours too, so the table we
         /// append can never collide with a duplicate key.
         /// </summary>
-        private static void SplitTomlBlock(string text, List<string> keep, List<string> own)
+        private static void SplitTomlBlock(string text, List<string> keep, List<string> own,
+            string serverKey = ServerKey)
         {
-            var inlineKey = new System.Text.RegularExpressions.Regex($"^\\s*([\"']?){ServerKey}\\1\\s*=");
-            var rootDotted = new System.Text.RegularExpressions.Regex($"^\\s*mcp_servers\\s*\\.\\s*([\"']?){ServerKey}\\1\\s*[.=]");
+            var inlineKey = new System.Text.RegularExpressions.Regex($"^\\s*([\"']?){serverKey}\\1\\s*=");
+            var rootDotted = new System.Text.RegularExpressions.Regex($"^\\s*mcp_servers\\s*\\.\\s*([\"']?){serverKey}\\1\\s*[.=]");
             var table = new List<string>();
             bool inOwn = false;
             foreach (var line in text.Replace("\r\n", "\n").Split('\n'))
@@ -328,7 +344,7 @@ namespace BIMBotPlugin.Core
                 if (parts != null)
                 {
                     table = parts;
-                    inOwn = parts.Count >= 2 && parts[0] == "mcp_servers" && parts[1] == ServerKey;
+                    inOwn = parts.Count >= 2 && parts[0] == "mcp_servers" && parts[1] == serverKey;
                 }
                 if (inOwn) { own.Add(line); continue; }
                 if (parts == null && table.Count == 1 && table[0] == "mcp_servers" && inlineKey.IsMatch(line)) { own.Add(line); continue; }
@@ -426,30 +442,51 @@ namespace BIMBotPlugin.Core
             }
 
             var eol = raw.Contains("\r\n") ? "\r\n" : "\n";
-            var keep = new List<string>();
-            var own = new List<string>();
-            SplitTomlBlock(raw, keep, own);
-
-            if (own.Count > 0 && IsTomlBlockValid(own) && !hadBom)
+            // Two passes — BIM-Bot (Revit) and BIM-Bot-Navis (Navisworks). Each
+            // split is key-specific so the other table lands in `keep` and survives.
+            var specs = new[]
+            {
+                (Key: ServerKey, Env: (string?)null),
+                (Key: NavisServerKey, Env: "env = { BIMBOT_NAVIS_PORT = \"8091\" }"),
+            };
+            // A BOM alone forces a rewrite (some parsers choke on it).
+            bool changed = hadBom;
+            bool addedAny = false;
+            string text = raw;
+            foreach (var spec in specs)
+            {
+                var keep = new List<string>();
+                var own = new List<string>();
+                SplitTomlBlock(text, keep, own, spec.Key);
+                if (own.Count > 0 && IsTomlBlockValid(own) && !hadBom) continue;
+                addedAny = addedAny || own.Count == 0;
+                changed = true;
+                while (keep.Count > 0 && keep[keep.Count - 1].Trim().Length == 0) keep.RemoveAt(keep.Count - 1);
+                var block = new List<string>
+                {
+                    $"[mcp_servers.{spec.Key}]",
+                    $"command = {TomlString(nodeExe)}",
+                    $"args = [{TomlString(indexJs)}]",
+                };
+                if (spec.Env != null) block.Add(spec.Env);
+                block.AddRange(new[]
+                {
+                    // First launch of node can exceed the 10 s default while
+                    // antivirus scans it; long Revit operations exceed the 60 s one.
+                    "startup_timeout_sec = 30",
+                    "tool_timeout_sec = 300",
+                });
+                text = (keep.Count > 0 ? string.Join(eol, keep) + eol + eol : "") +
+                       string.Join(eol, block) + eol;
+            }
+            if (!changed)
             {
                 result.Configured = true;
                 result.Detail = "Already configured correctly.";
                 return result;
             }
 
-            while (keep.Count > 0 && keep[keep.Count - 1].Trim().Length == 0) keep.RemoveAt(keep.Count - 1);
-            var block = new[]
-            {
-                $"[mcp_servers.{ServerKey}]",
-                $"command = {TomlString(nodeExe)}",
-                $"args = [{TomlString(indexJs)}]",
-                // First launch of node can exceed the 10 s default while
-                // antivirus scans it; long Revit operations exceed the 60 s one.
-                "startup_timeout_sec = 30",
-                "tool_timeout_sec = 300",
-            };
-            var output = (keep.Count > 0 ? string.Join(eol, keep) + eol + eol : "") +
-                         string.Join(eol, block) + eol;
+            var output = text;
 
             try
             {
@@ -464,8 +501,8 @@ namespace BIMBotPlugin.Core
                 result.Changed = true;
                 result.Detail = hadBom
                     ? "Rewrote config without the UTF-8 BOM that was breaking it."
-                    : own.Count == 0
-                        ? "Added BIM-Bot entry."
+                    : addedAny
+                        ? "Added BIM-Bot + BIM-Bot-Navis entries."
                         : "Repaired stale BIM-Bot entry (old path no longer existed).";
             }
             catch (Exception ex)

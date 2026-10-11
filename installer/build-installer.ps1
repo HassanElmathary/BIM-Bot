@@ -34,6 +34,15 @@ foreach ($band in $revitBands) {
 Pop-Location
 Write-Host "  [OK] All plugin bands built"
 
+# 1b. Build the Navisworks plugin (single net48 DLL, API-compatible
+#     across Manage 2020-2026 — compiled against the local Manage API).
+Write-Host "[1b/4] Building Navisworks Plugin..."
+Push-Location "$root\navis-mcp-plugin\BIMBotNavisPlugin"
+cmd /c "dotnet build -c Release >nul 2>&1"
+if ($LASTEXITCODE -ne 0) { Pop-Location; Write-Host "FAILED to build Navisworks plugin!"; exit 1 }
+Pop-Location
+Write-Host "  [OK] Navisworks plugin built"
+
 # 2. Build MCP server
 Write-Host "[2/4] Building MCP Server..."
 Push-Location "$root\revit-mcp-server"

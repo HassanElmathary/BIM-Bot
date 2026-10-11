@@ -1,8 +1,8 @@
 {
-  "version": "2.7.0",
-  "releaseUrl": "https://github.com/HassanElmathary/BIM-Bot/releases/tag/v2.7.0",
-  "downloadUrl": "https://github.com/HassanElmathary/BIM-Bot/releases/download/v2.7.0/BIMBot-Setup-2.7.0.exe",
-  "assetFileName": "BIMBot-Setup-2.7.0.exe",
-  "changelog": "BIM-Bot v2.7.0 — ChatGPT Desktop auto-connect. NEW: the installer, every Revit start, and the 'Connect Claude' ribbon button now register BIM-Bot in ChatGPT Desktop automatically (%USERPROFILE%\\.codex\\config.toml, [mcp_servers.BIM-Bot]) — no manual setup; all 230 tools appear in ChatGPT after a restart. Only the BIM-Bot table is edited (other ChatGPT settings untouched, .bimbot-backup written first); stale paths are repaired; longer startup/tool timeouts for large Revit operations. Uninstall removes the ChatGPT entry too (now 9 MCP client configs). bimbot-doctor.ps1 checks the ChatGPT entry. The mcp-config.chatgpt.json sample is replaced by mcp-config.chatgpt.toml (ChatGPT reads TOML, not JSON).",
+  "version": "2.7.2",
+  "releaseUrl": "https://github.com/HassanElmathary/BIM-Bot/releases/tag/v2.7.2",
+  "downloadUrl": "https://github.com/HassanElmathary/BIM-Bot/releases/download/v2.7.2/BIMBot-Setup-2.7.2.exe",
+  "assetFileName": "BIMBot-Setup-2.7.2.exe",
+  "changelog": "BIM-Bot v2.7.2 — Navisworks MCP for Claude and ChatGPT. NEW: the installer, the Connect button, and every Revit startup now register a second BIM-Bot-Navis MCP entry (same server, BIMBOT_NAVIS_PORT=8091) in Claude Desktop, Claude Code, Cursor, Windsurf, VS Code, and ChatGPT Desktop's config.toml — all 21 navis_* tools (model tree, search, viewpoints, clash detective, TimeLiner, append/export) appear in both AI clients with zero manual setup. Uninstall removes both entries. FIX: stale-entry repair now validates both entries.",
   "minVersion": "1.0.0"
 }

@@ -16,18 +16,22 @@ namespace BIMBotNavisPlugin
     /// </summary>
     public static class NavisPluginApp
     {
-        public const string Version = "2.7.0";
+        public const string Version = "2.7.2";
         public const int DefaultPort = 8091;
 
         private static NavisSocketService? _service;
         public static bool IsServiceRunning => _service?.IsRunning ?? false;
         public static int ActivePort => _service?.Port ?? DefaultPort;
+        public static DateTime LastAutoStartUtc { get; private set; } = DateTime.MinValue;
 
-        public static void StartService()
+        public static void StartService(bool manual = false)
         {
             if (_service == null)
-                _service = new NavisSocketService(DefaultPort, NavisCommandExecutor.Execute);
+                _service = new NavisSocketService(DefaultPort,
+                    (method, pars) => NavisMainThread.Execute(() => NavisCommandExecutor.Execute(method, pars)));
             _service.Start();
+            if (!manual) LastAutoStartUtc = DateTime.UtcNow;
+            NavisLogger.Log($"Service started on port {ActivePort} (manual={manual})");
         }
 
         public static void StopService()

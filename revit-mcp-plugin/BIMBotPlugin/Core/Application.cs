@@ -31,7 +31,7 @@ namespace BIMBotPlugin.Core
         public static SocketService? SocketServiceInstance => _socketService;
         public static ExternalEventManager? EventManagerInstance => _eventManager;
 
-        public static string Version => "2.7.0";
+        public static string Version => "2.7.2";
 
         public Result OnStartup(UIControlledApplication application)
         {
@@ -421,39 +421,47 @@ namespace BIMBotPlugin.Core
                 // Only writes when an entry is missing or broken.
                 _ = Task.Run(() => ClaudeConfigService.EnsureAllSilent());
 
-                // Background update check (non-blocking)
-                _ = Task.Run(async () =>
+                // Background update check (non-blocking) — respects user setting
+                var settings = PluginSettings.Load();
+                if (settings.AutoCheckUpdates)
                 {
-                    try
+                    _ = Task.Run(async () =>
                     {
-                        var checker = new UpdateChecker();
-                        var updateInfo = await checker.CheckForUpdateAsync();
-
-                        if (updateInfo.UpdateAvailable)
+                        try
                         {
-                            var skippedVersion = UpdateChecker.GetSkippedVersion();
-                            if (skippedVersion == updateInfo.LatestVersion)
+                            var checker = new UpdateChecker();
+                            var updateInfo = await checker.CheckForUpdateAsync();
+
+                            if (updateInfo.UpdateAvailable)
                             {
-                                Logger.Log($"Update {updateInfo.LatestVersion} available but skipped by user.");
-                                return;
-                            }
+                                var skippedVersion = UpdateChecker.GetSkippedVersion();
+                                if (skippedVersion == updateInfo.LatestVersion)
+                                {
+                                    Logger.Log($"Update {updateInfo.LatestVersion} available but skipped by user.");
+                                    return;
+                                }
 
-                            Logger.Log($"Update available: {updateInfo.LatestVersion}");
-                            // Queue UI notification for next idle
-                            _pendingUpdateInfo = updateInfo;
-                            // Update the ribbon button badge on the UI thread
-                            _pendingUpdateBadge = true;
+                                Logger.Log($"Update available: {updateInfo.LatestVersion}");
+                                // Queue UI notification for next idle
+                                _pendingUpdateInfo = updateInfo;
+                                // Update the ribbon button badge on the UI thread
+                                _pendingUpdateBadge = true;
+                            }
+                            else
+                            {
+                                Logger.Log("Plugin is up to date.");
+                            }
                         }
-                        else
+                        catch (Exception ex)
                         {
-                            Logger.Log("Plugin is up to date.");
+                            Logger.LogError("Startup update check failed (non-critical)", ex);
                         }
-                    }
-                    catch (Exception ex)
-                    {
-                        Logger.LogError("Startup update check failed (non-critical)", ex);
-                    }
-                });
+                    });
+                }
+                else
+                {
+                    Logger.Log("Auto-check for updates is disabled — skipping startup update check.");
+                }
 
                 return;
             }

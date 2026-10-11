@@ -35,6 +35,12 @@ const fs = require("fs");
 const path = require("path");
 
 const SERVER_KEY = "BIM-Bot";
+const NAVIS_SERVER_KEY = "BIM-Bot-Navis";
+// Navisworks MCP endpoint: the Navis plugin listens on 8091 (+scan) and
+// publishes %LOCALAPPDATA%\BIMBot\service-navis.json. The env pin wins over
+// the handshake file (see navisEndpoint.ts); the plain BIM-Bot entry keeps
+// working for Revit on 8080 either way.
+const NAVIS_ENV = { BIMBOT_NAVIS_PORT: "8091" };
 
 function parseArgs() {
     const args = process.argv.slice(2);
@@ -118,19 +124,30 @@ function ensureConfig(label, configPath, nodeExe, indexJs, createIfMissing, opts
         config[serversKey] = {};
     }
 
-    if (isEntryValid(config[serversKey][SERVER_KEY]) && !hadBom) {
+    // Both entries: BIM-Bot (Revit, port 8080) and BIM-Bot-Navis
+    // (Navisworks, BIMBOT_NAVIS_PORT=8091). Same server binary — the
+    // navis_* tools route via withNavisConnection.
+    const specs = [
+        { key: SERVER_KEY, env: {} },
+        { key: NAVIS_SERVER_KEY, env: { ...NAVIS_ENV } },
+    ];
+    const allValid = specs.every(({ key }) => isEntryValid(config[serversKey][key]));
+    if (allValid && !hadBom) {
         return `${label}: already configured correctly`;
     }
 
-    const wasStale = !!config[serversKey][SERVER_KEY];
-    const entry = {
-        command: nodeExe,
-        args: [indexJs],
-        env: {},
-    };
-    // VS Code requires an explicit transport type on each server entry.
-    if (stdioType) entry.type = "stdio";
-    config[serversKey][SERVER_KEY] = entry;
+    let wasStale = false;
+    for (const { key, env } of specs) {
+        if (config[serversKey][key]) wasStale = true;
+        const entry = {
+            command: nodeExe,
+            args: [indexJs],
+            env: { ...env },
+        };
+        // VS Code requires an explicit transport type on each server entry.
+        if (stdioType) entry.type = "stdio";
+        config[serversKey][key] = entry;
+    }
 
     try {
         if (fs.existsSync(configPath)) {
@@ -145,7 +162,7 @@ function ensureConfig(label, configPath, nodeExe, indexJs, createIfMissing, opts
 
     if (rebuiltFromBroken) return `${label}: config was corrupt (invalid JSON) — backed it up and rebuilt it`;
     if (hadBom) return `${label}: rewrote config without UTF-8 BOM (breaks some parsers)`;
-    return `${label}: ${wasStale ? "repaired stale entry" : "added BIM-Bot entry"}`;
+    return `${label}: ${wasStale ? "repaired stale entry" : "added BIM-Bot + BIM-Bot-Navis entries"}`;
 }
 
 // ── ChatGPT Desktop (TOML) ───────────────────────────────────
@@ -193,27 +210,28 @@ function tomlHeaderParts(line) {
     return parts;
 }
 
-function isOwnTomlTable(parts) {
-    return !!parts && parts.length >= 2 && parts[0] === "mcp_servers" && parts[1] === SERVER_KEY;
+function isOwnTomlTable(parts, serverKey = SERVER_KEY) {
+    return !!parts && parts.length >= 2 && parts[0] === "mcp_servers" && parts[1] === serverKey;
 }
 
 // Split a TOML document into the BIM-Bot block and everything else.
 // Also drops inline forms (`BIM-Bot = {...}` under [mcp_servers], or
 // `mcp_servers.BIM-Bot... =` dotted keys at the root) so the table we append
-// can never collide with a duplicate key.
-function splitTomlBlock(text) {
+// can never collide with a duplicate key. Keyed on serverKey so the
+// BIM-Bot-Navis table survives a BIM-Bot pass and vice versa.
+function splitTomlBlock(text, serverKey = SERVER_KEY) {
     const lines = text.split(/\r?\n/);
     const keep = [];
     const own = [];
     let table = [];          // key parts of the current table ([] = root)
     let inOwn = false;
-    const inlineKey = new RegExp(`^\\s*(["']?)${SERVER_KEY}\\1\\s*=`);
-    const rootDotted = new RegExp(`^\\s*mcp_servers\\s*\\.\\s*(["']?)${SERVER_KEY}\\1\\s*[.=]`);
+    const inlineKey = new RegExp(`^\\s*(["']?)${serverKey}\\1\\s*=`);
+    const rootDotted = new RegExp(`^\\s*mcp_servers\\s*\\.\\s*(["']?)${serverKey}\\1\\s*[.=]`);
     for (const line of lines) {
         const parts = tomlHeaderParts(line);
         if (parts) {
             table = parts;
-            inOwn = isOwnTomlTable(parts);
+            inOwn = isOwnTomlTable(parts, serverKey);
         }
         if (inOwn) { own.push(line); continue; }
         if (!parts && table.length === 1 && table[0] === "mcp_servers" && inlineKey.test(line)) { own.push(line); continue; }
@@ -245,16 +263,26 @@ function isTomlBlockValid(ownLines) {
     });
 }
 
-function buildTomlBlock(nodeExe, indexJs) {
-    return [
-        `[mcp_servers.${SERVER_KEY}]`,
+function buildTomlBlock(nodeExe, indexJs, serverKey = SERVER_KEY, env = null) {
+    const block = [
+        `[mcp_servers.${serverKey}]`,
         `command = ${tomlString(nodeExe)}`,
         `args = [${tomlString(indexJs)}]`,
+    ];
+    if (env) {
+        // Inline table — Codex/CodeGPT reads per-server env from here.
+        const pairs = Object.entries(env)
+            .map(([k, v]) => `${k} = ${tomlString(v)}`)
+            .join(", ");
+        block.push(`env = { ${pairs} }`);
+    }
+    block.push(
         // First launch of node from Program Files can exceed the 10 s default
         // while antivirus scans it; long Revit operations exceed the 60 s one.
         "startup_timeout_sec = 30",
         "tool_timeout_sec = 300",
-    ];
+    );
+    return block;
 }
 
 function codexHome(home, isCurrentProfile) {
@@ -290,26 +318,40 @@ function ensureTomlConfig(label, configPath, nodeExe, indexJs, createIfMissing) 
     }
 
     const eol = raw.includes("\r\n") ? "\r\n" : "\n";
-    const { keep, own } = splitTomlBlock(raw);
-    if (own.length && isTomlBlockValid(own) && !hadBom) {
+    // Two passes — BIM-Bot (Revit) and BIM-Bot-Navis (Navisworks). Each
+    // split is key-specific so the other table lands in `keep` and survives.
+    const specs = [
+        { key: SERVER_KEY, env: null },
+        { key: NAVIS_SERVER_KEY, env: NAVIS_ENV },
+    ];
+    let keep = raw;
+    // A BOM alone forces a rewrite (some parsers choke on it).
+    let changed = hadBom;
+    let addedAny = false;
+    for (const { key, env } of specs) {
+        const { keep: k, own } = splitTomlBlock(keep, key);
+        if (own.length && isTomlBlockValid(own) && !hadBom) continue;
+        addedAny = addedAny || !own.length;
+        changed = true;
+        while (k.length && k[k.length - 1].trim() === "") k.pop();
+        keep = (k.length ? k.join(eol) + eol + eol : "") +
+            buildTomlBlock(nodeExe, indexJs, key, env).join(eol) + eol;
+    }
+    if (!changed) {
         return `${label}: already configured correctly`;
     }
-
-    while (keep.length && keep[keep.length - 1].trim() === "") keep.pop();
-    const out = (keep.length ? keep.join(eol) + eol + eol : "") +
-        buildTomlBlock(nodeExe, indexJs).join(eol) + eol;
 
     try {
         if (fs.existsSync(configPath)) {
             fs.copyFileSync(configPath, configPath + ".bimbot-backup");
         }
         fs.mkdirSync(path.dirname(configPath), { recursive: true });
-        fs.writeFileSync(configPath, out);
+        fs.writeFileSync(configPath, keep);
     } catch (err) {
         return `${label}: failed to write config (${err.message}): ${configPath}`;
     }
     if (hadBom) return `${label}: rewrote config without UTF-8 BOM (breaks some parsers)`;
-    return `${label}: ${own.length ? "repaired stale entry" : "added BIM-Bot entry"}`;
+    return `${label}: ${addedAny ? "added BIM-Bot + BIM-Bot-Navis entries" : "repaired stale entry"}`;
 }
 
 function removeTomlEntry(label, configPath) {
@@ -324,8 +366,16 @@ function removeTomlEntry(label, configPath) {
     }
     if (raw.charCodeAt(0) === 0xfeff) raw = raw.slice(1);
     const eol = raw.includes("\r\n") ? "\r\n" : "\n";
-    const { keep, own } = splitTomlBlock(raw);
-    if (!own.length) return `${label}: no BIM-Bot entry — skipped`;
+    // Strip both tables; each split preserves the other in `keep`.
+    let keep = raw;
+    let found = false;
+    for (const key of [SERVER_KEY, NAVIS_SERVER_KEY]) {
+        const { keep: k, own } = splitTomlBlock(keep, key);
+        if (own.length) found = true;
+        keep = k.join(eol);
+    }
+    if (!found) return `${label}: no BIM-Bot entry — skipped`;
+    keep = keep.split(eol);
     while (keep.length && keep[keep.length - 1].trim() === "") keep.pop();
     try {
         fs.copyFileSync(configPath, configPath + ".bimbot-backup");
@@ -420,10 +470,12 @@ function removeEntry(label, configPath, opts = {}) {
         return `${label}: config is not valid JSON (${err.message}) — left untouched: ${configPath}`;
     }
     const servers = config[serversKey];
-    if (!servers || typeof servers !== "object" || !(SERVER_KEY in servers)) {
+    if (!servers || typeof servers !== "object" ||
+        (!(SERVER_KEY in servers) && !(NAVIS_SERVER_KEY in servers))) {
         return `${label}: no BIM-Bot entry — skipped`;
     }
     delete servers[SERVER_KEY];
+    delete servers[NAVIS_SERVER_KEY];
     try {
         fs.copyFileSync(configPath, configPath + ".bimbot-backup");
         fs.writeFileSync(configPath, JSON.stringify(config, null, 2));

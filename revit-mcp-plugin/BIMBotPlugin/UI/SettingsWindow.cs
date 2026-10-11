@@ -47,10 +47,11 @@ namespace BIMBotPlugin.UI
         public SettingsWindow(GeminiSettings currentSettings)
         {
             ResultSettings = currentSettings;
+            var pluginSettings = PluginSettings.Load();
 
             Title = "AI Settings";
             Width = 440;
-            Height = 620;
+            Height = 700;
             WindowStartupLocation = WindowStartupLocation.CenterOwner;
             ResizeMode = ResizeMode.NoResize;
             ThemeManager.ApplyTheme(this);
@@ -60,11 +61,46 @@ namespace BIMBotPlugin.UI
             // Title
             stack.Children.Add(new TextBlock
             {
-                Text = "⚙️ AI Provider Settings",
+                Text = "⚙️ Settings",
                 FontSize = 18, FontWeight = FontWeights.Bold,
                 Foreground = DarkTheme.FgLight,
                 Margin = new Thickness(0, 0, 0, 16)
             });
+
+            // --- General Settings ---
+            var generalPanel = new StackPanel();
+
+            var autoUpdateCheck = new CheckBox
+            {
+                Content = "Automatically check for updates on startup",
+                IsChecked = pluginSettings.AutoCheckUpdates,
+                Foreground = DarkTheme.FgLight,
+                FontSize = 13,
+                Margin = new Thickness(0, 0, 0, 12)
+            };
+            autoUpdateCheck.Checked += (s, e) =>
+            {
+                pluginSettings.AutoCheckUpdates = true;
+                pluginSettings.Save();
+            };
+            autoUpdateCheck.Unchecked += (s, e) =>
+            {
+                pluginSettings.AutoCheckUpdates = false;
+                pluginSettings.Save();
+            };
+            generalPanel.Children.Add(autoUpdateCheck);
+            generalPanel.Children.Add(new TextBlock
+            {
+                Text = "Uncheck to stop receiving update notifications. You can still check manually with the \"Check Updates\" ribbon button.",
+                TextWrapping = TextWrapping.Wrap,
+                Foreground = DarkTheme.FgDim,
+                FontSize = 11,
+                Margin = new Thickness(20, -8, 0, 8)
+            });
+
+            var generalGroup = DarkTheme.MakeGroupBox("🔧 General", generalPanel);
+            generalGroup.Margin = new Thickness(0, 0, 0, 16);
+            stack.Children.Add(generalGroup);
 
             // --- Theme Selection ---
             stack.Children.Add(DarkTheme.MakeLabel("Theme Appearance"));

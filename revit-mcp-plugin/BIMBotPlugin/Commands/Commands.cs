@@ -1,6 +1,7 @@
 using Autodesk.Revit.Attributes;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
+using BIMBotPlugin.AI;
 using BIMBotPlugin.Core;
 using BIMBotPlugin.UI;
 
@@ -37,15 +38,22 @@ namespace BIMBotPlugin.Commands
     {
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
-            var info = $"BIM-Bot Plugin v{Application.Version}\n\n" +
-                       $"Service Status: {(Application.IsServiceRunning ? "Running ✅" : "Stopped ❌")}\n" +
-                       $"Port: {Application.SocketServiceInstance?.Port.ToString() ?? "8080 (not started)"}\n" +
-                       $"Protocol: JSON-RPC 2.0\n\n" +
-                       $"To connect an AI client, configure it to use:\n" +
-                       $"  Server: bim-bot\n" +
-                       $"  Command: node <install-path>/build/index.js";
-            TaskDialog.Show("BIM-Bot Settings", info);
-            return Result.Succeeded;
+            try
+            {
+                var aiSettings = GeminiSettings.Load();
+                var window = new SettingsWindow(aiSettings)
+                {
+                    Owner = System.Windows.Application.Current?.MainWindow
+                };
+                if (window.ShowDialog() == true)
+                    window.ResultSettings?.Save();
+                return Result.Succeeded;
+            }
+            catch (System.Exception ex)
+            {
+                message = ex.Message;
+                return Result.Failed;
+            }
         }
     }
 

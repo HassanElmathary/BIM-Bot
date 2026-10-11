@@ -31,9 +31,12 @@ namespace BIMBotPlugin.UI
         {
             Title = "BIM-Bot — Update Available";
             Width = 520;
-            Height = 460;
+            // Grow to fit content (header + changelog + all buttons/links) instead of
+            // a fixed height that clipped the bottom; never exceed the usable screen area.
+            SizeToContent = SizeToContent.Height;
             MinWidth = 420;
             MinHeight = 380;
+            MaxHeight = Math.Max(MinHeight, SystemParameters.WorkArea.Height - 20);
             WindowStartupLocation = WindowStartupLocation.CenterScreen;
             ResizeMode = ResizeMode.NoResize;
             WindowStyle = WindowStyle.None;
@@ -59,7 +62,11 @@ namespace BIMBotPlugin.UI
                 }
             };
 
-            var mainStack = new StackPanel { Margin = new Thickness(0) };
+            // Header (auto) / body (fills remaining, scrolls if needed) / buttons (auto)
+            var mainStack = new Grid { Margin = new Thickness(0) };
+            mainStack.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            mainStack.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            mainStack.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
             // ====== Top header bar with gradient ======
             var headerBorder = new Border
@@ -117,6 +124,7 @@ namespace BIMBotPlugin.UI
             });
 
             headerBorder.Child = headerStack;
+            Grid.SetRow(headerBorder, 0);
             mainStack.Children.Add(headerBorder);
 
             // ====== Body content ======
@@ -218,6 +226,21 @@ namespace BIMBotPlugin.UI
             secondaryRow.Children.Add(skipBtn);
 
             buttonPanel.Children.Add(secondaryRow);
+
+            // Opt-out link — turns off automatic update checks entirely.
+            // Manual checks via the ribbon "Check Updates" button still work.
+            var stopUpdatesLink = new TextBlock
+            {
+                Text = "🔕  Don't check for updates automatically",
+                FontSize = 12,
+                Foreground = DarkTheme.FgDim,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Margin = new Thickness(0, 12, 0, 0),
+                Cursor = System.Windows.Input.Cursors.Hand,
+                TextDecorations = TextDecorations.Underline
+            };
+            stopUpdatesLink.MouseLeftButtonDown += OnStopUpdatesClicked;
+            buttonPanel.Children.Add(stopUpdatesLink);
 
             // View on GitHub link
             var linkText = new TextBlock
@@ -394,6 +417,39 @@ namespace BIMBotPlugin.UI
         {
             UpdateChecker.SkipVersion(_updateInfo.LatestVersion);
             Close();
+        }
+
+        /// <summary>
+        /// Turns off the automatic startup update check. The user can re-enable it
+        /// from BIM-Bot Settings, and can still check manually from the ribbon.
+        /// </summary>
+        private void OnStopUpdatesClicked(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            try
+            {
+                var settings = PluginSettings.Load();
+                settings.AutoCheckUpdates = false;
+                settings.Save();
+                Logger.Log("User turned off automatic update checks from the update notification.");
+
+                MessageBox.Show(
+                    "Automatic update checks are now turned off.\n\n" +
+                    "You can turn them back on anytime in BIM-Bot Settings, " +
+                    "or check manually with the \"Check Updates\" ribbon button.",
+                    "BIM-Bot — Updates",
+                    MessageBoxButton.OK, MessageBoxImage.Information);
+                Close();
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError("Failed to disable automatic update checks", ex);
+                if (_statusText != null)
+                {
+                    _statusText.Foreground = DarkTheme.FgWarning;
+                    _statusText.Text = $"❌ Could not save setting: {ex.Message}";
+                    _statusText.Visibility = Visibility.Visible;
+                }
+            }
         }
     }
 }

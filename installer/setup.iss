@@ -8,7 +8,7 @@
 ; ============================================================
 
 #define MyAppName      "BIM-Bot"
-#define MyAppVersion   "2.7.0"
+#define MyAppVersion   "2.7.2"
 #define MyAppPublisher "Hassan Ahmed Elmathary"
 #define MyAppURL       "https://github.com/HassanElmathary/BIM-Bot"
 #define MyAppExeName   "Start MCP Server.bat"
@@ -97,6 +97,13 @@ Name: "revit2024"; Description: "Revit 2024 (.NET 4.8)"; GroupDescription: "Depl
 Name: "revit2025"; Description: "Revit 2025 (.NET 8.0)"; GroupDescription: "Deploy Revit plugin to:"; Components: plugin; Check: IsRevitInstalled('2025')
 Name: "revit2026"; Description: "Revit 2026 (.NET 8.0)"; GroupDescription: "Deploy Revit plugin to:"; Components: plugin; Check: IsRevitInstalled('2026')
 Name: "revit2027"; Description: "Revit 2027 (.NET 8.0)"; GroupDescription: "Deploy Revit plugin to:"; Components: plugin; Check: IsRevitInstalled('2027')
+Name: "navis2020"; Description: "Navisworks Manage 2020"; GroupDescription: "Deploy Navisworks plugin to:"; Components: plugin; Check: IsNavisInstalled('2020')
+Name: "navis2021"; Description: "Navisworks Manage 2021"; GroupDescription: "Deploy Navisworks plugin to:"; Components: plugin; Check: IsNavisInstalled('2021')
+Name: "navis2022"; Description: "Navisworks Manage 2022"; GroupDescription: "Deploy Navisworks plugin to:"; Components: plugin; Check: IsNavisInstalled('2022')
+Name: "navis2023"; Description: "Navisworks Manage 2023"; GroupDescription: "Deploy Navisworks plugin to:"; Components: plugin; Check: IsNavisInstalled('2023')
+Name: "navis2024"; Description: "Navisworks Manage 2024"; GroupDescription: "Deploy Navisworks plugin to:"; Components: plugin; Check: IsNavisInstalled('2024')
+Name: "navis2025"; Description: "Navisworks Manage 2025"; GroupDescription: "Deploy Navisworks plugin to:"; Components: plugin; Check: IsNavisInstalled('2025')
+Name: "navis2026"; Description: "Navisworks Manage 2026"; GroupDescription: "Deploy Navisworks plugin to:"; Components: plugin; Check: IsNavisInstalled('2026')
 ; Additional options
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional options:"
 
@@ -129,6 +136,9 @@ Source: "..\revit-mcp-plugin\BIMBotPlugin\bin\R2024\Release\net48\*"; DestDir: "
 Source: "..\revit-mcp-plugin\BIMBotPlugin\bin\R2025\Release\net8.0-windows\*"; DestDir: "{app}\plugin\R2025"; Flags: ignoreversion recursesubdirs uninsrestartdelete; Components: plugin; Tasks: revit2025
 Source: "..\revit-mcp-plugin\BIMBotPlugin\bin\R2026\Release\net8.0-windows\*"; DestDir: "{app}\plugin\R2026"; Flags: ignoreversion recursesubdirs uninsrestartdelete; Components: plugin; Tasks: revit2026
 Source: "..\revit-mcp-plugin\BIMBotPlugin\bin\R2027\Release\net10.0-windows\*"; DestDir: "{app}\plugin\R2027"; Flags: ignoreversion recursesubdirs uninsrestartdelete; Components: plugin; Tasks: revit2027
+; Navisworks plugin — one net48 DLL serves every Manage year (2020–2026).
+; Only the DLL ships: Navisworks provides Newtonsoft.Json itself.
+Source: "..\navis-mcp-plugin\BIMBotNavisPlugin\bin\Release\net48\BIMBotNavisPlugin.dll"; DestDir: "{app}\plugin-navis"; Flags: ignoreversion uninsrestartdelete; Components: plugin; Tasks: navis2020 navis2021 navis2022 navis2023 navis2024 navis2025 navis2026
 
 ; License
 Source: "..\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
@@ -153,6 +163,7 @@ Filename: "{#MyAppURL}"; Description: "Visit documentation"; Flags: nowait posti
 Type: filesandordirs; Name: "{app}\server"
 Type: filesandordirs; Name: "{app}\nodejs"
 Type: filesandordirs; Name: "{app}\plugin"
+Type: filesandordirs; Name: "{app}\plugin-navis"
 ; Files GENERATED at install time by [Code] (CreateLauncherScript /
 ; CreateMcpConfigReference). Inno only auto-deletes files listed in [Files],
 ; so without these entries they — and therefore {app} itself — survive every
@@ -218,6 +229,112 @@ function GetPluginSubfolder(YearInt: Integer): string;
 begin
   // Every Revit version gets its own build — the APIs differ across the range.
   Result := 'R' + IntToStr(YearInt);
+end;
+
+// ── Navisworks Detection & Deployment ─────────────────────────
+//
+// One net48 DLL (plugin-navis\BIMBotNavisPlugin.dll) serves every Manage
+// year: it is copied into <Manage install>\Plugins\BIMBot\, which Navisworks
+// scans at startup. That folder lives under Program Files, so per-user
+// (non-admin) installs skip the copy with a log line instead of failing —
+// the MCP configs (incl. BIM-Bot-Navis) are still written, and copying the
+// single DLL by hand later is enough to light Navisworks up.
+
+function GetNavisInstallDir(Year: string): string;
+var
+  i: Integer;
+  Root: string;
+begin
+  Result := '';
+  if DirExists(ExpandConstant('{pf}\Autodesk\Navisworks Manage ' + Year)) then
+  begin
+    Result := ExpandConstant('{pf}\Autodesk\Navisworks Manage ' + Year);
+    Exit;
+  end;
+  for i := 67 to 90 do
+  begin
+    Root := Chr(i) + ':\';
+    if DirExists(Root + 'Program Files\Autodesk\Navisworks Manage ' + Year) then
+    begin
+      Result := Root + 'Program Files\Autodesk\Navisworks Manage ' + Year;
+      Exit;
+    end;
+  end;
+end;
+
+function IsNavisInstalled(Year: string): Boolean;
+begin
+  Result := GetNavisInstallDir(Year) <> '';
+end;
+
+procedure InstallNavisPlugin(Year: string);
+var
+  TargetDir: string;
+  SrcDll: string;
+begin
+  TargetDir := GetNavisInstallDir(Year) + '\Plugins\BIMBot';
+  SrcDll := ExpandConstant('{app}\plugin-navis\BIMBotNavisPlugin.dll');
+  if not FileExists(SrcDll) then
+  begin
+    Log('Navisworks ' + Year + ': plugin DLL missing from install (' + SrcDll + ') — skipped');
+    Exit;
+  end;
+  if not ForceDirectories(TargetDir) then
+  begin
+    Log('Navisworks ' + Year + ': cannot write ' + TargetDir + ' (needs admin?) — copy BIMBotNavisPlugin.dll there by hand');
+    Exit;
+  end;
+  if FileCopy(SrcDll, TargetDir + '\BIMBotNavisPlugin.dll', False) then
+    Log('Installed Navisworks plugin for Manage ' + Year + ' (' + TargetDir + ')')
+  else
+    Log('Navisworks ' + Year + ': copy failed (needs admin?) — copy BIMBotNavisPlugin.dll to ' + TargetDir + ' by hand');
+end;
+
+procedure RemoveNavisPlugin(Year: string);
+var
+  i: Integer;
+  Dir, Dll: string;
+begin
+  // Remove from every plausible location: default path, other drives, and
+  // every user profile (per-user installs from another account).
+  for i := 0 to 2 do
+  begin
+    if i = 0 then Dir := ExpandConstant('{pf}\Autodesk\Navisworks Manage ' + Year + '\Plugins\BIMBot')
+    else if i = 1 then Dir := ExpandConstant('{sd}\Program Files\Autodesk\Navisworks Manage ' + Year + '\Plugins\BIMBot')
+    else Dir := '';
+    if (Dir <> '') then
+    begin
+      Dll := Dir + '\BIMBotNavisPlugin.dll';
+      if FileExists(Dll) then DeleteFile(Dll);
+      if DirExists(Dir) then RemoveDir(Dir);
+    end;
+  end;
+end;
+
+procedure RemoveNavisPluginEverywhere(Year: string);
+var
+  UsersRoot: string;
+  FR: TFindRec;
+begin
+  RemoveNavisPlugin(Year);
+  UsersRoot := ExpandConstant('{sd}\Users');
+  if FindFirst(UsersRoot + '\*', FR) then
+  try
+    repeat
+      if (FR.Attributes and FILE_ATTRIBUTE_DIRECTORY <> 0)
+         and (FR.Name <> '.') and (FR.Name <> '..') then
+      begin
+        // Legacy per-user bundle location (never scanned by Navisworks, but
+        // clean it anyway so no dead copy lingers).
+        if DirExists(UsersRoot + '\' + FR.Name +
+          '\AppData\Roaming\Autodesk\Navisworks Manage ' + Year + '\Plugins\BIMBot') then
+          DelTree(UsersRoot + '\' + FR.Name +
+            '\AppData\Roaming\Autodesk\Navisworks Manage ' + Year + '\Plugins\BIMBot', True, True, True);
+      end;
+    until not FindNext(FR);
+  finally
+    FindClose(FR);
+  end;
 end;
 
 // ── Addin File Management ───────────────────────────────────
@@ -848,6 +965,16 @@ begin
         InstallAddinForRevit(Years[i]);
     end;
 
+    // Deploy the Navisworks plugin DLL into each selected Manage install.
+    // Same DLL for every year (net48, API-compatible 2020–2026).
+    if WizardIsTaskSelected('navis2020') then InstallNavisPlugin('2020');
+    if WizardIsTaskSelected('navis2021') then InstallNavisPlugin('2021');
+    if WizardIsTaskSelected('navis2022') then InstallNavisPlugin('2022');
+    if WizardIsTaskSelected('navis2023') then InstallNavisPlugin('2023');
+    if WizardIsTaskSelected('navis2024') then InstallNavisPlugin('2024');
+    if WizardIsTaskSelected('navis2025') then InstallNavisPlugin('2025');
+    if WizardIsTaskSelected('navis2026') then InstallNavisPlugin('2026');
+
     // Auto-configure Claude Desktop
     if WizardIsComponentSelected('claude') then
       ConfigureClaudeDesktop();
@@ -884,6 +1011,14 @@ begin
 
     for i := 0 to 7 do
       RemoveAddinEverywhere(Years[i]);
+
+    RemoveNavisPluginEverywhere('2020');
+    RemoveNavisPluginEverywhere('2021');
+    RemoveNavisPluginEverywhere('2022');
+    RemoveNavisPluginEverywhere('2023');
+    RemoveNavisPluginEverywhere('2024');
+    RemoveNavisPluginEverywhere('2025');
+    RemoveNavisPluginEverywhere('2026');
 
     RemoveLegacyAppDirs();
   end
