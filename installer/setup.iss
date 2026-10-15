@@ -234,37 +234,45 @@ end;
 // ── Navisworks Detection & Deployment ─────────────────────────
 //
 // One net48 DLL (plugin-navis\BIMBotNavisPlugin.dll) serves every Manage
-// year: it is copied directly into <Manage install>\Plugins\, which
-// Navisworks scans at startup. (A BIMBot subfolder was tried first and did
-// not load — root placement works under every folder-scan mode.) That
-// folder lives under Program Files, so a non-admin install retries the
-// copy/delete elevated (one UAC prompt) instead of silently skipping it —
-// otherwise Navisworks never loads the plugin and the navis_* MCP tools
-// have nothing to talk to.
+// year. Navisworks only loads a .NET plugin from a subfolder of
+// <Manage install>\Plugins\ whose name matches the assembly name:
+//   Plugins\BIMBotNavisPlugin\BIMBotNavisPlugin.dll
+// Both earlier 2.7.2 layouts were silently ignored — Plugins\BIMBot\ (folder
+// name != assembly name) and a bare DLL in Plugins\ (root is not scanned) —
+// so the navis_* MCP tools had nothing to talk to. Both are cleaned up here.
+// That folder lives under Program Files, so a non-admin install retries the
+// copy/delete elevated (one UAC prompt) instead of silently skipping it.
 
 var
-  // Dirs (semicolon-separated) whose Navisworks plugin copy/delete needs
-  // admin rights. They are handled with a single elevated call so the user
-  // only ever sees one UAC prompt per install/uninstall.
+  // Plugins dirs (semicolon-separated) whose Navisworks plugin copy/delete
+  // needs admin rights. They are handled with a single elevated call so the
+  // user only ever sees one UAC prompt per install/uninstall.
   NavisCleanupDirs: string;
 
+const
+  NavisPluginFolder = 'BIMBotNavisPlugin';
+
+// A Manage install is a dir that actually holds Roamer.exe — a bare
+// "Navisworks Manage <year>\Plugins" left behind by an older BIM-Bot
+// deploy must not count as an installed Navisworks.
 function GetNavisInstallDir(Year: string): string;
 var
   i: Integer;
-  Root: string;
+  Dir: string;
 begin
   Result := '';
-  if DirExists(ExpandConstant('{pf}\Autodesk\Navisworks Manage ' + Year)) then
+  Dir := ExpandConstant('{pf}\Autodesk\Navisworks Manage ' + Year);
+  if FileExists(Dir + '\Roamer.exe') then
   begin
-    Result := ExpandConstant('{pf}\Autodesk\Navisworks Manage ' + Year);
+    Result := Dir;
     Exit;
   end;
   for i := 67 to 90 do
   begin
-    Root := Chr(i) + ':\';
-    if DirExists(Root + 'Program Files\Autodesk\Navisworks Manage ' + Year) then
+    Dir := Chr(i) + ':\Program Files\Autodesk\Navisworks Manage ' + Year;
+    if FileExists(Dir + '\Roamer.exe') then
     begin
-      Result := Root + 'Program Files\Autodesk\Navisworks Manage ' + Year;
+      Result := Dir;
       Exit;
     end;
   end;
@@ -275,14 +283,22 @@ begin
   Result := GetNavisInstallDir(Year) <> '';
 end;
 
-// Run one elevated PowerShell that creates every dir in Dirs and copies
-// SrcDll into each as BIMBotNavisPlugin.dll. Dirs is semicolon-separated.
-// Returns True when the DLL exists in every dir afterwards.
+// PowerShell fragment removing the dead layouts from one Plugins dir.
+function NavisLegacyCleanupPs(PluginsDir: string): string;
+begin
+  Result := 'Remove-Item -LiteralPath ''' + PluginsDir + '\BIMBotNavisPlugin.dll'' -Force -ErrorAction SilentlyContinue; ' +
+    'Remove-Item -LiteralPath ''' + PluginsDir + '\BIMBot'' -Recurse -Force -ErrorAction SilentlyContinue; ';
+end;
+
+// Run one elevated PowerShell that, for every Plugins dir in Dirs, creates
+// Plugins\BIMBotNavisPlugin, copies SrcDll into it and removes the dead
+// layouts. Dirs is semicolon-separated. Returns True when the DLL exists in
+// every target afterwards.
 function InstallNavisPluginElevated(SrcDll, Dirs: string): Boolean;
 var
-  Params, Dir, Dll: string;
+  Params, Dir, Target: string;
   ResultCode: Integer;
-  p, q: Integer;
+  p: Integer;
   Rest: string;
 begin
   Result := True;
@@ -294,8 +310,10 @@ begin
     if p = 0 then begin Dir := Rest; Rest := ''; end
     else begin Dir := Copy(Rest, 1, p - 1); Rest := Copy(Rest, p + 1, Length(Rest)); end;
     if Dir = '' then Continue;
-    Params := Params + 'New-Item -ItemType Directory -Force ''' + Dir + ''' | Out-Null; ' +
-      'Copy-Item ''' + SrcDll + ''' ''' + Dir + '\BIMBotNavisPlugin.dll'' -Force; ';
+    Target := Dir + '\' + NavisPluginFolder;
+    Params := Params + 'New-Item -ItemType Directory -Force ''' + Target + ''' | Out-Null; ' +
+      'Copy-Item ''' + SrcDll + ''' ''' + Target + '\BIMBotNavisPlugin.dll'' -Force; ' +
+      NavisLegacyCleanupPs(Dir);
   end;
   Params := Params + '"';
   // runas = UAC prompt. If the user declines, ShellExec returns False and we
@@ -309,30 +327,43 @@ begin
   Rest := Dirs;
   while Rest <> '' do
   begin
-    q := Pos(';', Rest);
-    if q = 0 then begin Dir := Rest; Rest := ''; end
-    else begin Dir := Copy(Rest, 1, q - 1); Rest := Copy(Rest, q + 1, Length(Rest)); end;
+    p := Pos(';', Rest);
+    if p = 0 then begin Dir := Rest; Rest := ''; end
+    else begin Dir := Copy(Rest, 1, p - 1); Rest := Copy(Rest, p + 1, Length(Rest)); end;
     if Dir = '' then Continue;
-    Dll := Dir + '\BIMBotNavisPlugin.dll';
-    if FileExists(Dll) then
-      Log('Installed Navisworks plugin (elevated) in ' + Dir)
+    Target := Dir + '\' + NavisPluginFolder + '\BIMBotNavisPlugin.dll';
+    if FileExists(Target) then
+      Log('Installed Navisworks plugin (elevated): ' + Target)
     else
     begin
-      Log('Navisworks: elevated copy did not produce ' + Dll + ' — copy BIMBotNavisPlugin.dll there by hand');
+      Log('Navisworks: elevated copy did not produce ' + Target + ' — copy BIMBotNavisPlugin.dll there by hand');
       Result := False;
     end;
   end;
 end;
 
-// NOTE: the DLL goes directly in Plugins\ (not a BIMBot subfolder).
-// A bare DLL there loads under every folder-scan mode Navisworks uses;
-// a subfolder was found to not load on some machines.
+// The hand-made ApplicationPlugins bundle from 2.7.0 had an invalid
+// PackageContents.xml (never loaded) and a stale DLL. Remove it so it can
+// never double-load alongside the Plugins\BIMBotNavisPlugin copy.
+procedure RemoveNavisLegacyBundle();
+var
+  Bundle: string;
+begin
+  Bundle := ExpandConstant('{commonappdata}\Autodesk\ApplicationPlugins\BIMBotNavis.bundle');
+  if DirExists(Bundle) then
+  begin
+    DelTree(Bundle, True, True, True);
+    Log('Navisworks: removed legacy bundle ' + Bundle);
+  end;
+end;
+
 procedure InstallNavisPlugin(Year: string);
 var
-  TargetDir: string;
+  PluginsDir, TargetDir: string;
   SrcDll: string;
 begin
-  TargetDir := GetNavisInstallDir(Year) + '\Plugins';
+  PluginsDir := GetNavisInstallDir(Year) + '\Plugins';
+  TargetDir := PluginsDir + '\' + NavisPluginFolder;
   SrcDll := ExpandConstant('{app}\plugin-navis\BIMBotNavisPlugin.dll');
   if not FileExists(SrcDll) then
   begin
@@ -345,51 +376,48 @@ begin
     if FileCopy(SrcDll, TargetDir + '\BIMBotNavisPlugin.dll', False) then
     begin
       Log('Installed Navisworks plugin for Manage ' + Year + ' (' + TargetDir + ')');
+      DeleteFile(PluginsDir + '\BIMBotNavisPlugin.dll');
+      if DirExists(PluginsDir + '\BIMBot') then DelTree(PluginsDir + '\BIMBot', True, True, True);
       Exit;
     end;
   end;
   // Slow path: queue for the single elevated copy (one UAC prompt for all
   // years — see the end of CurStepChanged's Navisworks block).
-  if Pos(TargetDir + ';', NavisCleanupDirs) = 0 then
-    NavisCleanupDirs := NavisCleanupDirs + TargetDir + ';';
+  if Pos(PluginsDir + ';', NavisCleanupDirs) = 0 then
+    NavisCleanupDirs := NavisCleanupDirs + PluginsDir + ';';
   Log('Navisworks ' + Year + ': queued elevated copy into ' + TargetDir);
 end;
 
 procedure RemoveNavisPlugin(Year: string);
 var
   i: Integer;
-  Dir, Dll, LegacyDir: string;
+  Dir: string;
 begin
-  // Remove from every plausible location: default path, other drives, and
-  // every user profile (per-user installs from another account).
-  // DLL lives directly in Plugins\ (see InstallNavisPlugin); the BIMBot
-  // subfolder is legacy from the first 2.7.2 build — remove it too.
-  for i := 0 to 2 do
+  // Remove from every plausible location: default path and other drives.
+  // Covers the current Plugins\BIMBotNavisPlugin layout and both dead
+  // 2.7.2 layouts (bare DLL in Plugins\, Plugins\BIMBot\).
+  for i := 0 to 1 do
   begin
     if i = 0 then Dir := ExpandConstant('{pf}\Autodesk\Navisworks Manage ' + Year + '\Plugins')
-    else if i = 1 then Dir := ExpandConstant('{sd}\Program Files\Autodesk\Navisworks Manage ' + Year + '\Plugins')
-    else Dir := '';
-    if (Dir <> '') then
+    else Dir := ExpandConstant('{sd}\Program Files\Autodesk\Navisworks Manage ' + Year + '\Plugins');
+    if DirExists(Dir + '\' + NavisPluginFolder) then DelTree(Dir + '\' + NavisPluginFolder, True, True, True);
+    if FileExists(Dir + '\BIMBotNavisPlugin.dll') then DeleteFile(Dir + '\BIMBotNavisPlugin.dll');
+    if DirExists(Dir + '\BIMBot') then DelTree(Dir + '\BIMBot', True, True, True);
+    // Anything left behind needs admin rights: queue it for the single
+    // elevated cleanup at the end of the uninstall step.
+    if DirExists(Dir + '\' + NavisPluginFolder) or FileExists(Dir + '\BIMBotNavisPlugin.dll')
+       or DirExists(Dir + '\BIMBot') then
     begin
-      Dll := Dir + '\BIMBotNavisPlugin.dll';
-      LegacyDir := Dir + '\BIMBot';
-      if FileExists(Dll) then DeleteFile(Dll);
-      if DirExists(LegacyDir) then DelTree(LegacyDir, True, True, True);
-      // Anything left behind needs admin rights: queue it for the single
-      // elevated cleanup at the end of the uninstall step.
-      if FileExists(Dll) or DirExists(LegacyDir) then
-      begin
-        if Pos(Dir + ';', NavisCleanupDirs) = 0 then
-          NavisCleanupDirs := NavisCleanupDirs + Dir + ';';
-        Log('Navisworks: queued elevated removal of ' + Dll);
-      end;
+      if Pos(Dir + ';', NavisCleanupDirs) = 0 then
+        NavisCleanupDirs := NavisCleanupDirs + Dir + ';';
+      Log('Navisworks: queued elevated removal under ' + Dir);
     end;
   end;
 end;
 
-// One elevated PowerShell removing every queued Navisworks plugin DLL
-// (plus the legacy BIMBot subfolder). Single UAC prompt for the whole
-// uninstall. Never touches the Plugins folder itself.
+// One elevated PowerShell removing every queued Navisworks plugin copy.
+// Single UAC prompt for the whole uninstall. Never touches the Plugins
+// folder itself.
 procedure RemoveNavisPluginElevated();
 var
   Params, Dir, Rest: string;
@@ -405,8 +433,8 @@ begin
     if p = 0 then begin Dir := Rest; Rest := ''; end
     else begin Dir := Copy(Rest, 1, p - 1); Rest := Copy(Rest, p + 1, Length(Rest)); end;
     if Dir = '' then Continue;
-    Params := Params + 'Remove-Item -LiteralPath ''' + Dir + '\BIMBotNavisPlugin.dll'' -Force -ErrorAction SilentlyContinue; ' +
-      'Remove-Item -LiteralPath ''' + Dir + '\BIMBot'' -Recurse -Force -ErrorAction SilentlyContinue; ';
+    Params := Params + 'Remove-Item -LiteralPath ''' + Dir + '\' + NavisPluginFolder + ''' -Recurse -Force -ErrorAction SilentlyContinue; ' +
+      NavisLegacyCleanupPs(Dir);
   end;
   Params := Params + '"';
   if ShellExec('runas', 'powershell.exe', Params, '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
@@ -1088,6 +1116,7 @@ begin
         Log('Navisworks: some plugin copies still missing — copy BIMBotNavisPlugin.dll from {app}\plugin-navis by hand');
       NavisCleanupDirs := '';
     end;
+    RemoveNavisLegacyBundle();
 
     // Auto-configure Claude Desktop
     if WizardIsComponentSelected('claude') then
@@ -1133,6 +1162,7 @@ begin
     RemoveNavisPluginEverywhere('2024');
     RemoveNavisPluginEverywhere('2025');
     RemoveNavisPluginEverywhere('2026');
+    RemoveNavisLegacyBundle();
 
     // Flush anything the non-elevated uninstall could not delete (Program
     // Files copies): one UAC prompt for all of it.

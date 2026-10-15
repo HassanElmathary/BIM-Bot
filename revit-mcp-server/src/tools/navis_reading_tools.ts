@@ -112,13 +112,13 @@ export function registerNavisReadingTools(server: McpServer) {
 
     server.tool(
         "navis_connection_status",
-        "Check Navisworks connection status (handshake file, host, port). Does not require Navisworks to be running.",
+        "Diagnose the Navisworks connection: checks Navisworks is running, the BIM-Bot plugin is installed, the handshake file, the TCP port and a live ping. Returns a verdict and a fix hint. Safe to call when Navisworks is closed.",
         {},
         async () => {
             try {
-                const { resolveNavisEndpoint } = await import("../utils/navisEndpoint.js");
-                const ep = resolveNavisEndpoint();
-                return { content: [{ type: "text", text: JSON.stringify({ target: "navisworks", ...ep }, null, 2) }] };
+                const { diagnoseNavis } = await import("../utils/navisDiagnostics.js");
+                const diag = await diagnoseNavis();
+                return { content: [{ type: "text", text: JSON.stringify({ target: "navisworks", ...diag }, null, 2) }] };
             } catch (e) { return { content: [{ type: "text", text: `Failed: ${e instanceof Error ? e.message : String(e)}` }] }; }
         }
     );

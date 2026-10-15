@@ -44,6 +44,15 @@
       <HintPath>$(NavisworksSDK)\Autodesk.Navisworks.Clash.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <Reference Include="Autodesk.Navisworks.ComApi">
+      <HintPath>$(NavisworksSDK)\Autodesk.Navisworks.ComApi.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Autodesk.Navisworks.Interop.ComApi">
+      <HintPath>$(NavisworksSDK)\Autodesk.Navisworks.Interop.ComApi.dll</HintPath>
+      <EmbedInteropTypes>false</EmbedInteropTypes>
+      <Private>false</Private>
+    </Reference>
     <Reference Include="Autodesk.Navisworks.Timeliner">
       <HintPath>$(NavisworksSDK)\Autodesk.Navisworks.Timeliner.dll</HintPath>
       <Private>false</Private>

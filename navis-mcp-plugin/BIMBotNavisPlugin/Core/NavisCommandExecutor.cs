@@ -6,6 +6,7 @@ using System.Xml.Linq;
 using Autodesk.Navisworks.Api;
 using Autodesk.Navisworks.Api.Clash;
 using Newtonsoft.Json.Linq;
+using BIMBotNavisPlugin;
 
 namespace BIMBotNavisPlugin.Core
 {
@@ -16,12 +17,13 @@ namespace BIMBotNavisPlugin.Core
     /// no open document → clear error). Never throws across the boundary with
     /// an unhandled exception type — ProcessRequest wraps, but messages stay clean.
     /// </summary>
-    public static class NavisCommandExecutor
+    public static partial class NavisCommandExecutor
     {
         public static JObject Execute(string method, JObject pars)
         {
             switch (method)
             {
+                case "navis_ping": return Ping();
                 case "navis_get_model_info": return GetModelInfo();
                 case "navis_search_items": return SearchItems(pars);
                 case "navis_get_selected": return GetSelected();
@@ -39,7 +41,9 @@ namespace BIMBotNavisPlugin.Core
                 case "navis_export_nwd": return ExportNwd(pars);
                 case "navis_override_color": return OverrideColor(pars);
                 case "navis_hide_items": return HideItems(pars);
-                default: throw new Exception($"Unknown Navisworks command '{method}'.");
+                default:
+                    return ExecuteExtended(method, pars)
+                           ?? throw new Exception($"Unknown Navisworks command '{method}'.");
             }
         }
 
@@ -171,6 +175,21 @@ namespace BIMBotNavisPlugin.Core
         }
 
         // ── reading / viewpoints ──
+
+        private static JObject Ping()
+        {
+            var doc = Application.ActiveDocument ?? Application.MainDocument;
+            return new JObject
+            {
+                ["ok"] = true,
+                ["product"] = "navisworks",
+                ["pluginVersion"] = NavisPluginApp.Version,
+                ["port"] = NavisPluginApp.ActivePort,
+                ["pid"] = System.Diagnostics.Process.GetCurrentProcess().Id,
+                ["hasDocument"] = doc != null && !doc.IsClear,
+                ["fileName"] = doc?.FileName ?? "",
+            };
+        }
 
         private static JObject GetModelInfo()
         {
