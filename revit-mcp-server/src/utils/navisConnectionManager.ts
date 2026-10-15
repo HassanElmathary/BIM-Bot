@@ -1,5 +1,6 @@
 import { RevitSocketClient } from "./SocketClient.js";
 import { resolveNavisEndpoint } from "./navisEndpoint.js";
+import { diagnoseNavis } from "./navisDiagnostics.js";
 
 // ── ADDITIVE-ONLY: Navisworks connection manager ──
 // Mirrors ConnectionManager.ts (Revit) without modifying it.
@@ -35,6 +36,12 @@ async function connectWithRetry(client: RevitSocketClient): Promise<void> {
             return;
         } catch (err) {
             lastError = err instanceof Error ? err : new Error(String(err));
+            const errno = (lastError as NodeJS.ErrnoException).code;
+            const epCheck = resolveNavisEndpoint();
+            const noHandshake = epCheck.source !== "handshake";
+            if (errno === "ECONNREFUSED" && noHandshake) {
+                break;
+            }
             if (attempt < MAX_RETRIES) {
                 const delay = INITIAL_DELAY_MS * Math.pow(2, attempt - 1);
                 console.error(
@@ -49,18 +56,12 @@ async function connectWithRetry(client: RevitSocketClient): Promise<void> {
         }
     }
 
-    const ep = resolveNavisEndpoint();
-    const where =
-        ep.source === "handshake"
-            ? `${ep.host}:${ep.port} (from the Navisworks plugin handshake file)`
-            : ep.source === "env"
-                ? `${ep.host}:${ep.port} (from BIMBOT_NAVIS_HOST/BIMBOT_NAVIS_PORT)`
-                : `${ep.host}:${ep.port} (default — the Navisworks plugin has not published a port, so its service is probably not running)`;
-
+    const diag = await diagnoseNavis({ ping: false });
     throw new Error(
-        `Could not connect to Navisworks at ${where} after ${MAX_RETRIES} attempts. ` +
+        `Could not connect to Navisworks at ${diag.endpoint.host}:${diag.endpoint.port} ` +
+        `(${diag.verdict}). ${diag.hint} ` +
         `Last error: ${lastError?.message ?? "unknown"}. ` +
-        `Check that Navisworks Manage is open with a model loaded, and that the BIM-Bot ribbon button reads "BIM-Bot ON".`
+        `Run navis_connection_status for full details.`
     );
 }
 
@@ -82,7 +83,9 @@ function attemptConnect(client: RevitSocketClient): Promise<void> {
             if (settled) return;
             settled = true;
             cleanup();
-            reject(new Error(`TCP connection failed: ${err.message}`));
+            const wrapped = new Error(`TCP connection failed: ${err.message}`) as NodeJS.ErrnoException;
+            wrapped.code = (err as NodeJS.ErrnoException).code;
+            reject(wrapped);
         };
         client.rawSocket.on("connect", onConnect);
         client.rawSocket.on("error", onError);

@@ -1,16 +1,16 @@
 using System;
+using System.Windows.Forms;
 using Autodesk.Navisworks.Api.Plugins;
 using BIMBotNavisPlugin.Core;
 
 namespace BIMBotNavisPlugin
 {
     /// <summary>
-    /// Navisworks Manage entry point. Navisworks auto-loads every AddInPlugin
-    /// found in the Plugins folder at startup — the constructor runs on the
-    /// main thread, so the socket service starts automatically: this is what
-    /// makes Claude/ChatGPT "automatically connect" (same role as Revit's
-    /// Application.OnStartup + Idling auto-start).
-    /// The ribbon button (Add-ins tab) toggles the service via Execute.
+    /// Navisworks Manage ribbon entry point (Add-ins tab). AddInPlugins are
+    /// delay-loaded — this constructor only runs on the first click — so the
+    /// startup auto-start lives in BIMBotAutoStart (EventWatcherPlugin).
+    /// The constructor still starts the service if auto-start failed, and
+    /// Execute toggles it.
     /// </summary>
     [Plugin("BIMBotNavis", "BIMB",
         DisplayName = "BIM-Bot",
@@ -23,7 +23,8 @@ namespace BIMBotNavisPlugin
             try
             {
                 NavisMainThread.Init();
-                NavisPluginApp.StartService();
+                if (!NavisPluginApp.IsServiceRunning)
+                    NavisPluginApp.StartService();
             }
             catch (Exception ex)
             {
@@ -42,17 +43,34 @@ namespace BIMBotNavisPlugin
                     && (DateTime.UtcNow - NavisPluginApp.LastAutoStartUtc).TotalSeconds < 10)
                     return 0;
                 if (NavisPluginApp.IsServiceRunning)
+                {
                     NavisPluginApp.StopService();
+                    MessageBox.Show(
+                        "BIM-Bot service stopped. Claude / ChatGPT can no longer reach Navisworks.\n\nClick BIM-Bot again to restart it.",
+                        "BIM-Bot",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Information);
+                }
                 else
                 {
                     NavisMainThread.Init();
                     NavisPluginApp.StartService(manual: true);
+                    MessageBox.Show(
+                        $"BIM-Bot service is running on port {NavisPluginApp.ActivePort}.",
+                        "BIM-Bot",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Information);
                 }
                 return 0;
             }
             catch (Exception ex)
             {
                 NavisLogger.LogError("Toggle service failed", ex);
+                MessageBox.Show(
+                    $"BIM-Bot could not start: {ex.Message}",
+                    "BIM-Bot",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
                 return 1;
             }
         }

@@ -34,20 +34,14 @@ function writerIsAlive(pid: unknown): boolean {
 
 /**
  * Resolve where the Navisworks-side service is listening.
- * Precedence: BIMBOT_NAVIS_PORT/BIMBOT_NAVIS_HOST env → service-navis.json → 8091.
+ * Precedence: live service-navis.json → BIMBOT_NAVIS_PORT/BIMBOT_NAVIS_HOST env → 8091.
+ * The handshake wins over env because the installer writes
+ * BIMBOT_NAVIS_PORT=8091 into every client config, while the plugin scans
+ * 8091→8101 when 8091 is taken — a pinned env port would then dial the
+ * wrong (or an unrelated) listener. The handshake is ignored when its
+ * writer pid is dead.
  */
 export function resolveNavisEndpoint(): NavisEndpoint {
-    const envPort = process.env.BIMBOT_NAVIS_PORT
-        ? Number.parseInt(process.env.BIMBOT_NAVIS_PORT, 10)
-        : NaN;
-    if (Number.isInteger(envPort) && envPort > 0 && envPort < 65536) {
-        return {
-            host: process.env.BIMBOT_NAVIS_HOST || NAVIS_DEFAULT_HOST,
-            port: envPort,
-            source: "env",
-        };
-    }
-
     try {
         const raw = fs.readFileSync(navisHandshakePath(), "utf8");
         const data = JSON.parse(raw.charCodeAt(0) === 0xfeff ? raw.slice(1) : raw);
@@ -61,6 +55,17 @@ export function resolveNavisEndpoint(): NavisEndpoint {
         }
     } catch {
         // No handshake yet — Navisworks service not started.
+    }
+
+    const envPort = process.env.BIMBOT_NAVIS_PORT
+        ? Number.parseInt(process.env.BIMBOT_NAVIS_PORT, 10)
+        : NaN;
+    if (Number.isInteger(envPort) && envPort > 0 && envPort < 65536) {
+        return {
+            host: process.env.BIMBOT_NAVIS_HOST || NAVIS_DEFAULT_HOST,
+            port: envPort,
+            source: "env",
+        };
     }
 
     return { host: NAVIS_DEFAULT_HOST, port: NAVIS_DEFAULT_PORT, source: "default" };

@@ -29,6 +29,7 @@ namespace BIMBotNavisPlugin
             if (_service == null)
                 _service = new NavisSocketService(DefaultPort,
                     (method, pars) => NavisMainThread.Execute(() => NavisCommandExecutor.Execute(method, pars)));
+            if (_service.IsRunning) return;
             _service.Start();
             if (!manual) LastAutoStartUtc = DateTime.UtcNow;
             NavisLogger.Log($"Service started on port {ActivePort} (manual={manual})");
@@ -36,7 +37,9 @@ namespace BIMBotNavisPlugin
 
         public static void StopService()
         {
-            _service?.Stop();
+            if (_service == null || !_service.IsRunning) return;
+            _service.Stop();
+            NavisLogger.Log("Service stopped");
         }
     }
 }
