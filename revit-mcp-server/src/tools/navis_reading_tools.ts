@@ -23,16 +23,29 @@ export function registerNavisReadingTools(server: McpServer) {
 
     server.tool(
         "navis_search_items",
-        "Search the Navisworks model tree for items by name/class/property (uses Navisworks Search API).",
+        "Search the Navisworks model for items whose property value contains searchText (case-insensitive). " +
+        "Returns displayIds like 'p:0/3/12' that navis_select_items, navis_zoom_to_items, navis_hide_items, " +
+        "navis_override_color, navis_get_item_properties and the other displayIds tools accept " +
+        "(valid until models are removed or reloaded). Each search scans every item on the Navisworks UI thread: " +
+        "on large federated models Navisworks freezes for several seconds, so reuse returned displayIds instead of " +
+        "re-searching, and use withinSelection to search only under the current selection.",
         {
-            searchText: z.string().describe("Text to search for, e.g. 'Level 1', 'Walls', 'Pipe'"),
-            searchProperty: z.string().optional().describe("Property to match: Name (default), Class, Category, Material"),
-            limit: z.number().optional().describe("Max items to return (default 100)"),
+            searchText: z.string().describe("Text the property value must contain, e.g. 'Walls', 'Level 1', 'Pipe'"),
+            searchProperty: z.string().optional().describe(
+                "Name (Item>Name, default) | Category (Revit Element>Category, falls back to Item>Type) | " +
+                "Class (Item>Type) | Material (Item>Material) | 'Tab>Property', e.g. 'Element>Mark'. " +
+                "Use navis_get_item_properties on one item to see its tabs."),
+            limit: z.number().optional().describe("Max items to return (default 100); 'count' reports all matches"),
+            withinSelection: z.boolean().optional().describe("Search only the current Navisworks selection and its children (much faster on big models)"),
         },
         async (args) => {
             try {
-                const response = await withNavisConnection((c) =>
-                    c.sendCommand("navis_search_items", { searchText: args.searchText, searchProperty: args.searchProperty || "Name", limit: args.limit || 100 }));
+                const response = await withNavisConnection((c) => c.sendCommand("navis_search_items", {
+                    searchText: args.searchText,
+                    searchProperty: args.searchProperty || "Name",
+                    limit: args.limit || 100,
+                    withinSelection: args.withinSelection ?? false,
+                }));
                 return { content: [{ type: "text", text: JSON.stringify(response, null, 2) }] };
             } catch (e) { return { content: [{ type: "text", text: `Failed: ${e instanceof Error ? e.message : String(e)}` }] }; }
         }
@@ -52,7 +65,7 @@ export function registerNavisReadingTools(server: McpServer) {
 
     server.tool(
         "navis_select_items",
-        "Select ModelItems in Navisworks by display IDs.",
+        "Select ModelItems in Navisworks by displayIds ('p:...' values from navis_search_items or navis_get_selected).",
         { displayIds: z.array(z.string()).describe("Navisworks ModelItem display IDs") },
         async (args) => {
             try {

@@ -26,7 +26,7 @@ namespace BIMBotNavisPlugin.Core
                 case "navis_ping": return Ping();
                 case "navis_get_model_info": return GetModelInfo();
                 case "navis_search_items": return SearchItems(pars);
-                case "navis_get_selected": return GetSelected();
+                case "navis_get_selected": return GetSelected(pars);
                 case "navis_select_items": return SelectItems(pars);
                 case "navis_viewpoints_list": return ViewpointsList();
                 case "navis_viewpoint_apply": return ViewpointApply(pars);
@@ -82,29 +82,131 @@ namespace BIMBotNavisPlugin.Core
 
         private static JObject ItemJson(ModelItem item)
         {
-            return new JObject
+            var o = new JObject
             {
-                ["displayId"] = item.InstanceGuid.ToString(),
+                ["displayId"] = ItemRef(ActiveDoc(), item),
                 ["displayName"] = item.DisplayName ?? "",
                 ["class"] = item.ClassDisplayName ?? "",
                 ["hasGeometry"] = item.HasGeometry,
                 ["isHidden"] = item.IsHidden,
             };
+            if (item.InstanceGuid != Guid.Empty) o["instanceGuid"] = item.InstanceGuid.ToString();
+            var rid = PropText(item, "Element", "Id");
+            if (rid == "") rid = PropText(item, "Element ID", "Value");
+            if (rid != "") o["revitElementId"] = rid;
+            var rcat = PropText(item, "Element", "Category");
+            if (rcat != "") o["revitCategory"] = rcat;
+            return o;
         }
 
-        /// <summary>Resolve InstanceGuid strings to ModelItems by walking the model tree.</summary>
+        /// <summary>Display string of tab > property, or "" when absent.</summary>
+        private static string PropText(ModelItem item, string tab, string property)
+        {
+            try
+            {
+                var dp = item.PropertyCategories.FindPropertyByDisplayName(tab, property);
+                return dp?.Value?.ToDisplayString() ?? "";
+            }
+            catch { return ""; }
+        }
+        /// <summary>
+        /// Session-stable item reference "p:<modelIndex>/<childIndex>/...": the index of the
+        /// item's model in doc.Models, then the child index at each level below the model root.
+        /// Valid until models are removed or reloaded. "" if the item cannot be placed.
+        /// </summary>
+        private static string ItemRef(Document doc, ModelItem item)
+        {
+            var path = new List<int>();
+            var cur = item;
+            while (cur.Parent != null)
+            {
+                var parent = cur.Parent;
+                int i = 0, at = -1;
+                foreach (ModelItem child in parent.Children)
+                {
+                    if (child.Equals(cur)) { at = i; break; }
+                    i++;
+                }
+                if (at < 0) return "";
+                path.Add(at);
+                cur = parent;
+            }
+            int m = 0, modelIndex = -1;
+            foreach (Model model in doc.Models)
+            {
+                if (model.RootItem != null && model.RootItem.Equals(cur)) { modelIndex = m; break; }
+                m++;
+            }
+            if (modelIndex < 0) return "";
+            path.Add(modelIndex);
+            path.Reverse();
+            return "p:" + string.Join("/", path);
+        }
+        /// <summary>Normalized lookup key: "p:..." path, a non-empty GUID ("d" format), or null if invalid.</summary>
+        private static string? RefKey(string id)
+        {
+            var s = id.Trim();
+            if (s.StartsWith("p:", StringComparison.OrdinalIgnoreCase))
+                return "p:" + s.Substring(2).Trim();
+            if (Guid.TryParse(s, out var g) && g != Guid.Empty) return g.ToString();
+            return null;
+        }
+        private static ModelItem? ResolvePath(Document doc, string key)
+        {
+            var parts = key.Substring(2).Split('/');
+            var idx = new int[parts.Length];
+            for (int k = 0; k < parts.Length; k++)
+                if (!int.TryParse(parts[k], out idx[k]) || idx[k] < 0) return null;
+            var model = doc.Models.Cast<Model>().ElementAtOrDefault(idx[0]);
+            ModelItem? cur = model?.RootItem;
+            for (int k = 1; k < idx.Length && cur != null; k++)
+                cur = cur.Children.Cast<ModelItem>().ElementAtOrDefault(idx[k]);
+            return cur;
+        }
+        /// <summary>
+        /// Resolve displayIds to ModelItems, in input order. Accepts "p:..." paths from
+        /// ItemJson (O(depth) each) and, for compatibility, non-empty InstanceGuid strings
+        /// (one model-tree walk for all of them).
+        /// </summary>
         private static List<ModelItem> ResolveItems(Document doc, IEnumerable<string> ids)
         {
-            var wanted = new HashSet<string>(ids, StringComparer.OrdinalIgnoreCase);
-            var found = new Dictionary<string, ModelItem>(StringComparer.OrdinalIgnoreCase);
-            foreach (Model model in doc.Models)
-                Walk(model.RootItem, wanted, found);
-            var missing = wanted.Where(w => !found.ContainsKey(w)).ToList();
+            var list = ids.Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => s.Trim()).ToList();
+            var resolved = new Dictionary<string, ModelItem>(StringComparer.OrdinalIgnoreCase);
+            var guidWanted = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var id in list)
+            {
+                var key = RefKey(id);
+                if (key == null || resolved.ContainsKey(key)) continue;
+                if (key.StartsWith("p:", StringComparison.OrdinalIgnoreCase))
+                {
+                    var item = ResolvePath(doc, key);
+                    if (item != null) resolved[key] = item;
+                }
+                else guidWanted.Add(key);
+            }
+            if (guidWanted.Count > 0)
+            {
+                var found = new Dictionary<string, ModelItem>(StringComparer.OrdinalIgnoreCase);
+                foreach (Model model in doc.Models)
+                    Walk(model.RootItem, guidWanted, found);
+                foreach (var kv in found) resolved[kv.Key] = kv.Value;
+            }
+            var result = new List<ModelItem>();
+            var missing = new List<string>();
+            foreach (var id in list)
+            {
+                var key = RefKey(id);
+                if (key != null && resolved.TryGetValue(key, out var item)) result.Add(item);
+                else missing.Add(id);
+            }
             if (missing.Count > 0)
-                throw new Exception($"ModelItem(s) not found: {string.Join(", ", missing)}. Use navis_search_items to get valid displayIds.");
-            return wanted.Select(w => found[w]).ToList();
+                throw new Exception(
+                    $"ModelItem(s) not found: {string.Join(", ", missing)}. Use the 'p:...' displayIds returned by " +
+                    "navis_search_items or navis_get_selected in this session (they change if models are removed or " +
+                    "reloaded). The all-zero GUID is never a valid id.");
+            if (result.Count == 0) throw new Exception("No displayIds given.");
+            return result;
         }
-
         private static void Walk(ModelItem item, HashSet<string> wanted, Dictionary<string, ModelItem> found)
         {
             if (item == null || found.Count >= wanted.Count) return;
@@ -215,41 +317,95 @@ namespace BIMBotNavisPlugin.Core
             var doc = ActiveDoc();
             var text = Str(p, "searchText");
             if (string.IsNullOrWhiteSpace(text)) throw new Exception("searchText is required.");
-            var prop = Str(p, "searchProperty", "Name");
-            var limit = Int(p, "limit", 100);
+            var prop = Str(p, "searchProperty", "Name").Trim();
+            var limit = Math.Max(1, Int(p, "limit", 100));
+            var withinSelection = Bool(p, "withinSelection");
 
-            var search = new Search();
-            search.Selection.SelectAll();
-            search.Locations = SearchLocations.DescendantsAndSelf;
-            bool filterByClass = prop.Equals("Class", StringComparison.OrdinalIgnoreCase);
-            if (prop.Equals("Category", StringComparison.OrdinalIgnoreCase))
-                search.SearchConditions.Add(SearchCondition.HasCategoryByDisplayName(text));
-            else if (!filterByClass)
-                search.SearchConditions.Add(
-                    SearchCondition.HasPropertyByDisplayName("Item", "Name").DisplayStringContains(text));
-
-            var found = search.FindAll(doc, false);
+            string tab, name;
+            string? fbTab = null, fbName = null;
+            switch (prop.ToLowerInvariant())
+            {
+                case "":
+                case "name": tab = "Item"; name = "Name"; break;
+                case "class":
+                case "type": tab = "Item"; name = "Type"; break;
+                case "material": tab = "Item"; name = "Material"; break;
+                case "category": tab = "Element"; name = "Category"; fbTab = "Item"; fbName = "Type"; break;
+                default:
+                {
+                    var sep = prop.IndexOf('>');
+                    if (sep <= 0 || sep >= prop.Length - 1)
+                        throw new Exception("searchProperty must be Name, Category, Class, Material, or 'Tab>Property' (e.g. 'Element>Mark').");
+                    tab = prop.Substring(0, sep).Trim();
+                    name = prop.Substring(sep + 1).Trim();
+                    break;
+                }
+            }
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            var found = RunPropertySearch(doc, tab, name, text, withinSelection);
+            var matchedOn = tab + ">" + name;
+            if (found.Count == 0 && fbTab != null && fbName != null)
+            {
+                found = RunPropertySearch(doc, fbTab, fbName, text, withinSelection);
+                matchedOn = fbTab + ">" + fbName;
+            }
+            sw.Stop();
             var arr = new JArray();
-            int matched = 0;
             foreach (ModelItem item in found)
             {
-                if (filterByClass && (item.ClassDisplayName == null ||
-                    item.ClassDisplayName.IndexOf(text, StringComparison.OrdinalIgnoreCase) < 0))
-                    continue;
-                matched++;
-                if (arr.Count >= limit) continue;
+                if (arr.Count >= limit) break;
                 arr.Add(ItemJson(item));
             }
-            return new JObject { ["count"] = matched, ["returned"] = arr.Count, ["items"] = arr };
+            var result = new JObject
+            {
+                ["count"] = found.Count,
+                ["returned"] = arr.Count,
+                ["matchedOn"] = matchedOn,
+                ["scope"] = withinSelection ? "selection" : "wholeModel",
+                ["elapsedMs"] = sw.ElapsedMilliseconds,
+                ["items"] = arr,
+            };
+            if (sw.ElapsedMilliseconds > 2000)
+                result["note"] = $"Search took {sw.ElapsedMilliseconds} ms: Navisworks scans every item in scope on its UI thread " +
+                                 "and is frozen meanwhile. Reuse the displayIds above instead of searching again, or select a " +
+                                 "model/level first and pass withinSelection=true.";
+            if (found.Count == 0 && fbTab != null)
+                result["hint"] = $"No item has Element>Category or Item>Type containing '{text}'. Run navis_get_item_properties " +
+                                 "on one item to see its property tabs, then search with searchProperty 'Tab>Property'.";
+            return result;
+        }
+        private static ModelItemCollection RunPropertySearch(Document doc, string tab, string property, string text, bool withinSelection)
+        {
+            var search = new Search();
+            if (withinSelection)
+            {
+                var sel = doc.CurrentSelection.SelectedItems;
+                if (sel.Count == 0) throw new Exception("withinSelection is true but nothing is selected in Navisworks.");
+                search.Selection.CopyFrom(sel);
+            }
+            else
+            {
+                search.Selection.SelectAll();
+            }
+            search.Locations = SearchLocations.DescendantsAndSelf;
+            search.PruneBelowMatch = true;
+            search.SearchConditions.Add(
+                SearchCondition.HasPropertyByDisplayName(tab, property).DisplayStringContains(text).IgnoreStringValueCase());
+            return search.FindAll(doc, false);
         }
 
-        private static JObject GetSelected()
+        private static JObject GetSelected(JObject p)
         {
             var doc = ActiveDoc();
             var items = doc.CurrentSelection.SelectedItems;
+            var limit = Math.Max(1, Int(p, "limit", 500));
             var arr = new JArray();
-            foreach (ModelItem item in items) arr.Add(ItemJson(item));
-            return new JObject { ["count"] = arr.Count, ["items"] = arr };
+            foreach (ModelItem item in items)
+            {
+                if (arr.Count >= limit) break;
+                arr.Add(ItemJson(item));
+            }
+            return new JObject { ["count"] = items.Count, ["returned"] = arr.Count, ["items"] = arr };
         }
 
         private static JObject SelectItems(JObject p)
