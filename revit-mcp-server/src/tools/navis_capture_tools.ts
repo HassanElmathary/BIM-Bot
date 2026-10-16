@@ -58,12 +58,18 @@ export function registerNavisCaptureTools(server: McpServer) {
 
     server.tool(
         "navis_capture_clash",
-        "Zoom to one clash result (both clashing items selected and highlighted), capture an image of it, " +
+        "Zoom to one clash result, capture an image with item1 in red and item2 in green, with the rest of " +
+        "the model hidden by default so walls don't block the view (colours and visibility are restored afterwards), " +
         "and return the image plus both items' details (displayId, name, revitElementId, revitCategory). " +
         "Get test names from navis_list_clash_tests and clashIds from navis_get_clash_results.",
         {
             test: z.string().describe("Clash test name or GUID"),
             clashId: z.string().describe("Clash result GUID (id from navis_get_clash_results) or its name"),
+            highlight: z.boolean().optional().describe("Colour item1 red and item2 green in the image (default true; reset after capture)"),
+            context: z.enum(["isolate", "fade", "none"]).optional().describe(
+                "What to do with the rest of the model so nothing blocks the clash: isolate (default, fast) = show only " +
+                "the two items; fade = everything else see-through (shows surroundings, can take a minute on big models); " +
+                "none = leave as is. Restored after capture."),
             ...sizeArgs,
         },
         async (args) => {

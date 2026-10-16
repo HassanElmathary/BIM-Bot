@@ -72,12 +72,96 @@ namespace BIMBotNavisPlugin.Core
             vp.ZoomBox(ItemsBox(items));
             ApplyViewpoint(doc, vp);
 
-            var shot = Snapshot(doc, p);
+            var shot = Highlighted(doc, r, p);
             shot["test"] = test.DisplayName ?? "";
             shot["clash"] = ResultJson(r);
             shot["item1"] = r.Item1 != null ? (JToken)ItemJson(r.Item1) : JValue.CreateNull();
             shot["item2"] = r.Item2 != null ? (JToken)ItemJson(r.Item2) : JValue.CreateNull();
             return shot;
+        }
+
+        /// <summary>
+        /// Captures with item1 red and item2 green (highlight, default true). context decides what
+        /// happens to the rest of the model so walls in front don't hide the clash:
+        ///   "isolate" (default) — temporarily hide everything except the two items (fast);
+        ///   "fade" — make everything else see-through (shows surroundings, but slow on big models);
+        ///   "none" — leave the rest as is.
+        /// Colours are temporary overrides and hidden items are unhidden afterwards, so the user's
+        /// own colours and hide state are untouched.
+        /// </summary>
+        private static JObject Highlighted(Document doc, ClashResult r, JObject p)
+        {
+            bool highlight = Bool(p, "highlight", true);
+            var context = Str(p, "context", "isolate").Trim().ToLowerInvariant();
+            if (!highlight) return Snapshot(doc, p);
+
+            var keep = new List<ModelItem>();
+            if (r.Item1 != null) keep.Add(r.Item1);
+            if (r.Item2 != null) keep.Add(r.Item2);
+            var touched = new List<ModelItem>();
+            var hidden = new List<ModelItem>();
+            try
+            {
+                if (context == "fade")
+                {
+                    var roots = doc.Models.RootItems.ToList();
+                    doc.Models.OverrideTemporaryTransparency(roots, 0.85);
+                    touched.AddRange(roots);
+                }
+                else if (context == "isolate")
+                {
+                    hidden = OthersAlongPaths(doc, keep);
+                    if (hidden.Count > 0) doc.Models.SetHidden(hidden, true);
+                }
+                if (r.Item1 != null) Paint(doc, r.Item1, new Autodesk.Navisworks.Api.Color(1, 0, 0), touched);
+                if (r.Item2 != null) Paint(doc, r.Item2, new Autodesk.Navisworks.Api.Color(0, 0.75, 0), touched);
+                var shot = Snapshot(doc, p);
+                shot["context"] = context;
+                return shot;
+            }
+            finally
+            {
+                if (hidden.Count > 0) doc.Models.SetHidden(hidden, false);
+                if (touched.Count > 0) doc.Models.ResetTemporaryMaterials(touched);
+            }
+        }
+
+        /// <summary>
+        /// The smallest set of currently visible items whose hiding leaves only the kept items
+        /// visible: every sibling off the path from each model root down to a kept item.
+        /// </summary>
+        private static List<ModelItem> OthersAlongPaths(Document doc, List<ModelItem> keep)
+        {
+            var onPath = new HashSet<ModelItem>();
+            foreach (var k in keep)
+                for (var cur = k; cur != null; cur = cur.Parent) onPath.Add(cur);
+            var keepSet = new HashSet<ModelItem>(keep);
+            var result = new List<ModelItem>();
+
+            void Visit(ModelItem node)
+            {
+                if (keepSet.Contains(node)) return;           // keep it and everything under it
+                foreach (ModelItem child in node.Children)
+                {
+                    if (onPath.Contains(child)) Visit(child);
+                    else if (!child.IsHidden) result.Add(child);
+                }
+            }
+
+            foreach (ModelItem root in doc.Models.RootItems)
+            {
+                if (onPath.Contains(root)) Visit(root);
+                else if (!root.IsHidden) result.Add(root);
+            }
+            return result;
+        }
+
+        private static void Paint(Document doc, ModelItem item, Autodesk.Navisworks.Api.Color color, List<ModelItem> touched)
+        {
+            var one = new[] { item };
+            doc.Models.OverrideTemporaryTransparency(one, 0);
+            doc.Models.OverrideTemporaryColor(one, color);
+            touched.Add(item);
         }
 
         /// <summary>Renders the active view. width 320–2560 (default 1280), height 240–1600 (default 720), format jpeg|png.</summary>
