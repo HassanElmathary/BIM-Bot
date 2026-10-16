@@ -42,10 +42,14 @@ export function registerNavisCaptureTools(server: McpServer) {
         "clash, section, color override or hide actually looks like. The view stays where it was moved " +
         "unless restore=true.",
         {
-            viewpoint: z.string().optional().describe("Saved viewpoint name or GUID to apply before capturing"),
-            displayIds: z.array(z.string()).optional().describe("Zoom to these items before capturing"),
-            select: z.boolean().optional().describe("Select the displayIds items so they are highlighted (default true)"),
+            viewpoint: z.string().optional().describe("Saved viewpoint to apply first: its ref from navis_viewpoints_list (e.g. 'vp:12', preferred — names can repeat), or its name or GUID"),
+            displayIds: z.array(z.string()).optional().describe("Zoom to these items first; they are painted orange and, by default, everything else is hidden for the capture (see context)"),
+            select: z.boolean().optional().describe("Also select the items in Navisworks (default true). Selection is not drawn in the image — the orange colour is."),
             restore: z.boolean().optional().describe("Put the camera back after capturing (default false)"),
+            highlight: z.boolean().optional().describe("Paint the displayIds items orange in the image (default true; reset after capture)"),
+            context: z.enum(["isolate", "fade", "none"]).optional().describe(
+                "With displayIds: isolate (default, fast) = show only those items; fade = everything else see-through " +
+                "(slow on big models); none = leave as is. Restored after capture."),
             ...sizeArgs,
         },
         async (args) => {

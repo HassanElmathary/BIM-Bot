@@ -16,6 +16,10 @@ namespace BIMBotNavisPlugin.Core
     /// </summary>
     public static partial class NavisCommandExecutor
     {
+        private static readonly Autodesk.Navisworks.Api.Color Red = new Autodesk.Navisworks.Api.Color(1, 0, 0);
+        private static readonly Autodesk.Navisworks.Api.Color Green = new Autodesk.Navisworks.Api.Color(0, 0.75, 0);
+        private static readonly Autodesk.Navisworks.Api.Color Orange = new Autodesk.Navisworks.Api.Color(1, 0.5, 0);
+
         private static JObject CaptureView(JObject p)
         {
             var doc = ActiveDoc();
@@ -30,12 +34,25 @@ namespace BIMBotNavisPlugin.Core
                     doc.SavedViewpoints.CurrentSavedViewpoint = FindViewpoint(doc, vpName);
                     moved = true;
                 }
-                if (p["displayIds"] is JArray ids && ids.Count > 0)
+                var ids = Ids(p);
+                var items = ids.Count > 0 ? ResolveItems(doc, ids) : new List<ModelItem>();
+                if (items.Count > 0)
                 {
-                    ZoomToItems(new JObject { ["displayIds"] = ids, ["select"] = Bool(p, "select", true) });
+                    if (Bool(p, "select", true))
+                    {
+                        var coll = new ModelItemCollection();
+                        coll.AddRange(items);
+                        doc.CurrentSelection.CopyFrom(coll);
+                    }
+                    var vp = doc.CurrentViewpoint.CreateCopy();
+                    vp.ZoomBox(ItemsBox(items));
+                    ApplyViewpoint(doc, vp);
                     moved = true;
                 }
-                var shot = Snapshot(doc, p);
+                var shot = items.Count > 0
+                    ? Highlighted(doc, items.Select(i => (i, Orange)).ToList(), p)
+                    : Snapshot(doc, p);
+                if (items.Count > 0) shot["items"] = new JArray(items.Select(i => (JToken)ItemJson(i)));
                 if (!string.IsNullOrWhiteSpace(vpName)) shot["viewpoint"] = vpName;
                 return shot;
             }
@@ -72,7 +89,10 @@ namespace BIMBotNavisPlugin.Core
             vp.ZoomBox(ItemsBox(items));
             ApplyViewpoint(doc, vp);
 
-            var shot = Highlighted(doc, r, p);
+            var painted = new List<(ModelItem item, Autodesk.Navisworks.Api.Color color)>();
+            if (r.Item1 != null) painted.Add((r.Item1, Red));
+            if (r.Item2 != null) painted.Add((r.Item2, Green));
+            var shot = Highlighted(doc, painted, p);
             shot["test"] = test.DisplayName ?? "";
             shot["clash"] = ResultJson(r);
             shot["item1"] = r.Item1 != null ? (JToken)ItemJson(r.Item1) : JValue.CreateNull();
@@ -81,23 +101,20 @@ namespace BIMBotNavisPlugin.Core
         }
 
         /// <summary>
-        /// Captures with item1 red and item2 green (highlight, default true). context decides what
-        /// happens to the rest of the model so walls in front don't hide the clash:
-        ///   "isolate" (default) — temporarily hide everything except the two items (fast);
-        ///   "fade" — make everything else see-through (shows surroundings, but slow on big models);
+        /// Captures with each item painted its colour (highlight, default true). context decides what
+        /// happens to the rest of the model so walls in front don't hide the items:
+        ///   "isolate" (default) — temporarily hide everything except the items (fast);
+        ///   "fade" — make everything else see-through (shows surroundings, slow on big models);
         ///   "none" — leave the rest as is.
         /// Colours are temporary overrides and hidden items are unhidden afterwards, so the user's
         /// own colours and hide state are untouched.
         /// </summary>
-        private static JObject Highlighted(Document doc, ClashResult r, JObject p)
+        private static JObject Highlighted(Document doc, List<(ModelItem item, Autodesk.Navisworks.Api.Color color)> painted, JObject p)
         {
             bool highlight = Bool(p, "highlight", true);
             var context = Str(p, "context", "isolate").Trim().ToLowerInvariant();
-            if (!highlight) return Snapshot(doc, p);
-
-            var keep = new List<ModelItem>();
-            if (r.Item1 != null) keep.Add(r.Item1);
-            if (r.Item2 != null) keep.Add(r.Item2);
+            if (!highlight || painted.Count == 0) return Snapshot(doc, p);
+            var keep = painted.Select(x => x.item).ToList();
             var touched = new List<ModelItem>();
             var hidden = new List<ModelItem>();
             try
@@ -113,8 +130,7 @@ namespace BIMBotNavisPlugin.Core
                     hidden = OthersAlongPaths(doc, keep);
                     if (hidden.Count > 0) doc.Models.SetHidden(hidden, true);
                 }
-                if (r.Item1 != null) Paint(doc, r.Item1, new Autodesk.Navisworks.Api.Color(1, 0, 0), touched);
-                if (r.Item2 != null) Paint(doc, r.Item2, new Autodesk.Navisworks.Api.Color(0, 0.75, 0), touched);
+                foreach (var (item, color) in painted) Paint(doc, item, color, touched);
                 var shot = Snapshot(doc, p);
                 shot["context"] = context;
                 return shot;

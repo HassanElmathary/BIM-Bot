@@ -419,14 +419,22 @@ namespace BIMBotNavisPlugin.Core
             return new JObject { ["selected"] = items.Count };
         }
 
-        private static void CollectViewpoints(SavedItemCollection items, JArray arr)
+        private static void CollectViewpoints(SavedItemCollection items, JArray arr, string folder = "")
         {
             foreach (SavedItem item in items)
             {
                 if (item is SavedViewpoint sv)
-                    arr.Add(new JObject { ["name"] = sv.DisplayName ?? "", ["guid"] = sv.Guid.ToString() });
+                {
+                    var o = new JObject { ["ref"] = $"vp:{arr.Count}", ["name"] = sv.DisplayName ?? "" };
+                    if (folder != "") o["folder"] = folder;
+                    if (sv.Guid != Guid.Empty) o["guid"] = sv.Guid.ToString();
+                    arr.Add(o);
+                }
                 else if (item is GroupItem g)
-                    CollectViewpoints(g.Children, arr);
+                {
+                    var name = g.DisplayName ?? "";
+                    CollectViewpoints(g.Children, arr, folder == "" ? name : folder + " / " + name);
+                }
             }
         }
 
@@ -435,7 +443,14 @@ namespace BIMBotNavisPlugin.Core
             var doc = ActiveDoc();
             var arr = new JArray();
             CollectViewpoints(doc.SavedViewpoints.ToSavedItemCollection(), arr);
-            return new JObject { ["count"] = arr.Count, ["viewpoints"] = arr };
+            var duplicates = arr.GroupBy(v => v.Value<string>("name") ?? "").Count(g => g.Count() > 1);
+            return new JObject
+            {
+                ["count"] = arr.Count,
+                ["duplicateNames"] = duplicates,
+                ["note"] = "Use 'ref' (e.g. vp:12) to pick a viewpoint: names can repeat and many GUIDs are empty. Refs change if saved viewpoints are added, deleted or reordered.",
+                ["viewpoints"] = arr,
+            };
         }
 
         private static SavedViewpoint FindViewpoint(Document doc, string idOrName)
@@ -450,6 +465,12 @@ namespace BIMBotNavisPlugin.Core
                 }
             }
             Recurse(doc.SavedViewpoints.ToSavedItemCollection());
+            if (idOrName.StartsWith("vp:", StringComparison.OrdinalIgnoreCase)
+                && int.TryParse(idOrName.Substring(3), out var idx))
+            {
+                if (idx >= 0 && idx < found.Count) return found[idx];
+                throw new Exception($"Viewpoint ref '{idOrName}' is out of range (0–{found.Count - 1}). Use navis_viewpoints_list.");
+            }
             foreach (var sv in found)
             {
                 if (string.Equals(sv.DisplayName, idOrName, StringComparison.OrdinalIgnoreCase)
