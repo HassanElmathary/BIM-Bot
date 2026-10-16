@@ -39,6 +39,7 @@ namespace BIMBotNavisPlugin.Core
                 case "navis_get_clash_detail": return ClashDetail(p);
                 case "navis_list_clash_pairs": return ClashPairs(p);
                 case "navis_find_by_revit_ids": return FindByRevitIds(p);
+                case "navis_refresh_models": return RefreshModels();
                 case "navis_capture_view": return CaptureView(p);
                 case "navis_capture_clash": return CaptureClash(p);
                 // TimeLiner

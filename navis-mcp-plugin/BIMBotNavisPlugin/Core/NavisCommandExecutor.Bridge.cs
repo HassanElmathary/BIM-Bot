@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using Autodesk.Navisworks.Api;
 using Autodesk.Navisworks.Api.Clash;
 using Newtonsoft.Json.Linq;
@@ -120,22 +121,36 @@ namespace BIMBotNavisPlugin.Core
             var ids = (p["elementIds"] as JArray)?.Select(t => t.ToString().Trim()).Where(s => s != "").Distinct().ToList()
                       ?? new List<string>();
             if (ids.Count == 0) throw new Exception("elementIds is required (non-empty).");
-            if (ids.Count > 50) throw new Exception("At most 50 elementIds per call (each one is a model search).");
-
-            var found = new JObject();
-            var notFound = new JArray();
-            var hits = new List<ModelItem>();
-            foreach (var id in ids)
+            if (ids.Count > 500) throw new Exception("At most 500 elementIds per call.");
+            var src = Str(p, "sourceFile");
+            var wanted = new HashSet<string>(ids, StringComparer.Ordinal);
+            // <= 3 ids: one targeted search each. More: ONE search for every item that has Element > Id.
+            List<ModelItem> candidates;
+            bool singlePass = ids.Count > 3;
+            if (!singlePass)
             {
-                var exact = RunPropertySearch(doc, "Element", "Id", id, false)
-                    .Cast<ModelItem>()
-                    .Where(m => PropText(m, "Element", "Id") == id)
-                    .ToList();
-                if (exact.Count == 0) { notFound.Add(id); continue; }
-                found[id] = new JArray(exact.Select(m => ItemRef(doc, m)));
-                hits.AddRange(exact);
+                candidates = new List<ModelItem>();
+                foreach (var id in ids)
+                    candidates.AddRange(RunPropertySearch(doc, "Element", "Id", id, false).Cast<ModelItem>());
             }
-
+            else
+            {
+                candidates = ItemsWithRevitId(doc);
+            }
+            var found = new JObject();
+            var hits = new List<ModelItem>();
+            int otherModels = 0;
+            foreach (var m in candidates)
+            {
+                var id = PropText(m, "Element", "Id");
+                if (!wanted.Contains(id)) continue;
+                if (src != "" && !SameModel(SourceFileOf(doc, m), src)) { otherModels++; continue; }
+                var arr = found[id] as JArray;
+                if (arr == null) { arr = new JArray(); found[id] = arr; }
+                arr.Add(ItemRef(doc, m));
+                hits.Add(m);
+            }
+            var notFound = new JArray(ids.Where(i => found[i] == null));
             if (hits.Count > 0 && Bool(p, "select", true))
             {
                 var coll = new ModelItemCollection();
@@ -148,7 +163,66 @@ namespace BIMBotNavisPlugin.Core
                 vp.ZoomBox(ItemsBox(hits));
                 ApplyViewpoint(doc, vp);
             }
-            return new JObject { ["found"] = found, ["notFound"] = notFound, ["itemCount"] = hits.Count };
+            var result = new JObject
+            {
+                ["found"] = found,
+                ["notFound"] = notFound,
+                ["itemCount"] = hits.Count,
+                ["sourceFile"] = src,
+                ["skippedInOtherModels"] = otherModels,
+                ["mode"] = singlePass ? "singlePass" : "perIdSearch",
+            };
+            if (otherModels > 0)
+                result["note"] = $"{otherModels} item(s) with matching IDs were ignored because they belong to other models than '{src}' (Revit IDs are only unique per Revit file).";
+            return result;
+        }
+
+        /// <summary>Every item that carries an Element > Id property (one search, PruneBelowMatch).</summary>
+        private static List<ModelItem> ItemsWithRevitId(Document doc)
+        {
+            var search = new Search();
+            search.Selection.SelectAll();
+            search.Locations = SearchLocations.DescendantsAndSelf;
+            search.PruneBelowMatch = true;
+            search.SearchConditions.Add(SearchCondition.HasPropertyByDisplayName("Element", "Id"));
+            return search.FindAll(doc, false).Cast<ModelItem>().ToList();
+        }
+
+        private static string ModelKey(string name) =>
+            Regex.Replace(Path.GetFileName(name ?? "").Trim(), @"\.(nwc|nwd|nwf|rvt)$", "", RegexOptions.IgnoreCase).ToLowerInvariant();
+
+        /// <summary>True when an NWC/RVT source file and a Revit document title name the same model
+        /// (exact, or one is a prefix of the other — covers workshared locals like "Project_jane").</summary>
+        private static bool SameModel(string sourceFile, string other)
+        {
+            var a = ModelKey(sourceFile);
+            var b = ModelKey(other);
+            return a != "" && b != "" && (a == b || a.StartsWith(b, StringComparison.Ordinal) || b.StartsWith(a, StringComparison.Ordinal));
+        }
+
+        /// <summary>
+        /// Reloads changed model files if this Navisworks version exposes a refresh call to plugins.
+        /// Probed by reflection so the plugin compiles on every version.
+        /// </summary>
+        private static JObject RefreshModels()
+        {
+            var doc = ActiveDoc();
+            string[] names = { "UpdateFiles", "RefreshFiles" };
+            foreach (var target in new object[] { doc, doc.Models })
+            {
+                foreach (var n in names)
+                {
+                    var mi = target.GetType().GetMethod(n,
+                        System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance,
+                        null, Type.EmptyTypes, null);
+                    if (mi == null) continue;
+                    mi.Invoke(target, null);
+                    NavisLogger.Log($"navis_refresh_models via {target.GetType().Name}.{n}");
+                    return new JObject { ["refreshed"] = true, ["via"] = target.GetType().Name + "." + n };
+                }
+            }
+            throw new Exception("This Navisworks version exposes no refresh call to plugins. Click Home > Refresh in " +
+                                "Navisworks, then run navis_recheck_clash.");
         }
     }
 }
