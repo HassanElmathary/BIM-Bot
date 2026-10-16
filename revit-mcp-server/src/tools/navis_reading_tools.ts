@@ -77,7 +77,7 @@ export function registerNavisReadingTools(server: McpServer) {
 
     server.tool(
         "navis_viewpoints_list",
-        "List saved viewpoints in the Navisworks document.",
+        "List saved viewpoints. Each has a 'ref' like 'vp:12' — use it to pick a viewpoint, because names can repeat and many GUIDs are empty.",
         {},
         async () => {
             try {
@@ -89,8 +89,8 @@ export function registerNavisReadingTools(server: McpServer) {
 
     server.tool(
         "navis_viewpoint_apply",
-        "Apply a saved viewpoint by name or GUID.",
-        { viewpoint: z.string().describe("Viewpoint name or GUID") },
+        "Apply a saved viewpoint by ref (e.g. 'vp:12' from navis_viewpoints_list, preferred), name or GUID.",
+        { viewpoint: z.string().describe("Viewpoint ref (vp:N), name or GUID") },
         async (args) => {
             try {
                 const response = await withNavisConnection((c) => c.sendCommand("navis_viewpoint_apply", { viewpoint: args.viewpoint }));
