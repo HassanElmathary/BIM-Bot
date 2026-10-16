@@ -36,6 +36,9 @@ namespace BIMBotNavisPlugin.Core
                 case "navis_set_camera": return SetCamera(p);
                 case "navis_zoom_to_items": return ZoomToItems(p);
                 case "navis_view_preset": return ViewPreset(p);
+                case "navis_get_clash_detail": return ClashDetail(p);
+                case "navis_list_clash_pairs": return ClashPairs(p);
+                case "navis_find_by_revit_ids": return FindByRevitIds(p);
                 case "navis_capture_view": return CaptureView(p);
                 case "navis_capture_clash": return CaptureClash(p);
                 // TimeLiner
