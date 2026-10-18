@@ -83,4 +83,26 @@ export function registerNavisCaptureTools(server: McpServer) {
             } catch (e) { return { content: [{ type: "text" as const, text: `Failed: ${e instanceof Error ? e.message : String(e)}` }] }; }
         }
     );
+
+    server.tool(
+        "navis_export_clash_snapshots",
+        "Save a red/green, isolated JPEG of every clash in a clash test to a folder, plus clashes.csv " +
+        "(clash, status, distance, both items, image file). About 1 s per image; max 250 images per call — " +
+        "for more, tell the user to use the 'Clash Snapshots' button in Navisworks (Add-ins tab). " +
+        "Default folder: Documents\\BIM-Bot Clash Snapshots\\<test>_<date>.",
+        {
+            test: z.string().describe("Clash test name or GUID (from navis_list_clash_tests)"),
+            statusFilter: z.string().optional().describe("open (default: New + Active) | all | New | Active | Reviewed | Approved | Resolved"),
+            maxImages: z.number().optional().describe("Max images, 1–250 (default 100)"),
+            folder: z.string().optional().describe("Output folder (default: Documents\\BIM-Bot Clash Snapshots\\<test>_<date>)"),
+            width: z.number().optional().describe("Image width in pixels, 320–2560 (default 1280)"),
+            height: z.number().optional().describe("Image height in pixels, 240–1600 (default 720)"),
+        },
+        async (args) => {
+            try {
+                const response = await withNavisConnection((c) => c.sendCommand("navis_export_clash_snapshots", args));
+                return { content: [{ type: "text" as const, text: JSON.stringify(response, null, 2) }] };
+            } catch (e) { return { content: [{ type: "text" as const, text: `Failed: ${e instanceof Error ? e.message : String(e)}` }] }; }
+        }
+    );
 }
