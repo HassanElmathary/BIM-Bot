@@ -97,3 +97,15 @@ test("csvCell quotes only when needed and doubles quotes", () => {
     assert.equal(csvCell(undefined), "");
     assert.equal(csvCell(12.5), "12.5");
 });
+
+test("decide: federated NWD items match by discipline NWC or original RVT name", () => {
+    const docs = [doc("QC-ELE-10002_m.ali4ZHSN", { isActive: true }), doc("QC-FPR-10002", { isLinked: true })];
+    const d = decide([
+        { revitElementId: "9276566", sourceFile: "QC-ELE-10002.nwc", revitSourceFile: "QC-ELE-10002_m.ali4ZHSN.rvt", displayName: "tray" },
+        { revitElementId: "2155309", sourceFile: "Other.nwc", revitSourceFile: "QC-FPR-10002_k.ibrahim33RDB.rvt", displayName: "fitting" },
+        { revitElementId: "1", sourceFile: "20260401_FEDERATED MODEL.nwd", displayName: "rootonly" },
+    ], docs);
+    assert.deepEqual(d.map((x) => x.action), ["select", "select", "skip"]);
+    assert.equal(d[0].revitDocument, "QC-ELE-10002_m.ali4ZHSN");
+    assert.equal(d[1].revitDocument, "QC-FPR-10002");
+});

@@ -12,6 +12,7 @@ export interface BridgeItem {
     revitElementId?: string;
     revitCategory?: string;
     sourceFile?: string;
+    revitSourceFile?: string;
 }
 
 export interface ClashInfo {
@@ -87,20 +88,22 @@ export function decide(items: BridgeItem[], docs: RevitDoc[]): Decision[] {
         const id = Number(it.revitElementId);
         const src = it.sourceFile ?? "";
         const label = it.displayName || it.displayId || "?";
+        const rsrc = it.revitSourceFile ?? "";
+        const fits = (title: string) => sameModel(src, title) || (!!rsrc && sameModel(rsrc, title));
         if (!Number.isInteger(id) || id <= 0) {
             return { item: label, revitElementId: null, sourceFile: src, revitDocument: "", action: "skip", reason: "No Revit Element ID on this item (not from a Revit NWC?)." };
         }
         if (!src) {
             return { item: label, revitElementId: id, sourceFile: "", revitDocument: active?.title ?? "", action: "select", reason: "Source file unknown — assumed to be the active Revit document." };
         }
-        if (active && sameModel(src, active.title)) {
+        if (active && fits(active.title)) {
             return { item: label, revitElementId: id, sourceFile: src, revitDocument: active.title, action: "select", reason: "From the active Revit document." };
         }
-        const linked = docs.find((d) => d.isLinked && sameModel(src, d.title));
+        const linked = docs.find((d) => d.isLinked && fits(d.title));
         if (linked) {
             return { item: label, revitElementId: id, sourceFile: src, revitDocument: linked.title, action: "select", reason: "From a linked model. If the active model has an element with the same ID, Revit selects that one instead — check the result." };
         }
-        const other = docs.find((d) => !d.isLinked && !d.isActive && !d.isFamilyDocument && sameModel(src, d.title));
+        const other = docs.find((d) => !d.isLinked && !d.isActive && !d.isFamilyDocument && fits(d.title));
         if (other) {
             return { item: label, revitElementId: id, sourceFile: src, revitDocument: other.title, action: "activate", reason: "From an open Revit document that is not active." };
         }
