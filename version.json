@@ -1,8 +1,8 @@
 {
-  "version": "2.7.2",
-  "releaseUrl": "https://github.com/HassanElmathary/BIM-Bot/releases/tag/v2.7.2",
-  "downloadUrl": "https://github.com/HassanElmathary/BIM-Bot/releases/download/v2.7.2/BIMBot-Setup-2.7.2.exe",
-  "assetFileName": "BIMBot-Setup-2.7.2.exe",
-  "changelog": "BIM-Bot v2.7.2 — Navisworks MCP for Claude and ChatGPT. NEW: the installer, the Connect button, and every Revit startup now register a second BIM-Bot-Navis MCP entry (same server, BIMBOT_NAVIS_PORT=8091) in Claude Desktop, Claude Code, Cursor, Windsurf, VS Code, and ChatGPT Desktop's config.toml — all 21 navis_* tools (model tree, search, viewpoints, clash detective, TimeLiner, append/export) appear in both AI clients with zero manual setup. Uninstall removes both entries. FIX: stale-entry repair now validates both entries.",
+  "version": "2.7.3",
+  "releaseUrl": "https://github.com/HassanElmathary/BIM-Bot/releases/tag/v2.7.3",
+  "downloadUrl": "https://github.com/HassanElmathary/BIM-Bot/releases/download/v2.7.3/BIMBot-Setup-2.7.3.exe",
+  "assetFileName": "BIMBot-Setup-2.7.3.exe",
+  "changelog": "BIM-Bot v2.7.3 — Navisworks that Claude can see, linked to Revit. NEW: navis_capture_view and navis_capture_clash return real images of the Navisworks view (clash items red/green, the rest see-through), plus a Clash Snapshots ribbon button and navis_export_clash_snapshots (one image per clash + CSV). NEW Navisworks <-> Revit bridge: navis_clash_to_revit selects and zooms both clashing elements in the right Revit model, revit_selection_to_navis finds the Revit selection in Navisworks, navis_recheck_clash, navis_clash_handoff_table (Revit ID pairs per discipline file) and navis_refresh_models — works on federated NWD models. FIXES: reliable Navisworks connection (auto-start, instant UI-thread wake, never off-thread), navis_connection_status diagnostics with a fix hint, fast failure when Navisworks is closed, usable item IDs and Revit Category search.",
   "minVersion": "1.0.0"
 }

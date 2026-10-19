@@ -5,13 +5,13 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Revit](https://img.shields.io/badge/Revit-2020--2027-blue.svg)](#)
 
-> BIM-Bot: Model Context Protocol (MCP) server + Revit & Navisworks plugins for AI-driven BIM automation with **230 tools**, built-in Gemini AI chat, and Power BI 3D export.
+> BIM-Bot: Model Context Protocol (MCP) server + Revit & Navisworks plugins for AI-driven BIM automation with **266 tools**, built-in Gemini AI chat, and Power BI 3D export.
 
 ---
 
 ## ⚡ Quick Install
 
- 1. Download **`BIMBot-Setup-2.7.2.exe`** from [GitHub Releases](https://github.com/HassanElmathary/BIM-Bot/releases)
+ 1. Download **`BIMBot-Setup-2.7.3.exe`** from [GitHub Releases](https://github.com/HassanElmathary/BIM-Bot/releases)
 2. Run the installer as **Administrator**
 3. Follow the wizard — it will:
    - ✅ Auto-detect your Revit versions (2020–2027)
