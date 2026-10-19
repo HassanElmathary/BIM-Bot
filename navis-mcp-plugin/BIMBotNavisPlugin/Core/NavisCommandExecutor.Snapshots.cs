@@ -76,7 +76,7 @@ namespace BIMBotNavisPlugin.Core
             var cameraBefore = doc.CurrentViewpoint.CreateCopy();
             var selectionBefore = new ModelItemCollection();
             selectionBefore.CopyFrom(doc.CurrentSelection.SelectedItems);
-            var opts = new JObject { ["width"] = width, ["height"] = height, ["format"] = "jpeg" };
+            var opts = new JObject { ["width"] = width, ["height"] = height, ["format"] = "jpeg", ["seeThroughSecond"] = true };
             var csv = new StringBuilder();
             csv.AppendLine("index,clash,status,distance,item1,item2,image");
             int saved = 0, failed = 0;
@@ -97,7 +97,7 @@ namespace BIMBotNavisPlugin.Core
                         if (r.Item2 != null) items.Add(r.Item2);
                         if (items.Count == 0) throw new Exception("clash has no items");
                         var vp = doc.CurrentViewpoint.CreateCopy();
-                        vp.ZoomBox(ItemsBox(items));
+                        vp.ZoomBox(ClashZoomBox(r, items));
                         ApplyViewpoint(doc, vp);
                         var painted = new List<(ModelItem item, Autodesk.Navisworks.Api.Color color)>();
                         if (r.Item1 != null) painted.Add((r.Item1, Red));

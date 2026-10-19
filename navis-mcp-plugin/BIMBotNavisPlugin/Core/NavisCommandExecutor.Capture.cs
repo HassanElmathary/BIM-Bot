@@ -86,12 +86,13 @@ namespace BIMBotNavisPlugin.Core
             coll.AddRange(items);
             doc.CurrentSelection.CopyFrom(coll);
             var vp = doc.CurrentViewpoint.CreateCopy();
-            vp.ZoomBox(ItemsBox(items));
+            vp.ZoomBox(ClashZoomBox(r, items));
             ApplyViewpoint(doc, vp);
 
             var painted = new List<(ModelItem item, Autodesk.Navisworks.Api.Color color)>();
             if (r.Item1 != null) painted.Add((r.Item1, Red));
             if (r.Item2 != null) painted.Add((r.Item2, Green));
+            if (p["seeThroughSecond"] == null) p["seeThroughSecond"] = true;
             var shot = Highlighted(doc, painted, p);
             shot["test"] = test.DisplayName ?? "";
             shot["clash"] = ResultJson(r);
@@ -131,6 +132,8 @@ namespace BIMBotNavisPlugin.Core
                     if (hidden.Count > 0) doc.Models.SetHidden(hidden, true);
                 }
                 foreach (var (item, color) in painted) Paint(doc, item, color, touched);
+                if (painted.Count == 2 && Bool(p, "seeThroughSecond", false))
+                    doc.Models.OverrideTemporaryTransparency(new[] { painted[1].item }, 0.5);
                 var shot = Snapshot(doc, p);
                 shot["context"] = context;
                 return shot;
@@ -170,6 +173,27 @@ namespace BIMBotNavisPlugin.Core
                 else if (!root.IsHidden) result.Add(root);
             }
             return result;
+        }
+
+        /// <summary>
+        /// Box to zoom to for a clash: Clash Detective's own ViewBounds, else the clash's
+        /// BoundingBox, else the box around both items (old behaviour).
+        /// </summary>
+        private static BoundingBox3D ClashZoomBox(ClashResult r, List<ModelItem> items)
+        {
+            try
+            {
+                var vb = r.ViewBounds;
+                if (vb != null && !vb.IsEmpty) return vb;
+            }
+            catch { }
+            try
+            {
+                var bb = r.BoundingBox;
+                if (bb != null && !bb.IsEmpty) return bb;
+            }
+            catch { }
+            return ItemsBox(items);
         }
 
         private static void Paint(Document doc, ModelItem item, Autodesk.Navisworks.Api.Color color, List<ModelItem> touched)

@@ -74,6 +74,7 @@ export function registerNavisCaptureTools(server: McpServer) {
                 "What to do with the rest of the model so nothing blocks the clash: isolate (default, fast) = show only " +
                 "the two items; fade = everything else see-through (shows surroundings, can take a minute on big models); " +
                 "none = leave as is. Restored after capture."),
+            seeThroughSecond: z.boolean().optional().describe("Draw the green item 50% see-through so a red item inside it is visible (default true)"),
             ...sizeArgs,
         },
         async (args) => {
