@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
@@ -54,6 +55,30 @@ namespace BIMBotNavisPlugin.Core
             return SameModel(file, src) || (rvt != "" && SameModel(rvt, src));
         }
 
+        /// <summary>
+        /// The item's Revit Element ID as text, or "". Element > Id is stored as an Int32, which
+        /// ToDisplayString() cannot read (PropText returns "" for it), so read the number directly;
+        /// fall back to the "Element ID" > "Value" tab that some exports add.
+        /// </summary>
+        private static string RevitIdOf(ModelItem m)
+        {
+            try
+            {
+                var v = m.PropertyCategories.FindPropertyByDisplayName("Element", "Id")?.Value;
+                if (v != null)
+                {
+                    if (v.IsInt32) return v.ToInt32().ToString(CultureInfo.InvariantCulture);
+                    if (v.IsDisplayString)
+                    {
+                        var s = v.ToDisplayString();
+                        if (s != "") return s;
+                    }
+                }
+            }
+            catch { }
+            return PropText(m, "Element ID", "Value");
+        }
+
         /// <summary>Walks up from item until a node carries Element > Id. Returns (id, carrierItem) or ("", item).</summary>
         private static (string id, ModelItem carrier) RevitIdUp(ModelItem item)
         {
@@ -61,8 +86,7 @@ namespace BIMBotNavisPlugin.Core
             for (int i = 0; i <= RevitIdSearchDepth && cur != null; i++)
             {
                 if (i > 0 && IsStructuralNode(cur)) break; // never take a level's / category's / file's id
-                var id = PropText(cur, "Element", "Id");
-                if (id == "") id = PropText(cur, "Element ID", "Value");
+                var id = RevitIdOf(cur);
                 if (id != "") return (id, cur);
                 cur = cur.Parent;
             }
@@ -96,10 +120,16 @@ namespace BIMBotNavisPlugin.Core
             o["revitSourceFile"] = rvt;
             if (o["revitCategory"] == null)
             {
+                // Families and types are collection nodes too: the category is the TOP-most
+                // collection below the file node, not the nearest one.
+                string? category = null;
                 for (var cur = item; cur != null; cur = cur.Parent)
                 {
-                    if (InternalType(cur) == "LcRevitCollection") { o["revitCategory"] = cur.DisplayName ?? ""; break; }
+                    var t = InternalType(cur);
+                    if (t == "LcOaPartition") break;
+                    if (t == "LcRevitCollection") category = cur.DisplayName ?? "";
                 }
+                if (category != null) o["revitCategory"] = category;
             }
             return o;
         }
@@ -178,7 +208,7 @@ namespace BIMBotNavisPlugin.Core
             {
                 candidates = new List<ModelItem>();
                 foreach (var id in ids)
-                    candidates.AddRange(RunPropertySearch(doc, "Element", "Id", id, false).Cast<ModelItem>());
+                    candidates.AddRange(SearchRevitId(doc, id));
             }
             else
             {
@@ -189,7 +219,7 @@ namespace BIMBotNavisPlugin.Core
             int otherModels = 0;
             foreach (var m in candidates)
             {
-                var id = PropText(m, "Element", "Id");
+                var id = RevitIdOf(m);
                 if (!wanted.Contains(id)) continue;
                 if (src != "" && !MatchesSource(doc, m, src)) { otherModels++; continue; }
                 var arr = found[id] as JArray;
@@ -225,6 +255,32 @@ namespace BIMBotNavisPlugin.Core
         }
 
         /// <summary>Every item that carries an Element > Id property (one search, PruneBelowMatch).</summary>
+        /// <summary>
+        /// Items whose Element > Id equals id. Navisworks stores that Id as a NUMBER, so a text
+        /// "contains" search never matches it: search by numeric value first, text as a fallback.
+        /// </summary>
+        private static List<ModelItem> SearchRevitId(Document doc, string id)
+        {
+            List<ModelItem> Run(SearchCondition condition)
+            {
+                var search = new Search();
+                search.Selection.SelectAll();
+                search.Locations = SearchLocations.DescendantsAndSelf;
+                search.PruneBelowMatch = true;
+                search.SearchConditions.Add(condition);
+                return search.FindAll(doc, false).Cast<ModelItem>().ToList();
+            }
+            var has = SearchCondition.HasPropertyByDisplayName("Element", "Id");
+            if (int.TryParse(id, out var n))
+            {
+                var byNumber = Run(has.EqualValue(VariantData.FromInt32(n)));
+                if (byNumber.Count > 0) return byNumber;
+            }
+            var byText = Run(has.DisplayStringContains(id));
+            if (byText.Count > 0) return byText;
+            return Run(SearchCondition.HasPropertyByDisplayName("Element ID", "Value").DisplayStringContains(id));
+        }
+
         private static List<ModelItem> ItemsWithRevitId(Document doc)
         {
             var search = new Search();
