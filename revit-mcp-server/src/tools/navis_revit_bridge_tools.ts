@@ -101,7 +101,7 @@ export function registerNavisRevitBridgeTools(server: McpServer) {
         "revit_selection_to_navis",
         "Take the elements currently selected in Revit and find, select and zoom to the same elements in " +
         "Navisworks. Only Navisworks models whose source file matches the active Revit document are searched " +
-        "(Revit IDs are only unique per file). Max 500 elements.",
+        "(Revit IDs are only unique per file). Max 50 elements (the first 50 are used).",
         {
             zoom: z.boolean().optional().describe("Zoom Navisworks to the found items (default true)"),
             sourceFile: z.string().optional().describe(
@@ -111,7 +111,7 @@ export function registerNavisRevitBridgeTools(server: McpServer) {
         async (args) => {
             try {
                 const selResp = await withRevitConnection((c) => c.sendCommand("get_selected_elements", {}));
-                const ids = extractIds(selResp).slice(0, 500);
+                const ids = extractIds(selResp).slice(0, 50);
                 if (ids.length === 0) return text("Nothing is selected in Revit (or no element ids were returned).");
                 const active = (await revitDocs()).find((d) => d.isActive);
                 const src = args.sourceFile === "*" ? "" : (args.sourceFile ?? active?.title ?? "");

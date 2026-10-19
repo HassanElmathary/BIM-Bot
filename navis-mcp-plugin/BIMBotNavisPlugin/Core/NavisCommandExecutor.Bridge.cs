@@ -17,6 +17,7 @@ namespace BIMBotNavisPlugin.Core
     public static partial class NavisCommandExecutor
     {
         private const int RevitIdSearchDepth = 4;
+        private const int MaxRevitIdLookups = 50;
 
         /// <summary>Item > Internal Type, e.g. LcOaPartition (file), LcRevitCollection (category), LcRevitLayer (level).</summary>
         private static string InternalType(ModelItem m) => PropText(m, "Item", "Internal Type");
@@ -198,22 +199,15 @@ namespace BIMBotNavisPlugin.Core
             var ids = (p["elementIds"] as JArray)?.Select(t => t.ToString().Trim()).Where(s => s != "").Distinct().ToList()
                       ?? new List<string>();
             if (ids.Count == 0) throw new Exception("elementIds is required (non-empty).");
-            if (ids.Count > 500) throw new Exception("At most 500 elementIds per call.");
+            if (ids.Count > MaxRevitIdLookups)
+                throw new Exception($"At most {MaxRevitIdLookups} elementIds per call (each is one model search; select fewer elements in Revit).");
             var src = Str(p, "sourceFile");
             var wanted = new HashSet<string>(ids, StringComparer.Ordinal);
-            // <= 3 ids: one targeted search each. More: ONE search for every item that has Element > Id.
-            List<ModelItem> candidates;
-            bool singlePass = ids.Count > 3;
-            if (!singlePass)
-            {
-                candidates = new List<ModelItem>();
-                foreach (var id in ids)
-                    candidates.AddRange(SearchRevitId(doc, id));
-            }
-            else
-            {
-                candidates = ItemsWithRevitId(doc);
-            }
+            // One numeric search per id (~0.4 s each once Navisworks' property cache is warm). Never one
+            // pass over every item with an Element Id: on a federated model that froze Navisworks > 5 min.
+            var candidates = new List<ModelItem>();
+            foreach (var id in ids)
+                candidates.AddRange(SearchRevitId(doc, id));
             var found = new JObject();
             var hits = new List<ModelItem>();
             int otherModels = 0;
@@ -247,7 +241,7 @@ namespace BIMBotNavisPlugin.Core
                 ["itemCount"] = hits.Count,
                 ["sourceFile"] = src,
                 ["skippedInOtherModels"] = otherModels,
-                ["mode"] = singlePass ? "singlePass" : "perIdSearch",
+                ["mode"] = "perIdSearch",
             };
             if (otherModels > 0)
                 result["note"] = $"{otherModels} item(s) with matching IDs were ignored because they belong to other models than '{src}' (Revit IDs are only unique per Revit file).";
@@ -281,15 +275,6 @@ namespace BIMBotNavisPlugin.Core
             return Run(SearchCondition.HasPropertyByDisplayName("Element ID", "Value").DisplayStringContains(id));
         }
 
-        private static List<ModelItem> ItemsWithRevitId(Document doc)
-        {
-            var search = new Search();
-            search.Selection.SelectAll();
-            search.Locations = SearchLocations.DescendantsAndSelf;
-            search.PruneBelowMatch = true;
-            search.SearchConditions.Add(SearchCondition.HasPropertyByDisplayName("Element", "Id"));
-            return search.FindAll(doc, false).Cast<ModelItem>().ToList();
-        }
 
         private static string ModelKey(string name) =>
             Regex.Replace(Path.GetFileName(name ?? "").Trim(), @"\.(nwc|nwd|nwf|rvt)$", "", RegexOptions.IgnoreCase).ToLowerInvariant();
