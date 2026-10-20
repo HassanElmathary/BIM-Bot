@@ -98,6 +98,17 @@ namespace BIMBotPlugin.Core
                 };
                 corePanel.AddItem(projectFilesData);
 
+                // --- Join Bridge (manual Navisworks master / Revit slave pairing) ---
+                var bridgeData = new PushButtonData("MCPBridgeJoin", "Join\nBridge", asm,
+                    "BIMBotPlugin.Commands.BridgeJoinCommand")
+                {
+                    ToolTip = "Join this model to the BIM-Bot bridge as a slave of the Navisworks master " +
+                              "(start the bridge in Navisworks first: Add-ins > BIM-Bot Bridge). Click again to leave.",
+                    LargeImage = RibbonIcons.ProjectFiles(32),
+                    Image = RibbonIcons.ProjectFiles(16)
+                };
+                corePanel.AddItem(bridgeData);
+
                 // --- Connect Claude ---
                 var claudeData = new PushButtonData("MCPClaudeConnect", "Connect\nClaude", asm,
                     "BIMBotPlugin.Commands.ConnectToClaudeCommand")
@@ -283,6 +294,7 @@ namespace BIMBotPlugin.Core
         {
             try
             {
+                BridgeSessionFile.LeaveAllForThisProcess();
                 _socketService?.Stop();
                 Logger.Log("BIM-Bot Plugin shut down");
                 return Result.Succeeded;
