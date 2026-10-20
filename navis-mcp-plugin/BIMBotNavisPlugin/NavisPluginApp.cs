@@ -16,7 +16,7 @@ namespace BIMBotNavisPlugin
     /// </summary>
     public static class NavisPluginApp
     {
-        public const string Version = "2.7.3";
+        public const string Version = "2.7.4";
         public const int DefaultPort = 8091;
 
         private static NavisSocketService? _service;

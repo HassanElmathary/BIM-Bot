@@ -5,13 +5,13 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Revit](https://img.shields.io/badge/Revit-2020--2027-blue.svg)](#)
 
-> BIM-Bot: Model Context Protocol (MCP) server + Revit & Navisworks plugins for AI-driven BIM automation with **266 tools**, built-in Gemini AI chat, and Power BI 3D export.
+> BIM-Bot: Model Context Protocol (MCP) server + Revit & Navisworks plugins for AI-driven BIM automation with **267 tools**, built-in Gemini AI chat, and Power BI 3D export.
 
 ---
 
 ## ⚡ Quick Install
 
- 1. Download **`BIMBot-Setup-2.7.3.exe`** from [GitHub Releases](https://github.com/HassanElmathary/BIM-Bot/releases)
+ 1. Download **`BIMBot-Setup-2.7.4.exe`** from [GitHub Releases](https://github.com/HassanElmathary/BIM-Bot/releases)
 2. Run the installer as **Administrator**
 3. Follow the wizard — it will:
    - ✅ Auto-detect your Revit versions (2020–2027)
@@ -26,7 +26,7 @@
 
 ## Supported AI Clients
 
-BIM-Bot works with **any MCP-compatible AI client**. The installer auto-configures Claude Desktop; for others, copy the config below.
+BIM-Bot works with **any MCP-compatible AI client**. The installer auto-configures Claude Desktop, ChatGPT Desktop, OpenCode, Cursor, Windsurf and VS Code when they are installed; for others, copy the config below.
 
 | Client | Config File |
 |--------|-------------|
@@ -35,6 +35,7 @@ BIM-Bot works with **any MCP-compatible AI client**. The installer auto-configur
 | Windsurf | `%USERPROFILE%\.codeium\windsurf\mcp_config.json` |
 | VS Code | `.vscode/mcp.json` or Command Palette → "MCP: Open User Configuration" |
 | Gemini CLI | `~/.gemini/settings.json` |
+| OpenCode | `%USERPROFILE%\.config\opencode\opencode.json` (auto-configured) |
 
 ### Claude Desktop / Cursor / Windsurf / Gemini CLI
 
@@ -64,6 +65,35 @@ BIM-Bot works with **any MCP-compatible AI client**. The installer auto-configur
 }
 ```
 
+### OpenCode
+
+The installer and the Revit plugin's **Connect Claude** button write this into
+`~/.config/opencode/opencode.json` once OpenCode is installed (`npm i -g opencode-ai`).
+OpenCode merges `command` + `args` into one array and calls `env` `environment`:
+
+```json
+{
+  "mcp": {
+    "BIM-Bot": {
+      "type": "local",
+      "command": ["C:\\Program Files\\BIMBot\\nodejs\\node.exe", "C:\\Program Files\\BIMBot\\server\\build\\index.js"],
+      "enabled": true,
+      "timeout": 30000
+    }
+  }
+}
+```
+
+BIM-Bot tools are off for OpenCode's default agents, so ~280 tool schemas don't
+load into every session. Switch to the **BIM-Bot** agent (Tab) to use them — it has
+every Revit and Navisworks tool, read and write, and creates a checkpoint before changes.
+
+The `BIM-Bot` server already reaches Navisworks (it finds the running Navisworks plugin
+by itself), so the extra `BIM-Bot-Navis` entry is added with `"enabled": false` and can stay off.
+For a project folder, copy `server\opencode\AGENTS.md` (safety + `send_code_to_revit` rules)
+into its root. `server\opencode\opencode.sample.json` shows a full project config.
+Check with `opencode mcp list`. Keep provider keys in `opencode auth login`, not in a shared `opencode.json`.
+
 > **Restart your AI client** after editing the config to load the new MCP server.
 
 ---
@@ -85,7 +115,7 @@ The uninstaller will automatically:
 
 ## Features
 
-- **230 MCP Tools** across 20 categories (209 Revit + 21 Navisworks):
+- **267 MCP Tools** across 20 categories (209 Revit + 58 Navisworks):
   - 🔍 **Reading** (19): Views, elements, parameters, rooms, levels, sheets, families, schedules, linked models
   - 🏗️ **Creating** (15): Walls, floors, ceilings, roofs, levels, grids, rooms, views, sheets, tags
   - ✏️ **Editing** (13): Modify, move, rotate, copy, delete, mirror, align, group, batch modify, conditional bulk parameter edit
@@ -219,7 +249,7 @@ BIM-Bot/
 │       │   ├── excel-client.ts
 │       │   ├── notion-client.ts
 │       │   └── sqlite-client.ts
-│       ├── tools/                  # 230 MCP Tools (33 files: 29 Revit + 4 Navisworks)
+│       ├── tools/                  # 267 MCP Tools (35 files: 28 Revit + 7 Navisworks)
 │       │   ├── reading_tools.ts
 │       │   ├── creating_tools.ts
 │       │   ├── editing_tools.ts

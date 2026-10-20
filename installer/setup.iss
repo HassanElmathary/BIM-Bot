@@ -1,6 +1,6 @@
 ; ============================================================
 ;  BIM-Bot — Professional Installer (Inno Setup 6)
-;  AI-Powered BIM Automation • 230 MCP Tools • Revit 2020–2027 + Navisworks Manage
+;  AI-Powered BIM Automation • 267 MCP Tools • Revit 2020–2027 + Navisworks Manage
 ;  One plugin build per Revit version (plugin\R2020 .. plugin\R2027), each
 ;  compiled against that year's API. Do not point two years at one folder —
 ;  the ElementId/ForgeTypeId APIs differ across the range.
@@ -8,7 +8,7 @@
 ; ============================================================
 
 #define MyAppName      "BIM-Bot"
-#define MyAppVersion   "2.7.3"
+#define MyAppVersion   "2.7.4"
 #define MyAppPublisher "Hassan Ahmed Elmathary"
 #define MyAppURL       "https://github.com/HassanElmathary/BIM-Bot"
 #define MyAppExeName   "Start MCP Server.bat"
@@ -72,7 +72,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Messages]
 WelcomeLabel1=Welcome to {#MyAppName}
-WelcomeLabel2=This will install {#MyAppName} v{#MyAppVersion} on your computer.%n%n{#MyAppName} provides 230 AI-powered MCP tools for Autodesk Revit and Navisworks Manage, enabling intelligent BIM automation through Claude Desktop, ChatGPT, Cursor, Windsurf, and any MCP client.%n%nSupports Revit 2020–2027.
+WelcomeLabel2=This will install {#MyAppName} v{#MyAppVersion} on your computer.%n%n{#MyAppName} provides 267 AI-powered MCP tools for Autodesk Revit and Navisworks Manage, enabling intelligent BIM automation through Claude Desktop, ChatGPT, OpenCode, Cursor, Windsurf, and any MCP client.%n%nSupports Revit 2020–2027.
 FinishedHeadingLabel=Installation Complete!
 FinishedLabel={#MyAppName} has been successfully installed.%n%nNext Steps:%n  1. Open Revit → look for the "BIM-Bot" tab in the ribbon%n  2. Open Claude Desktop or ChatGPT Desktop → BIM-Bot tools are ready to use
 
@@ -85,7 +85,7 @@ Name: "custom"; Description: "Custom installation"; Flags: iscustom
 Name: "server"; Description: "MCP Server (Node.js) — 209 AI tools for BIM automation"; Types: full server custom; Flags: fixed
 Name: "nodejs"; Description: "Portable Node.js Runtime (v20 LTS)"; Types: full server custom; Flags: fixed
 Name: "plugin"; Description: "Revit Plugin — connects Revit to the MCP Server"; Types: full custom
-Name: "claude"; Description: "Auto-connect Claude Desktop, ChatGPT Desktop & other MCP clients"; Types: full custom
+Name: "claude"; Description: "Auto-connect Claude Desktop, ChatGPT Desktop, OpenCode & other MCP clients"; Types: full custom
 
 [Tasks]
 ; Auto-detect installed Revit versions — only show those found.
@@ -124,6 +124,9 @@ Source: "..\revit-mcp-server\node_modules\*"; DestDir: "{app}\server\node_module
 Source: "..\revit-mcp-server\package.json"; DestDir: "{app}\server"; Flags: ignoreversion; Components: server
 Source: "..\revit-mcp-server\scripts\configure-claude.cjs"; DestDir: "{app}\server\scripts"; Flags: ignoreversion; Components: server
 Source: "..\revit-mcp-server\scripts\probe-revit.cjs"; DestDir: "{app}\server\scripts"; Flags: ignoreversion; Components: server
+; OpenCode defaults (tool scoping + the BIM-Bot agent) read by
+; configure-claude.cjs and the plugin's self-heal, plus project samples.
+Source: "..\revit-mcp-server\opencode\*"; DestDir: "{app}\server\opencode"; Flags: ignoreversion; Components: server
 Source: "..\installer\Install-Prerequisites.ps1"; DestDir: "{app}\server\scripts"; Flags: ignoreversion; Components: server
 
 ; Revit Plugin DLLs — one build per Revit version
@@ -704,7 +707,7 @@ end;
 //
 // Install wrote a "BIM-Bot" entry into up to 9 client configs per profile
 // (see configure-claude.cjs: Claude Desktop (+MS Store), Claude Code,
-// Cursor, Windsurf, Gemini CLI, VS Code, VS Code Insiders, ChatGPT Desktop). The old
+// Cursor, Windsurf, Gemini CLI, VS Code, VS Code Insiders, ChatGPT Desktop, OpenCode). The old
 // uninstaller only logged "left for manual cleanup", leaving every client
 // pointing at a deleted node.exe/index.js — Claude then shows a dead server
 // on every start. Removal preserves all other servers in each file and
@@ -746,7 +749,7 @@ var
   Params: string;
   ResultCode: Integer;
 begin
-  SetArrayLength(Lines, 63);
+  SetArrayLength(Lines, 64);
   Lines[0] := 'param([switch]$AllUsers)';
   Lines[1] := '$ErrorActionPreference = ''SilentlyContinue''';
   Lines[2] := 'function Get-BimBotHomes {';
@@ -810,8 +813,10 @@ begin
   Lines[58] := '    }';
   Lines[59] := '    if ($changed) { Copy-Item $toml ($toml + ''.bimbot-backup'') -Force; [System.IO.File]::WriteAllLines($toml, [string[]]$out, (New-Object System.Text.UTF8Encoding $false)) }';
   Lines[60] := '  }';
-  Lines[61] := '}';
-  Lines[62] := '';
+  // OpenCode keeps servers under "mcp" in ~/.config/opencode/opencode.json.
+  Lines[61] := '  Remove-BimBotEntry (Join-Path $prof ''.config\opencode\opencode.json'') ''mcp'' | Out-Null';
+  Lines[62] := '}';
+  Lines[63] := '';
 
   PsPath := ExpandConstant('{tmp}\bimbot-uninstall-cleanup.ps1');
   if not SaveStringsToFile(PsPath, Lines, False) then

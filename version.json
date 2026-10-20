@@ -1,8 +1,8 @@
 {
-  "version": "2.7.3",
-  "releaseUrl": "https://github.com/HassanElmathary/BIM-Bot/releases/tag/v2.7.3",
-  "downloadUrl": "https://github.com/HassanElmathary/BIM-Bot/releases/download/v2.7.3/BIMBot-Setup-2.7.3.exe",
-  "assetFileName": "BIMBot-Setup-2.7.3.exe",
-  "changelog": "BIM-Bot v2.7.3 — Navisworks that Claude can see, linked to Revit. NEW: navis_capture_view and navis_capture_clash return real images of the Navisworks view (clash items red/green, the rest see-through), plus a Clash Snapshots ribbon button and navis_export_clash_snapshots (one image per clash + CSV). NEW Navisworks <-> Revit bridge: navis_clash_to_revit selects and zooms both clashing elements in the right Revit model, revit_selection_to_navis finds the Revit selection in Navisworks, navis_recheck_clash, navis_clash_handoff_table (Revit ID pairs per discipline file) and navis_refresh_models — works on federated NWD models. FIXES: reliable Navisworks connection (auto-start, instant UI-thread wake, never off-thread), navis_connection_status diagnostics with a fix hint, fast failure when Navisworks is closed, usable item IDs and Revit Category search.",
+  "version": "2.7.4",
+  "releaseUrl": "https://github.com/HassanElmathary/BIM-Bot/releases/tag/v2.7.4",
+  "downloadUrl": "https://github.com/HassanElmathary/BIM-Bot/releases/download/v2.7.4/BIMBot-Setup-2.7.4.exe",
+  "assetFileName": "BIMBot-Setup-2.7.4.exe",
+  "changelog": "BIM-Bot v2.7.4 — OpenCode support and the Navisworks <-> Revit bridge session. NEW: OpenCode is auto-connected like Claude and ChatGPT (installer, Revit startup self-heal and the Connect Claude button write ~/.config/opencode/opencode.json); BIM-Bot tools stay hidden from OpenCode coding agents and appear in a dedicated BIM-Bot agent with checkpoint-before-write rules. NEW: manual bridge session — Navisworks Add-ins > BIM-Bot Bridge makes Navisworks the master and lists its discipline models; the Revit Join Bridge button attaches each open document as a slave, so navis_clash_to_revit selects and zooms both sides of a cross-discipline clash in the right Revit window; new navis_bridge_status. bimbot-doctor now checks OpenCode.",
   "minVersion": "1.0.0"
 }
