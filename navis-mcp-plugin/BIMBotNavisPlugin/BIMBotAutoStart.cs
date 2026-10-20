@@ -33,7 +33,7 @@ namespace BIMBotNavisPlugin
 
         public override void OnUnloading()
         {
-            try { NavisPluginApp.StopService(); }
+            try { NavisBridgeSession.Stop(); NavisPluginApp.StopService(); }
             catch (Exception ex) { NavisLogger.LogError("Stop on unload failed", ex); }
         }
     }

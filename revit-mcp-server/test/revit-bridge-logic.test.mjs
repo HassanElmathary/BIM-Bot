@@ -109,3 +109,60 @@ test("decide: federated NWD items match by discipline NWC or original RVT name",
     assert.equal(d[0].revitDocument, "QC-ELE-10002_m.ali4ZHSN");
     assert.equal(d[1].revitDocument, "QC-FPR-10002");
 });
+
+test("decideWithSlaves routes each clash element to the slave that owns its model", () => {
+    const { decideWithSlaves } = logic;
+    const slaves = [
+        { slot: "01", port: 8080, documentTitle: "QC-ELE-10002_hassan", model: "QC-ELE-10002.nwc" },
+        { slot: "02", port: 8081, documentTitle: "QC-FPR-10002_hassan", model: "QC-FPR-10002.nwc" },
+    ];
+    const r = decideWithSlaves([
+        { revitElementId: "9276566", sourceFile: "QC-ELE-10002.nwc", displayName: "tray" },
+        { revitElementId: "2155309", sourceFile: "QC-FPR-10002.nwc", displayName: "fitting" },
+        { revitElementId: "777", sourceFile: "QC-STR-10002.nwc", displayName: "beam" },
+        { revitElementId: "", sourceFile: "QC-ELE-10002.nwc", displayName: "noid" },
+    ], slaves);
+    assert.deepEqual(r.decisions.map((x) => x.action), ["select", "select", "skip", "skip"]);
+    assert.deepEqual(r.decisions.map((x) => x.slot), ["01", "02", null, null]);
+    assert.match(r.decisions[2].reason, /Join Bridge/);
+    assert.deepEqual(r.groups.map((g) => [g.slave.slot, g.ids]), [["01", [9276566]], ["02", [2155309]]]);
+});
+
+test("decideWithSlaves falls back to the original RVT vs the slave document title, and de-duplicates ids", () => {
+    const { decideWithSlaves } = logic;
+    const slaves = [{ slot: "01", port: 8080, documentTitle: "QC-ELE-10002_m.ali4ZHSN", model: "Renamed.nwc" }];
+    const r = decideWithSlaves([
+        { revitElementId: "5", sourceFile: "Other.nwc", revitSourceFile: "QC-ELE-10002_m.ali4ZHSN.rvt" },
+        { revitElementId: "5", sourceFile: "Other.nwc", revitSourceFile: "QC-ELE-10002_m.ali4ZHSN.rvt" },
+    ], slaves);
+    assert.deepEqual(r.decisions.map((x) => x.slot), ["01", "01"]);
+    assert.deepEqual(r.groups[0].ids, [5]);
+});
+
+test("readBridgeSession: null without a live master, drops dead slaves", async () => {
+    const fs = await import("node:fs");
+    const os = await import("node:os");
+    const path = await import("node:path");
+    const { readBridgeSession } = await import(new URL("../build/utils/bridgeSession.js", import.meta.url).href);
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "bimbot-bridge-"));
+    const old = process.env.LOCALAPPDATA;
+    process.env.LOCALAPPDATA = tmp;
+    try {
+        assert.equal(readBridgeSession(), null);
+        fs.mkdirSync(path.join(tmp, "BIMBot"));
+        const file = path.join(tmp, "BIMBot", "bridge-session.json");
+        const base = { version: 1, sessionId: "x", startedUtc: "", master: { pid: process.pid, port: 8091, file: "F.nwd", models: [{ name: "A.nwc" }] } };
+        fs.writeFileSync(file, JSON.stringify({ ...base, slaves: [
+            { slot: "01", pid: process.pid, port: 8080, documentTitle: "A", model: "A.nwc" },
+            { slot: "02", pid: 999999, port: 8081, documentTitle: "B", model: "B.nwc" },
+        ] }));
+        const s = readBridgeSession();
+        assert.equal(s.slaves.length, 1);
+        assert.equal(s.slaves[0].slot, "01");
+        fs.writeFileSync(file, JSON.stringify({ ...base, master: { ...base.master, pid: 999999 }, slaves: [] }));
+        assert.equal(readBridgeSession(), null);
+    } finally {
+        if (old === undefined) delete process.env.LOCALAPPDATA; else process.env.LOCALAPPDATA = old;
+        fs.rmSync(tmp, { recursive: true, force: true });
+    }
+});

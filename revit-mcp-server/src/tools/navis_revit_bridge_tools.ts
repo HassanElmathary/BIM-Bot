@@ -5,7 +5,10 @@ import { z } from "zod";
 import { withNavisConnection } from "../utils/navisConnectionManager.js";
 import { withRevitConnection } from "../utils/ConnectionManager.js";
 import type { BridgeItem, ClashDetail, ClashInfo, RevitDoc } from "../utils/revitBridgeLogic.js";
-import { csvCell, decide, extractIds, planActivation } from "../utils/revitBridgeLogic.js";
+import type { SlaveGroup } from "../utils/revitBridgeLogic.js";
+import { csvCell, decide, decideWithSlaves, extractIds, modelKey, planActivation } from "../utils/revitBridgeLogic.js";
+import { readBridgeSession } from "../utils/bridgeSession.js";
+import { RevitSocketClient } from "../utils/SocketClient.js";
 
 /**
  * Navisworks <-> Revit bridge. Orchestrates both plugin connections from the server:
@@ -39,6 +42,50 @@ async function clashDetail(test: string, clashId: string): Promise<ClashDetail> 
     return (await withNavisConnection((c) => c.sendCommand("navis_get_clash_detail", { test, clashId }))) as ClashDetail;
 }
 
+/** Runs fn against the BIM-Bot listener of ONE Revit process (a bridge slave), then disconnects. */
+async function withRevitAt<T>(port: number, fn: (c: RevitSocketClient) => Promise<T>): Promise<T> {
+    const client = new RevitSocketClient("127.0.0.1", port);
+    await new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error(`Revit slave on port ${port} did not answer within 5 s.`)), 5000);
+        client.rawSocket.once("connect", () => { clearTimeout(timer); resolve(); });
+        client.rawSocket.once("error", (e) => { clearTimeout(timer); reject(e); });
+        client.connect();
+    });
+    try {
+        return await fn(client);
+    } finally {
+        try { client.disconnect(); } catch { /* already closed */ }
+    }
+}
+
+/** Activates each slave's document in its own Revit window, then selects (and zooms to) its elements. */
+async function selectInSlaves(groups: SlaveGroup[], isolate: boolean, zoom: boolean): Promise<unknown[]> {
+    const out: unknown[] = [];
+    for (const g of groups) {
+        const r: Record<string, unknown> = { slot: g.slave.slot, documentTitle: g.slave.documentTitle, port: g.slave.port, elementIds: g.ids };
+        try {
+            await withRevitAt(g.slave.port, async (c) => {
+                try {
+                    r.activate = await c.sendCommand("activate_document", { documentTitle: g.slave.documentTitle });
+                } catch (e) {
+                    r.activate = `activate failed: ${e instanceof Error ? e.message : String(e)}`;
+                }
+                r.select = await c.sendCommand("select_elements", { elementIds: g.ids, isolate });
+                if (zoom) {
+                    try {
+                        r.zoom = await c.sendCommand("zoom_to_element", { elementId: g.ids[0] });
+                    } catch (e) {
+                        r.zoom = `zoom failed: ${e instanceof Error ? e.message : String(e)}`;
+                    }
+                }
+            });
+        } catch (e) {
+            r.error = e instanceof Error ? e.message : String(e);
+        }
+        out.push(r);
+    }
+    return out;
+}
 export function registerNavisRevitBridgeTools(server: McpServer) {
 
     server.tool(
@@ -60,6 +107,20 @@ export function registerNavisRevitBridgeTools(server: McpServer) {
             try {
                 const d = await clashDetail(args.test, args.clashId);
                 const items = [d.item1, d.item2].filter((i): i is BridgeItem => !!i);
+                const session = readBridgeSession();
+                if (session && session.slaves.length > 0) {
+                    const routed = decideWithSlaves(items, session.slaves);
+                    const slaves = await selectInSlaves(routed.groups, args.isolate ?? false, args.zoom !== false);
+                    return text(JSON.stringify({
+                        mode: "bridge-session",
+                        clash: d.clash,
+                        decisions: routed.decisions,
+                        slaves,
+                        note: routed.groups.length === 0
+                            ? "Nothing was selected: no joined Revit slave owns these items. See decisions."
+                            : undefined,
+                    }, null, 2));
+                }
                 const docs = await revitDocs();
                 if (docs.length === 0) return text("Revit is not reachable or has no open document.");
                 const plan = planActivation(decide(items, docs), args.activateDocument !== false);
@@ -104,12 +165,35 @@ export function registerNavisRevitBridgeTools(server: McpServer) {
         "(Revit IDs are only unique per file). Max 50 elements (the first 50 are used).",
         {
             zoom: z.boolean().optional().describe("Zoom Navisworks to the found items (default true)"),
+            slot: z.string().optional().describe("Bridge slave slot to read the selection from, e.g. '02' (needed when several Revit slaves joined)"),
             sourceFile: z.string().optional().describe(
                 "Override which Navisworks model to search (NWC/RVT file name). Default: the active Revit document's title. " +
                 "Pass '*' to search every model."),
         },
         async (args) => {
             try {
+                const session = readBridgeSession();
+                if (session && session.slaves.length > 0) {
+                    const slave = args.slot
+                        ? session.slaves.find((s) => s.slot === args.slot)
+                        : session.slaves.length === 1 ? session.slaves[0] : undefined;
+                    if (!slave) {
+                        return text(`The bridge has ${session.slaves.length} Revit slaves — pass slot: ` +
+                            session.slaves.map((s) => `${s.slot} = '${s.documentTitle}'`).join(", "));
+                    }
+                    const selResp = await withRevitAt(slave.port, async (c) => {
+                        try { await c.sendCommand("activate_document", { documentTitle: slave.documentTitle }); } catch { /* already active */ }
+                        return c.sendCommand("get_selected_elements", {});
+                    });
+                    const slaveIds = extractIds(selResp).slice(0, 50);
+                    if (slaveIds.length === 0) return text(`Nothing is selected in slave ${slave.slot} ('${slave.documentTitle}').`);
+                    const slaveFound = await withNavisConnection((c) =>
+                        c.sendCommand("navis_find_by_revit_ids", { elementIds: slaveIds, select: true, zoom: args.zoom !== false, sourceFile: slave.model }));
+                    return text(JSON.stringify({
+                        mode: "bridge-session", slot: slave.slot, revitDocument: slave.documentTitle,
+                        model: slave.model, revitElementIds: slaveIds, navisworks: slaveFound,
+                    }, null, 2));
+                }
                 const selResp = await withRevitConnection((c) => c.sendCommand("get_selected_elements", {}));
                 const ids = extractIds(selResp).slice(0, 50);
                 if (ids.length === 0) return text("Nothing is selected in Revit (or no element ids were returned).");
@@ -118,6 +202,31 @@ export function registerNavisRevitBridgeTools(server: McpServer) {
                 const found = await withNavisConnection((c) =>
                     c.sendCommand("navis_find_by_revit_ids", { elementIds: ids, select: true, zoom: args.zoom !== false, sourceFile: src }));
                 return text(JSON.stringify({ revitDocument: active?.title ?? "", revitElementIds: ids, navisworks: found }, null, 2));
+            } catch (e) { return fail(e); }
+        }
+    );
+
+    server.tool(
+        "navis_bridge_status",
+        "Show the manual BIM-Bot bridge session: the Navisworks master (federated file and its models) and the " +
+        "Revit slaves that joined (slot, document, model). Lists models with no slave yet, so you can tell the " +
+        "user which Revit files to open and join.",
+        {},
+        async () => {
+            try {
+                const s = readBridgeSession();
+                if (!s) {
+                    return text("No bridge session is running. In Navisworks open the federated model and click " +
+                        "Add-ins > BIM-Bot Bridge (that Navisworks becomes the master), then in each Revit model click BIM-Bot > Join Bridge.");
+                }
+                const joined = new Set(s.slaves.map((x) => modelKey(x.model)));
+                return text(JSON.stringify({
+                    sessionId: s.sessionId,
+                    startedUtc: s.startedUtc,
+                    master: { file: s.master.file, port: s.master.port, modelCount: s.master.models.length },
+                    slaves: s.slaves.map((x) => ({ slot: x.slot, documentTitle: x.documentTitle, model: x.model, port: x.port })),
+                    modelsWithoutSlave: s.master.models.map((m) => m.name).filter((n) => !joined.has(modelKey(n))),
+                }, null, 2));
             } catch (e) { return fail(e); }
         }
     );

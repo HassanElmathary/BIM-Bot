@@ -140,3 +140,64 @@ export function csvCell(v: unknown): string {
     const s = String(v ?? "");
     return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
+
+/** A joined Revit document (bridge slave) as far as routing needs it. */
+export interface SlaveTarget {
+    slot: string;
+    port: number;
+    documentTitle: string;
+    model: string;
+}
+
+export interface SlaveDecision {
+    item: string;
+    revitElementId: number | null;
+    sourceFile: string;
+    slot: string | null;
+    action: "select" | "skip";
+    reason: string;
+}
+
+export interface SlaveGroup {
+    slave: SlaveTarget;
+    ids: number[];
+}
+
+/**
+ * Which joined slave owns an item: exact model name first, then the name rule, then the item's
+ * original RVT vs the slave's document title. Null when no slave owns it.
+ */
+export function findSlave(item: BridgeItem, slaves: SlaveTarget[]): SlaveTarget | null {
+    const src = item.sourceFile ?? "";
+    const rsrc = item.revitSourceFile ?? "";
+    const key = modelKey(src);
+    return slaves.find((s) => key !== "" && modelKey(s.model) === key)
+        ?? slaves.find((s) => sameModel(src, s.model))
+        ?? (rsrc ? slaves.find((s) => sameModel(rsrc, s.documentTitle)) : undefined)
+        ?? null;
+}
+
+/** Routes every clash item to the slave that owns it; ids are grouped per slave (no duplicates). */
+export function decideWithSlaves(items: BridgeItem[], slaves: SlaveTarget[]): { decisions: SlaveDecision[]; groups: SlaveGroup[] } {
+    const decisions: SlaveDecision[] = [];
+    const groups = new Map<string, SlaveGroup>();
+    for (const it of items) {
+        const id = Number(it.revitElementId);
+        const src = it.sourceFile ?? "";
+        const label = it.displayName || it.displayId || "?";
+        if (!Number.isInteger(id) || id <= 0) {
+            decisions.push({ item: label, revitElementId: null, sourceFile: src, slot: null, action: "skip", reason: "No Revit Element ID on this item (not from a Revit NWC?)." });
+            continue;
+        }
+        const slave = findSlave(it, slaves);
+        if (!slave) {
+            decisions.push({ item: label, revitElementId: id, sourceFile: src, slot: null, action: "skip", reason: `No Revit slave has joined the bridge for '${src || "?"}'. Open that model in Revit and click BIM-Bot > Join Bridge.` });
+            continue;
+        }
+        decisions.push({ item: label, revitElementId: id, sourceFile: src, slot: slave.slot, action: "select", reason: `Slave ${slave.slot}: '${slave.documentTitle}'.` });
+        const group = groups.get(slave.slot) ?? { slave, ids: [] };
+        if (!group.ids.includes(id)) group.ids.push(id);
+        groups.set(slave.slot, group);
+    }
+    return { decisions, groups: [...groups.values()] };
+}
