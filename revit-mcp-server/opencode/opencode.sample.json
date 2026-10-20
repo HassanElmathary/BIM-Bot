@@ -1,0 +1,40 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "BIM-Bot": {
+      "type": "local",
+      "command": [
+        "C:\\Program Files\\BIMBot\\nodejs\\node.exe",
+        "C:\\Program Files\\BIMBot\\server\\build\\index.js"
+      ],
+      "environment": {},
+      "enabled": true,
+      "timeout": 30000
+    },
+    "BIM-Bot-Navis": {
+      "type": "local",
+      "command": [
+        "C:\\Program Files\\BIMBot\\nodejs\\node.exe",
+        "C:\\Program Files\\BIMBot\\server\\build\\index.js"
+      ],
+      "environment": {
+        "BIMBOT_NAVIS_PORT": "8091"
+      },
+      "enabled": false,
+      "timeout": 30000
+    }
+  },
+  "tools": {
+    "BIM-Bot_*": false,
+    "BIM-Bot-Navis_*": false
+  },
+  "agent": {
+    "BIM-Bot": {
+      "description": "Revit + Navisworks automation through BIM-Bot (read + write). Prefer test or detached models for changes.",
+      "mode": "primary",
+      "tools": {
+        "BIM-Bot_*": true
+      }
+    }
+  }
+}

@@ -233,6 +233,34 @@ if (Test-Path $toml) {
     }
 }
 
+# OpenCode: "mcp" key, and command is one array [exe, script].
+$ocPath = if ($env:OPENCODE_CONFIG) { $env:OPENCODE_CONFIG } else { "$env:USERPROFILE\.config\opencode\opencode.json" }
+if (Test-Path $ocPath) {
+    $anyClient = $true
+    try {
+        $oc = (Get-Content $ocPath -Raw -Encoding UTF8) -replace "^﻿", "" | ConvertFrom-Json
+        $entry = $oc.mcp.'BIM-Bot'
+        $cmd = if ($entry.command) { $entry.command[0] } else { $null }
+        $arg = if ($entry.command -and $entry.command.Count -gt 1) { $entry.command[1] } else { $null }
+        if (-not $entry) {
+            Write-Bad "OpenCode: no BIM-Bot entry in $ocPath"
+            Write-Info "Run this script with -Fix, or click 'Connect Claude' on the BIM-Bot ribbon."
+        } elseif ($entry.enabled -eq $false) {
+            Write-Warn "OpenCode: BIM-Bot entry is disabled (\"enabled\": false)"
+        } elseif (-not $cmd -or -not (Test-Path $cmd)) {
+            Write-Bad "OpenCode: BIM-Bot entry points at a missing command: '$cmd'"
+            Write-Info "Run this script with -Fix."
+        } elseif (-not $arg -or -not (Test-Path $arg)) {
+            Write-Bad "OpenCode: BIM-Bot entry points at a missing server script: '$arg'"
+            Write-Info "Run this script with -Fix."
+        } else {
+            Write-Ok "OpenCode: configured -> $arg (tools scoped to the 'BIM-Bot' agent)"
+        }
+    } catch {
+        Write-Warn "OpenCode: config is not plain JSON (comments?) — could not check it: $ocPath"
+    }
+}
+
 if (-not $anyClient) {
     Write-Warn "No MCP client config found for this user."
     Write-Info "Install Claude Desktop, then run this script with -Fix."

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -8,7 +9,7 @@ using Newtonsoft.Json.Linq;
 namespace BIMBotPlugin.Core
 {
     /// <summary>
-    /// Ensures Claude Desktop, Claude Code, ChatGPT Desktop and other MCP
+    /// Ensures Claude Desktop, Claude Code, ChatGPT Desktop, OpenCode and other MCP
     /// clients are configured to launch the
     /// BIM-Bot MCP server, and — critically — repairs stale entries whose
     /// paths no longer exist (e.g. after the repo or install folder moved).
@@ -513,6 +514,170 @@ namespace BIMBotPlugin.Core
         }
 
         // ────────────────────────────────────────────────────────
+        // OpenCode (JSON, "mcp" schema)
+        // ────────────────────────────────────────────────────────
+        //
+        // ~/.config/opencode/opencode.json (same path on Windows; OPENCODE_CONFIG
+        // overrides). Entry shape: { type: "local", command: [exe, script],
+        // environment, enabled, timeout }. The tool scoping + the BIM-Bot
+        // agent come from server\opencode\bimbot-opencode.json and are seeded
+        // only when BIM-Bot is first added. Mirrors configure-claude.cjs.
+
+        private static string OpenCodeConfigPath()
+        {
+            var env = Environment.GetEnvironmentVariable("OPENCODE_CONFIG");
+            if (!string.IsNullOrWhiteSpace(env)) return env!;
+            var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".config", "opencode");
+            var json = Path.Combine(dir, "opencode.json");
+            var jsonc = Path.Combine(dir, "opencode.jsonc");
+            return !File.Exists(json) && File.Exists(jsonc) ? jsonc : json;
+        }
+
+        private static bool OpenCodeSeen()
+        {
+            var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+            return Directory.Exists(Path.Combine(home, ".config", "opencode")) ||
+                   Directory.Exists(Path.Combine(home, ".local", "share", "opencode")) ||
+                   Directory.Exists(Path.Combine(home, ".opencode")) ||
+                   File.Exists(Path.Combine(appData, "npm", "opencode.cmd"));
+        }
+
+        private static bool IsOpenCodeEntryValid(JObject? entry)
+        {
+            if (entry == null || entry["type"]?.ToString() != "local") return false;
+            if (entry["command"] is not JArray cmd || cmd.Count < 2) return false;
+            return IsEntryValid(new JObject
+            {
+                ["command"] = cmd[0]?.ToString(),
+                ["args"] = new JArray { cmd[1]?.ToString() }
+            });
+        }
+
+        private static ConfigureResult EnsureOpenCodeConfigFile(
+            string configPath, string nodeExe, string indexJs, bool createIfMissing)
+        {
+            var result = new ConfigureResult { Target = "OpenCode" };
+
+            JObject config;
+            bool hadBom = false;
+            if (File.Exists(configPath))
+            {
+                try
+                {
+                    var raw = File.ReadAllText(configPath);
+                    if (raw.Length > 0 && raw[0] == '﻿') { raw = raw.Substring(1); hadBom = true; }
+                    config = JObject.Parse(raw, new JsonLoadSettings { CommentHandling = CommentHandling.Load });
+                    // OpenCode accepts JSONC; rewriting would drop the user's comments.
+                    if (config.Descendants().Any(t => t.Type == JTokenType.Comment))
+                        throw new JsonReaderException("file contains comments");
+                }
+                catch (Exception ex)
+                {
+                    result.Detail = $"Config has comments or is not plain JSON ({ex.Message}) — left untouched. Add the entries from server\\opencode\\opencode.sample.json by hand: {configPath}";
+                    return result;
+                }
+            }
+            else if (createIfMissing)
+            {
+                config = new JObject();
+            }
+            else
+            {
+                result.Detail = "Not installed (OpenCode not found) — skipped.";
+                return result;
+            }
+
+            bool changed = hadBom;
+            bool added = false;
+            if (config["$schema"] == null) { config["$schema"] = "https://opencode.ai/config.json"; changed = true; }
+            if (config["mcp"] is not JObject mcp) { mcp = new JObject(); config["mcp"] = mcp; }
+            bool firstTime = mcp[ServerKey] == null;
+
+            var specs = new[]
+            {
+                // Navisworks off by default: the same ~280 tools again, useful only
+                // with Navisworks open. The user flips "enabled" when needed.
+                (Key: ServerKey, Env: new JObject(), Enabled: true),
+                (Key: NavisServerKey, Env: new JObject { ["BIMBOT_NAVIS_PORT"] = "8091" }, Enabled: false),
+            };
+            foreach (var spec in specs)
+            {
+                var existing = mcp[spec.Key] as JObject;
+                if (IsOpenCodeEntryValid(existing)) continue;
+                if (existing == null) added = true;
+                changed = true;
+                var keepEnabled = existing?["enabled"]?.Type == JTokenType.Boolean
+                    ? existing["enabled"]!.Value<bool>() : spec.Enabled;
+                mcp[spec.Key] = new JObject
+                {
+                    ["type"] = "local",
+                    ["command"] = new JArray { nodeExe, indexJs },
+                    ["environment"] = spec.Env,
+                    ["enabled"] = keepEnabled,
+                    // ~280 tool schemas plus a cold node start can exceed the 5 s default.
+                    ["timeout"] = 30000
+                };
+            }
+
+            // Seed scoping only on first registration — this runs on every Revit
+            // start, and an agent the user deleted on purpose must stay deleted.
+            if (firstTime)
+            {
+                try
+                {
+                    var template = Path.Combine(Path.GetDirectoryName(Path.GetDirectoryName(indexJs)!)!,
+                        "opencode", "bimbot-opencode.json");
+                    if (File.Exists(template))
+                    {
+                        var defaults = JObject.Parse(File.ReadAllText(template));
+                        foreach (var section in new[] { "tools", "agent" })
+                        {
+                            if (defaults[section] is not JObject src) continue;
+                            if (config[section] is not JObject dst) { dst = new JObject(); config[section] = dst; }
+                            foreach (var prop in src.Properties())
+                                if (dst[prop.Name] == null) { dst[prop.Name] = prop.Value.DeepClone(); changed = true; }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.Log($"OpenCode defaults template unreadable (servers still added): {ex.Message}");
+                }
+            }
+
+            if (!changed)
+            {
+                result.Configured = true;
+                result.Detail = "Already configured correctly.";
+                return result;
+            }
+
+            try
+            {
+                if (File.Exists(configPath))
+                    File.Copy(configPath, configPath + ".bimbot-backup", overwrite: true);
+                var dir = Path.GetDirectoryName(configPath);
+                if (dir != null) Directory.CreateDirectory(dir);
+                File.WriteAllText(configPath, config.ToString(Formatting.Indented),
+                    new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+
+                result.Configured = true;
+                result.Changed = true;
+                result.Detail = hadBom
+                    ? "Rewrote config without the UTF-8 BOM that was breaking it."
+                    : added
+                        ? "Added BIM-Bot + BIM-Bot-Navis entries and the BIM-Bot agent."
+                        : "Repaired stale BIM-Bot entry (old path no longer existed).";
+            }
+            catch (Exception ex)
+            {
+                result.Detail = $"Failed to write config: {ex.Message}";
+            }
+            return result;
+        }
+
+        // ────────────────────────────────────────────────────────
         // Public API
         // ────────────────────────────────────────────────────────
 
@@ -589,6 +754,10 @@ namespace BIMBotPlugin.Core
             var codexDir = CodexHome();
             results.Add(EnsureTomlConfigFile("ChatGPT Desktop", Path.Combine(codexDir, "config.toml"),
                 nodeExe, indexJs, createIfMissing: ChatGptSeen(codexDir)));
+
+            // OpenCode — created once OpenCode shows up for this user.
+            results.Add(EnsureOpenCodeConfigFile(OpenCodeConfigPath(), nodeExe, indexJs,
+                createIfMissing: OpenCodeSeen()));
 
             return results;
         }

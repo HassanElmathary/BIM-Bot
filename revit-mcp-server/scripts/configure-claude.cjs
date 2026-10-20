@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
  * configure-claude.cjs — register (or repair) the BIM-Bot MCP server in
- * Claude Desktop, Claude Code, ChatGPT Desktop, Cursor, Windsurf and VS Code.
+ * Claude Desktop, Claude Code, ChatGPT Desktop, OpenCode, Cursor, Windsurf and
+ * VS Code.
  *
  * Unlike a naive "skip if BIM-Bot exists" check, this validates that the
  * configured node/server paths actually exist and repairs stale entries
@@ -386,6 +387,164 @@ function removeTomlEntry(label, configPath) {
     return `${label}: removed BIM-Bot entry`;
 }
 
+// ── OpenCode (JSON, different schema) ────────────────────────
+//
+// OpenCode reads ~/.config/opencode/opencode.json (same path on Windows;
+// $OPENCODE_CONFIG overrides it). Servers live under "mcp", and a local entry
+// is { type: "local", command: [exe, ...args], environment, enabled, timeout }
+// — command and args merged into one array, "environment" not "env".
+//
+// OpenCode prefixes each MCP tool with its server key (BIM-Bot_get_levels), so
+// the defaults in opencode/bimbot-opencode.json can turn every BIM-Bot tool off
+// globally and back on only for the "BIM-Bot" agent. Those
+// defaults are merged key-by-key and never overwrite something already there.
+
+function openCodeConfigPath(home, isCurrentProfile) {
+    if (isCurrentProfile && process.env.OPENCODE_CONFIG) return process.env.OPENCODE_CONFIG;
+    const dir = path.join(home, ".config", "opencode");
+    const jsonc = path.join(dir, "opencode.jsonc");
+    const json = path.join(dir, "opencode.json");
+    return !fs.existsSync(json) && fs.existsSync(jsonc) ? jsonc : json;
+}
+
+// ~/.config/opencode appears on first run; the npm package drops opencode.cmd
+// in %APPDATA%\npm and the install script uses ~/.opencode\bin.
+function openCodeSeen(home) {
+    return [
+        path.join(home, ".config", "opencode"),
+        path.join(home, ".local", "share", "opencode"),
+        path.join(home, ".opencode"),
+        path.join(home, "AppData", "Roaming", "npm", "opencode.cmd"),
+    ].some((p) => fs.existsSync(p));
+}
+
+function loadOpenCodeDefaults() {
+    try {
+        const file = path.join(path.dirname(__dirname), "opencode", "bimbot-opencode.json");
+        const d = JSON.parse(fs.readFileSync(file, "utf8"));
+        return { tools: d.tools || {}, agent: d.agent || {} };
+    } catch {
+        return { tools: {}, agent: {} }; // older install without the template — servers only
+    }
+}
+
+function isOpenCodeEntryValid(entry) {
+    if (!entry || typeof entry !== "object" || entry.type !== "local") return false;
+    const cmd = Array.isArray(entry.command) ? entry.command : [];
+    return isEntryValid({ command: cmd[0], args: cmd.slice(1) });
+}
+
+function ensureOpenCodeConfig(label, configPath, nodeExe, indexJs, createIfMissing) {
+    let config = {};
+    let hadBom = false;
+    if (fs.existsSync(configPath)) {
+        try {
+            const raw = fs.readFileSync(configPath, "utf8");
+            hadBom = raw.charCodeAt(0) === 0xfeff;
+            config = JSON.parse(hadBom ? raw.slice(1) : raw);
+        } catch (err) {
+            // OpenCode accepts JSONC; rewriting would drop the user's comments,
+            // so never quarantine-and-rebuild this one.
+            return `${label}: config has comments or is not plain JSON (${err.message.split("\n")[0]}) — left untouched; ` +
+                `add the entries from server\\opencode\\opencode.sample.json by hand: ${configPath}`;
+        }
+    } else if (!createIfMissing) {
+        return `${label}: not installed — skipped`;
+    }
+
+    let changed = hadBom;
+    let added = false;
+    if (!config.$schema) { config.$schema = "https://opencode.ai/config.json"; changed = true; }
+    if (!config.mcp || typeof config.mcp !== "object") config.mcp = {};
+    const firstTime = !config.mcp[SERVER_KEY];
+
+    const specs = [
+        // Navisworks off by default: same ~280 tools again, only useful with
+        // Navisworks open. The user flips "enabled" when they need it.
+        { key: SERVER_KEY, environment: {}, enabled: true },
+        { key: NAVIS_SERVER_KEY, environment: { ...NAVIS_ENV }, enabled: false },
+    ];
+    for (const { key, environment, enabled } of specs) {
+        const existing = config.mcp[key];
+        if (isOpenCodeEntryValid(existing)) continue;
+        if (!existing) added = true;
+        changed = true;
+        config.mcp[key] = {
+            type: "local",
+            command: [nodeExe, indexJs],
+            environment,
+            // Keep the user's on/off choice across repairs.
+            enabled: existing && typeof existing.enabled === "boolean" ? existing.enabled : enabled,
+            // Tool listing: ~280 schemas plus a cold node start under antivirus
+            // can exceed OpenCode's 5 s default.
+            timeout: 30000,
+        };
+    }
+
+    // Seed the scoping only on first registration. The self-heal runs on every
+    // Revit start, and an agent the user deleted on purpose must stay deleted.
+    const defaults = firstTime ? loadOpenCodeDefaults() : { tools: {}, agent: {} };
+    if (Object.keys(defaults.tools).length) {
+        if (!config.tools || typeof config.tools !== "object") config.tools = {};
+        for (const [k, v] of Object.entries(defaults.tools)) {
+            if (!(k in config.tools)) { config.tools[k] = v; changed = true; }
+        }
+    }
+    if (Object.keys(defaults.agent).length) {
+        if (!config.agent || typeof config.agent !== "object") config.agent = {};
+        for (const [k, v] of Object.entries(defaults.agent)) {
+            if (!(k in config.agent)) { config.agent[k] = v; changed = true; }
+        }
+    }
+
+    if (!changed) return `${label}: already configured correctly`;
+    try {
+        if (fs.existsSync(configPath)) fs.copyFileSync(configPath, configPath + ".bimbot-backup");
+        fs.mkdirSync(path.dirname(configPath), { recursive: true });
+        fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+    } catch (err) {
+        return `${label}: failed to write config (${err.message}): ${configPath}`;
+    }
+    if (hadBom) return `${label}: rewrote config without UTF-8 BOM (breaks some parsers)`;
+    return `${label}: ${added ? "added BIM-Bot + BIM-Bot-Navis entries and the BIM-Bot agent" : "repaired stale entry"}`;
+}
+
+function removeOpenCodeEntry(label, configPath) {
+    if (!fs.existsSync(configPath)) return `${label}: no config file — skipped`;
+    let config;
+    try {
+        const raw = fs.readFileSync(configPath, "utf8");
+        config = JSON.parse(raw.charCodeAt(0) === 0xfeff ? raw.slice(1) : raw);
+    } catch (err) {
+        return `${label}: config is not plain JSON (${err.message}) — left untouched: ${configPath}`;
+    }
+    let found = false;
+    for (const key of [SERVER_KEY, NAVIS_SERVER_KEY]) {
+        if (config.mcp && key in config.mcp) { delete config.mcp[key]; found = true; }
+    }
+    if (!found) return `${label}: no BIM-Bot entry — skipped`;
+    // Drop the scoping we added, but only where it is still ours: agents are
+    // matched on their description so a user-built agent of the same name survives.
+    const defaults = loadOpenCodeDefaults();
+    if (config.tools) {
+        for (const k of Object.keys(defaults.tools)) delete config.tools[k];
+        if (!Object.keys(config.tools).length) delete config.tools;
+    }
+    if (config.agent) {
+        for (const [k, v] of Object.entries(defaults.agent)) {
+            if (config.agent[k] && config.agent[k].description === v.description) delete config.agent[k];
+        }
+        if (!Object.keys(config.agent).length) delete config.agent;
+    }
+    try {
+        fs.copyFileSync(configPath, configPath + ".bimbot-backup");
+        fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+    } catch (err) {
+        return `${label}: failed to write config (${err.message}): ${configPath}`;
+    }
+    return `${label}: removed BIM-Bot entry`;
+}
+
 function isCurrentHome(home) {
     const current = process.env.USERPROFILE || require("os").homedir();
     return home.toLowerCase() === current.toLowerCase();
@@ -402,7 +561,7 @@ function configureProfile(home, nodeExe, indexJs, { scanningAllProfiles = false 
 
     const report = (line) => {
         console.log(`  ${line}`);
-        if (!/: (not installed|config is not valid JSON|failed to write config)/.test(line)) configured++;
+        if (!/: (not installed|config is not valid JSON|config has comments|failed to write config)/.test(line)) configured++;
     };
 
     // Claude Desktop. For the profile we were actually asked about, write the
@@ -449,6 +608,10 @@ function configureProfile(home, nodeExe, indexJs, { scanningAllProfiles = false 
     const codexDir = codexHome(home, isCurrentHome(home));
     report(ensureTomlConfig("ChatGPT Desktop", path.join(codexDir, "config.toml"),
         nodeExe, indexJs, chatGptSeen(home, codexDir)));
+
+    // OpenCode — created once OpenCode shows up in the profile.
+    report(ensureOpenCodeConfig("OpenCode", openCodeConfigPath(home, isCurrentHome(home)),
+        nodeExe, indexJs, openCodeSeen(home)));
 
     return configured;
 }
@@ -527,6 +690,7 @@ function removeFromProfile(home) {
     }
     report(removeTomlEntry("ChatGPT Desktop",
         path.join(codexHome(home, isCurrentHome(home)), "config.toml")));
+    report(removeOpenCodeEntry("OpenCode", openCodeConfigPath(home, isCurrentHome(home))));
     return removed;
 }
 
@@ -604,7 +768,7 @@ function main() {
             "and click \"Connect Claude\" on the BIM-Bot ribbon (or re-run this script).");
     } else {
         console.log(`\nDone — ${totalConfigured} client config(s) in place. ` +
-            "Fully quit and reopen your MCP client (Claude, ChatGPT, Cursor, Windsurf, VS Code) for changes to take effect.");
+            "Fully quit and reopen your MCP client (Claude, ChatGPT, OpenCode, Cursor, Windsurf, VS Code) for changes to take effect.");
     }
 }
 
