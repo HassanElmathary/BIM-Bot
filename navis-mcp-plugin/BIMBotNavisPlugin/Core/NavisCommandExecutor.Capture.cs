@@ -211,7 +211,7 @@ namespace BIMBotNavisPlugin.Core
             int h = Math.Max(240, Math.Min(1600, Int(p, "height", 720)));
             bool png = Str(p, "format", "jpeg").Equals("png", StringComparison.OrdinalIgnoreCase);
 
-            using (var bmp = doc.ActiveView.GenerateImage(ImageGenerationStyle.Scene, w, h, true))
+            using (var bmp = RenderView(doc.ActiveView, w, h))
             {
                 if (bmp == null) throw new Exception("Navisworks returned no image (is a 3D view open and visible?).");
                 using (var ms = new MemoryStream())

@@ -1,0 +1,18 @@
+<Project>
+  <!--
+    One plugin build per Navisworks Manage year (2020-2027). Each year's API assemblies are
+    strong-named with their own version (2020 = 17.x ... 2027 = 24.x) and Navisworks only
+    redirects within its own major version, so a DLL built against one year does not load
+    in another. Build a year with:  dotnet build -c Release -p:NavisYear=2025
+    Output: bin\N<year>\Release\net48\BIMBotNavisPlugin.dll
+
+    These paths MUST be set here (before the SDK props import), not in the .csproj:
+    otherwise every year shares obj\ and the years overwrite each other's restore and
+    generated AssemblyInfo files.
+  -->
+  <PropertyGroup>
+    <NavisYear Condition="'$(NavisYear)' == ''">2024</NavisYear>
+    <BaseOutputPath>bin\N$(NavisYear)\</BaseOutputPath>
+    <BaseIntermediateOutputPath>obj\N$(NavisYear)\</BaseIntermediateOutputPath>
+  </PropertyGroup>
+</Project>

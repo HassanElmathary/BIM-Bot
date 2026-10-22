@@ -24,7 +24,7 @@ namespace BIMBotNavisPlugin.Core
         internal static List<string> ClashTestNames()
         {
             var doc = ActiveDoc();
-            return AllTests(ClashData(doc).Tests).Select(t => t.DisplayName ?? "").ToList();
+            return AllTests(ClashTestsOf(ClashData(doc))).Select(t => t.DisplayName ?? "").ToList();
         }
 
         /// <summary>Default output folder: Documents\BIM-Bot Clash Snapshots\&lt;test&gt;_&lt;yyyyMMdd_HHmm&gt;.</summary>

@@ -72,7 +72,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Messages]
 WelcomeLabel1=Welcome to {#MyAppName}
-WelcomeLabel2=This will install {#MyAppName} v{#MyAppVersion} on your computer.%n%n{#MyAppName} provides 267 AI-powered MCP tools for Autodesk Revit and Navisworks Manage, enabling intelligent BIM automation through Claude Desktop, ChatGPT, OpenCode, Cursor, Windsurf, and any MCP client.%n%nSupports Revit 2020–2027.
+WelcomeLabel2=This will install {#MyAppName} v{#MyAppVersion} on your computer.%n%n{#MyAppName} provides 267 AI-powered MCP tools for Autodesk Revit and Navisworks Manage, enabling intelligent BIM automation through Claude Desktop, ChatGPT, OpenCode, Cursor, Windsurf, and any MCP client.%n%nSupports Revit 2020–2027 and Navisworks Manage 2020–2027.
 FinishedHeadingLabel=Installation Complete!
 FinishedLabel={#MyAppName} has been successfully installed.%n%nNext Steps:%n  1. Open Revit → look for the "BIM-Bot" tab in the ribbon%n  2. Open Claude Desktop or ChatGPT Desktop → BIM-Bot tools are ready to use
 
@@ -104,6 +104,7 @@ Name: "navis2023"; Description: "Navisworks Manage 2023"; GroupDescription: "Dep
 Name: "navis2024"; Description: "Navisworks Manage 2024"; GroupDescription: "Deploy Navisworks plugin to:"; Components: plugin; Check: IsNavisInstalled('2024')
 Name: "navis2025"; Description: "Navisworks Manage 2025"; GroupDescription: "Deploy Navisworks plugin to:"; Components: plugin; Check: IsNavisInstalled('2025')
 Name: "navis2026"; Description: "Navisworks Manage 2026"; GroupDescription: "Deploy Navisworks plugin to:"; Components: plugin; Check: IsNavisInstalled('2026')
+Name: "navis2027"; Description: "Navisworks Manage 2027"; GroupDescription: "Deploy Navisworks plugin to:"; Components: plugin; Check: IsNavisInstalled('2027')
 ; Additional options
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional options:"
 
@@ -139,9 +140,18 @@ Source: "..\revit-mcp-plugin\BIMBotPlugin\bin\R2024\Release\net48\*"; DestDir: "
 Source: "..\revit-mcp-plugin\BIMBotPlugin\bin\R2025\Release\net8.0-windows\*"; DestDir: "{app}\plugin\R2025"; Flags: ignoreversion recursesubdirs uninsrestartdelete; Components: plugin; Tasks: revit2025
 Source: "..\revit-mcp-plugin\BIMBotPlugin\bin\R2026\Release\net8.0-windows\*"; DestDir: "{app}\plugin\R2026"; Flags: ignoreversion recursesubdirs uninsrestartdelete; Components: plugin; Tasks: revit2026
 Source: "..\revit-mcp-plugin\BIMBotPlugin\bin\R2027\Release\net10.0-windows\*"; DestDir: "{app}\plugin\R2027"; Flags: ignoreversion recursesubdirs uninsrestartdelete; Components: plugin; Tasks: revit2027
-; Navisworks plugin — one net48 DLL serves every Manage year (2020–2026).
+; Navisworks plugin — one net48 DLL PER Manage year (2020–2027). Each year's API is
+; strong-named with its own version (2020 = 17 … 2027 = 24) and Navisworks only redirects
+; within its own major version, so a DLL built for one year does not load in another.
 ; Only the DLL ships: Navisworks provides Newtonsoft.Json itself.
-Source: "..\navis-mcp-plugin\BIMBotNavisPlugin\bin\Release\net48\BIMBotNavisPlugin.dll"; DestDir: "{app}\plugin-navis"; Flags: ignoreversion uninsrestartdelete; Components: plugin; Tasks: navis2020 navis2021 navis2022 navis2023 navis2024 navis2025 navis2026
+Source: "..\navis-mcp-plugin\BIMBotNavisPlugin\bin\N2020\Release\net48\BIMBotNavisPlugin.dll"; DestDir: "{app}\plugin-navis\N2020"; Flags: ignoreversion uninsrestartdelete; Components: plugin; Tasks: navis2020
+Source: "..\navis-mcp-plugin\BIMBotNavisPlugin\bin\N2021\Release\net48\BIMBotNavisPlugin.dll"; DestDir: "{app}\plugin-navis\N2021"; Flags: ignoreversion uninsrestartdelete; Components: plugin; Tasks: navis2021
+Source: "..\navis-mcp-plugin\BIMBotNavisPlugin\bin\N2022\Release\net48\BIMBotNavisPlugin.dll"; DestDir: "{app}\plugin-navis\N2022"; Flags: ignoreversion uninsrestartdelete; Components: plugin; Tasks: navis2022
+Source: "..\navis-mcp-plugin\BIMBotNavisPlugin\bin\N2023\Release\net48\BIMBotNavisPlugin.dll"; DestDir: "{app}\plugin-navis\N2023"; Flags: ignoreversion uninsrestartdelete; Components: plugin; Tasks: navis2023
+Source: "..\navis-mcp-plugin\BIMBotNavisPlugin\bin\N2024\Release\net48\BIMBotNavisPlugin.dll"; DestDir: "{app}\plugin-navis\N2024"; Flags: ignoreversion uninsrestartdelete; Components: plugin; Tasks: navis2024
+Source: "..\navis-mcp-plugin\BIMBotNavisPlugin\bin\N2025\Release\net48\BIMBotNavisPlugin.dll"; DestDir: "{app}\plugin-navis\N2025"; Flags: ignoreversion uninsrestartdelete; Components: plugin; Tasks: navis2025
+Source: "..\navis-mcp-plugin\BIMBotNavisPlugin\bin\N2026\Release\net48\BIMBotNavisPlugin.dll"; DestDir: "{app}\plugin-navis\N2026"; Flags: ignoreversion uninsrestartdelete; Components: plugin; Tasks: navis2026
+Source: "..\navis-mcp-plugin\BIMBotNavisPlugin\bin\N2027\Release\net48\BIMBotNavisPlugin.dll"; DestDir: "{app}\plugin-navis\N2027"; Flags: ignoreversion uninsrestartdelete; Components: plugin; Tasks: navis2027
 
 ; License
 Source: "..\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
@@ -236,8 +246,8 @@ end;
 
 // ── Navisworks Detection & Deployment ─────────────────────────
 //
-// One net48 DLL (plugin-navis\BIMBotNavisPlugin.dll) serves every Manage
-// year. Navisworks only loads a .NET plugin from a subfolder of
+// One net48 DLL per Manage year (plugin-navis\N<year>\BIMBotNavisPlugin.dll),
+// each built against that year's API. Navisworks only loads a .NET plugin from a subfolder of
 // <Manage install>\Plugins\ whose name matches the assembly name:
 //   Plugins\BIMBotNavisPlugin\BIMBotNavisPlugin.dll
 // Both earlier 2.7.2 layouts were silently ignored — Plugins\BIMBot\ (folder
@@ -251,6 +261,9 @@ var
   // needs admin rights. They are handled with a single elevated call so the
   // user only ever sees one UAC prompt per install/uninstall.
   NavisCleanupDirs: string;
+  // Install copies that need admin rights: 'PluginsDir|SourceDll;' pairs, because
+  // every year has its own DLL.
+  NavisCopyQueue: string;
 
 const
   NavisPluginFolder = 'BIMBotNavisPlugin';
@@ -293,29 +306,32 @@ begin
     'Remove-Item -LiteralPath ''' + PluginsDir + '\BIMBot'' -Recurse -Force -ErrorAction SilentlyContinue; ';
 end;
 
-// Run one elevated PowerShell that, for every Plugins dir in Dirs, creates
-// Plugins\BIMBotNavisPlugin, copies SrcDll into it and removes the dead
-// layouts. Dirs is semicolon-separated. Returns True when the DLL exists in
-// every target afterwards.
-function InstallNavisPluginElevated(SrcDll, Dirs: string): Boolean;
+// Run one elevated PowerShell that, for every 'PluginsDir|SourceDll' pair in
+// Queue (semicolon-separated), creates Plugins\BIMBotNavisPlugin, copies that
+// year's DLL into it and removes the dead layouts. Returns True when the DLL
+// exists in every target afterwards.
+function InstallNavisPluginElevated(Queue: string): Boolean;
 var
-  Params, Dir, Target: string;
+  Params, Entry, Dir, Src, Target: string;
   ResultCode: Integer;
-  p: Integer;
+  p, bar: Integer;
   Rest: string;
 begin
   Result := True;
   Params := '-NoProfile -NonInteractive -Command "';
-  Rest := Dirs;
+  Rest := Queue;
   while Rest <> '' do
   begin
     p := Pos(';', Rest);
-    if p = 0 then begin Dir := Rest; Rest := ''; end
-    else begin Dir := Copy(Rest, 1, p - 1); Rest := Copy(Rest, p + 1, Length(Rest)); end;
-    if Dir = '' then Continue;
+    if p = 0 then begin Entry := Rest; Rest := ''; end
+    else begin Entry := Copy(Rest, 1, p - 1); Rest := Copy(Rest, p + 1, Length(Rest)); end;
+    bar := Pos('|', Entry);
+    if bar = 0 then Continue;
+    Dir := Copy(Entry, 1, bar - 1);
+    Src := Copy(Entry, bar + 1, Length(Entry));
     Target := Dir + '\' + NavisPluginFolder;
     Params := Params + 'New-Item -ItemType Directory -Force ''' + Target + ''' | Out-Null; ' +
-      'Copy-Item ''' + SrcDll + ''' ''' + Target + '\BIMBotNavisPlugin.dll'' -Force; ' +
+      'Copy-Item ''' + Src + ''' ''' + Target + '\BIMBotNavisPlugin.dll'' -Force; ' +
       NavisLegacyCleanupPs(Dir);
   end;
   Params := Params + '"';
@@ -327,14 +343,15 @@ begin
     Result := False;
     Exit;
   end;
-  Rest := Dirs;
+  Rest := Queue;
   while Rest <> '' do
   begin
     p := Pos(';', Rest);
-    if p = 0 then begin Dir := Rest; Rest := ''; end
-    else begin Dir := Copy(Rest, 1, p - 1); Rest := Copy(Rest, p + 1, Length(Rest)); end;
-    if Dir = '' then Continue;
-    Target := Dir + '\' + NavisPluginFolder + '\BIMBotNavisPlugin.dll';
+    if p = 0 then begin Entry := Rest; Rest := ''; end
+    else begin Entry := Copy(Rest, 1, p - 1); Rest := Copy(Rest, p + 1, Length(Rest)); end;
+    bar := Pos('|', Entry);
+    if bar = 0 then Continue;
+    Target := Copy(Entry, 1, bar - 1) + '\' + NavisPluginFolder + '\BIMBotNavisPlugin.dll';
     if FileExists(Target) then
       Log('Installed Navisworks plugin (elevated): ' + Target)
     else
@@ -367,7 +384,7 @@ var
 begin
   PluginsDir := GetNavisInstallDir(Year) + '\Plugins';
   TargetDir := PluginsDir + '\' + NavisPluginFolder;
-  SrcDll := ExpandConstant('{app}\plugin-navis\BIMBotNavisPlugin.dll');
+  SrcDll := ExpandConstant('{app}\plugin-navis\N' + Year + '\BIMBotNavisPlugin.dll');
   if not FileExists(SrcDll) then
   begin
     Log('Navisworks ' + Year + ': plugin DLL missing from install (' + SrcDll + ') — skipped');
@@ -386,8 +403,8 @@ begin
   end;
   // Slow path: queue for the single elevated copy (one UAC prompt for all
   // years — see the end of CurStepChanged's Navisworks block).
-  if Pos(PluginsDir + ';', NavisCleanupDirs) = 0 then
-    NavisCleanupDirs := NavisCleanupDirs + PluginsDir + ';';
+  if Pos(PluginsDir + '|', NavisCopyQueue) = 0 then
+    NavisCopyQueue := NavisCopyQueue + PluginsDir + '|' + SrcDll + ';';
   Log('Navisworks ' + Year + ': queued elevated copy into ' + TargetDir);
 end;
 
@@ -1103,8 +1120,7 @@ begin
         InstallAddinForRevit(Years[i]);
     end;
 
-    // Deploy the Navisworks plugin DLL into each selected Manage install.
-    // Same DLL for every year (net48, API-compatible 2020–2026).
+    // Deploy each selected Manage year's own plugin DLL (built against that year's API).
     if WizardIsTaskSelected('navis2020') then InstallNavisPlugin('2020');
     if WizardIsTaskSelected('navis2021') then InstallNavisPlugin('2021');
     if WizardIsTaskSelected('navis2022') then InstallNavisPlugin('2022');
@@ -1112,14 +1128,15 @@ begin
     if WizardIsTaskSelected('navis2024') then InstallNavisPlugin('2024');
     if WizardIsTaskSelected('navis2025') then InstallNavisPlugin('2025');
     if WizardIsTaskSelected('navis2026') then InstallNavisPlugin('2026');
+    if WizardIsTaskSelected('navis2027') then InstallNavisPlugin('2027');
 
     // Flush any Navisworks copies that needed admin rights: one elevated
     // PowerShell (single UAC prompt) handles every queued year at once.
-    if NavisCleanupDirs <> '' then
+    if NavisCopyQueue <> '' then
     begin
-      if not InstallNavisPluginElevated(ExpandConstant('{app}\plugin-navis\BIMBotNavisPlugin.dll'), NavisCleanupDirs) then
-        Log('Navisworks: some plugin copies still missing — copy BIMBotNavisPlugin.dll from {app}\plugin-navis by hand');
-      NavisCleanupDirs := '';
+      if not InstallNavisPluginElevated(NavisCopyQueue) then
+        Log('Navisworks: some plugin copies still missing — copy BIMBotNavisPlugin.dll from {app}\plugin-navis\N<year> by hand');
+      NavisCopyQueue := '';
     end;
     RemoveNavisLegacyBundle();
 
@@ -1167,6 +1184,7 @@ begin
     RemoveNavisPluginEverywhere('2024');
     RemoveNavisPluginEverywhere('2025');
     RemoveNavisPluginEverywhere('2026');
+    RemoveNavisPluginEverywhere('2027');
     RemoveNavisLegacyBundle();
 
     // Flush anything the non-elevated uninstall could not delete (Program

@@ -2,10 +2,11 @@
 
   <!--
     BIM-Bot Navisworks Manage plugin — ADDITIVE-ONLY, Revit plugin untouched.
-    Single net48 build: Navisworks Manage 2020-2025+ all run .NET Framework,
-    and compiling against the lowest API (2020) loads forward.
-    Build: dotnet build -c Release (requires Navisworks Manage API on machine,
-    or set $(NavisworksSDK) to the folder containing Autodesk.Navisworks.Api.dll).
+    One net48 build PER Navisworks year, 2020-2027 (see Directory.Build.props for why):
+      dotnet build -c Release -p:NavisYear=<year>   ->  bin\N<year>\Release\net48\
+    The API comes from the Speckle.Navisworks.API package for that year as compile-only
+    references (never copied to output — Navisworks provides them at load time). TimeLiner
+    is reached through reflection, so there is no Timeliner reference.
   -->
   <PropertyGroup>
     <TargetFramework>net48</TargetFramework>
@@ -21,49 +22,36 @@
   </PropertyGroup>
 
   <PropertyGroup>
-    <!-- Override on build machine without installed Navisworks:
-         dotnet build -p:NavisworksSDK="C:\SDK\Navis2020" -->
-    <NavisworksSDK Condition="'$(NavisworksSDK)' == ''">C:\Program Files\Autodesk\Navisworks Manage 2024</NavisworksSDK>
+    <!-- 2026.0.0 ships the 2025 ComApi (v22) by mistake; 2026.0.1 has the right one (v23). -->
+    <NavisApiPackageVersion>$(NavisYear).0.0</NavisApiPackageVersion>
+    <NavisApiPackageVersion Condition="'$(NavisYear)' == '2026'">2026.0.1</NavisApiPackageVersion>
+    <DefineConstants>$(DefineConstants);NAVIS$(NavisYear)</DefineConstants>
+    <!-- Other years' obj\N<year> folders hold generated .cs files: keep them out of the compile glob. -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);obj\**;bin\**</DefaultItemExcludes>
+  </PropertyGroup>
+
+  <!-- API-difference symbols used by Core/NavisCompat.cs (verified against each year's API DLLs). -->
+  <PropertyGroup Condition="'$(NavisYear)' &lt;= '2020'">
+    <DefineConstants>$(DefineConstants);NAVIS_NO_IMAGE</DefineConstants>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(NavisYear)' &gt;= '2024'">
+    <DefineConstants>$(DefineConstants);NAVIS_IMAGE_SECTIONING</DefineConstants>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(NavisYear)' &gt;= '2026'">
+    <DefineConstants>$(DefineConstants);NAVIS_ASSIGNEE</DefineConstants>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(NavisYear)' &gt;= '2027'">
+    <DefineConstants>$(DefineConstants);NAVIS_COMMENT_ASSIGNEE</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- ExcludeAssets=runtime equivalent: CopyLocal=false — Navisworks provides these at load time -->
-    <Reference Include="Autodesk.Navisworks.Api">
-      <HintPath>$(NavisworksSDK)\Autodesk.Navisworks.Api.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="Autodesk.Navisworks.Automation">
-      <HintPath>$(NavisworksSDK)\Autodesk.Navisworks.Automation.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="Autodesk.Navisworks.Controls">
-      <HintPath>$(NavisworksSDK)\Autodesk.Navisworks.Controls.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="Autodesk.Navisworks.Clash">
-      <HintPath>$(NavisworksSDK)\Autodesk.Navisworks.Clash.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="Autodesk.Navisworks.ComApi">
-      <HintPath>$(NavisworksSDK)\Autodesk.Navisworks.ComApi.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="Autodesk.Navisworks.Interop.ComApi">
-      <HintPath>$(NavisworksSDK)\Autodesk.Navisworks.Interop.ComApi.dll</HintPath>
-      <EmbedInteropTypes>false</EmbedInteropTypes>
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="Autodesk.Navisworks.Timeliner">
-      <HintPath>$(NavisworksSDK)\Autodesk.Navisworks.Timeliner.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-  </ItemGroup>
-
-  <ItemGroup>
+    <!-- Compile-only Navisworks API for $(NavisYear): Api, Clash, ComApi, Interop.ComApi, Controls. -->
+    <PackageReference Include="Speckle.Navisworks.API" Version="$(NavisApiPackageVersion)" PrivateAssets="all" ExcludeAssets="runtime" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
   </ItemGroup>
 
   <ItemGroup Condition="$(TargetFramework.StartsWith('net4'))">
+    <Reference Include="Microsoft.CSharp" />
     <Reference Include="PresentationCore" />
     <Reference Include="PresentationFramework" />
     <Reference Include="WindowsBase" />

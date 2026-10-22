@@ -6,7 +6,6 @@ using System.Linq;
 using System.Reflection;
 using Autodesk.Navisworks.Api;
 using Autodesk.Navisworks.Api.Clash;
-using Autodesk.Navisworks.Api.Timeliner;
 using Newtonsoft.Json.Linq;
 using ComBridge = Autodesk.Navisworks.Api.ComApi.ComApiBridge;
 using NwCom = Autodesk.Navisworks.Api.Interop.ComApi;
@@ -152,7 +151,7 @@ namespace BIMBotNavisPlugin.Core
                 arr.Add(new JObject
                 {
                     ["id"] = c.Id,
-                    ["author"] = c.Author ?? "",
+                    ["author"] = CommentAuthor(c),
                     ["status"] = c.Status.ToString(),
                     ["date"] = c.CreationDate.ToString("o"),
                     ["body"] = c.Body ?? "",
@@ -435,23 +434,60 @@ namespace BIMBotNavisPlugin.Core
         }
 
         // ── TimeLiner ──
+        // Reached through reflection + dynamic on the Timeliner assembly Navisworks itself loads,
+        // so the plugin has NO compile-time reference to Autodesk.Navisworks.Timeliner.dll and one
+        // source builds against every year's API (2020–2027; no package ships Timeliner for all).
 
-        private static DocumentTimeliner Timeliner(Document doc)
+        private const string TimelinerTaskTypeName = "Autodesk.Navisworks.Api.Timeliner.TimelinerTask";
+        private static Assembly? _timelinerAsm;
+
+        private static Assembly TimelinerAssembly()
         {
-            try { return doc.GetTimeliner(); }
-            catch (Exception ex) when (ex is FileNotFoundException || ex is TypeLoadException || ex is MissingMethodException)
+            if (_timelinerAsm != null) return _timelinerAsm;
+            _timelinerAsm = AppDomain.CurrentDomain.GetAssemblies()
+                .FirstOrDefault(a => a.GetName().Name == "Autodesk.Navisworks.Timeliner");
+            if (_timelinerAsm == null)
             {
-                throw new Exception("TimeLiner is not available in this Navisworks edition.", ex);
+                var path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Autodesk.Navisworks.Timeliner.dll");
+                if (!File.Exists(path)) throw new Exception("TimeLiner is not available in this Navisworks edition.");
+                _timelinerAsm = Assembly.LoadFrom(path);
+            }
+            return _timelinerAsm;
+        }
+
+        private static dynamic Timeliner(Document doc)
+        {
+            try
+            {
+                var getTimeliner = TimelinerAssembly().GetTypes()
+                    .Where(t => t.IsSealed && t.IsAbstract) // static classes hold the extension method
+                    .SelectMany(t => t.GetMethods(BindingFlags.Public | BindingFlags.Static))
+                    .FirstOrDefault(m => m.Name == "GetTimeliner" && m.GetParameters().Length == 1)
+                    ?? throw new Exception("GetTimeliner not found");
+                return getTimeliner.Invoke(null, new object[] { doc })
+                    ?? throw new Exception("no TimeLiner data for this document");
+            }
+            catch (Exception ex) when (!ex.Message.StartsWith("TimeLiner", StringComparison.Ordinal))
+            {
+                throw new Exception("TimeLiner is not available in this Navisworks edition: " + (ex.InnerException?.Message ?? ex.Message), ex);
             }
         }
 
-        private static (TimelinerTask task, GroupItem parent, int index) FindTask(DocumentTimeliner tl, string idOrName)
+        private static bool IsTask(SavedItem item) => item.GetType().FullName == TimelinerTaskTypeName;
+
+        private static dynamic NewTask() =>
+            Activator.CreateInstance(TimelinerAssembly().GetType(TimelinerTaskTypeName, true)!)!;
+
+        private static (dynamic task, GroupItem parent, int index) FindTask(dynamic tl, string idOrName)
         {
-            foreach (var (item, parent, index) in WalkSaved(tl.Tasks, tl.TasksRoot))
+            var root = (GroupItem)tl.TasksRoot;
+            foreach (var (item, parent, index) in WalkSaved((SavedItemCollection)tl.Tasks, root))
             {
-                if (item is TimelinerTask t && (string.Equals(t.DisplayName, idOrName, StringComparison.OrdinalIgnoreCase)
-                                               || string.Equals(t.DisplayId, idOrName, StringComparison.OrdinalIgnoreCase)))
-                    return (t, parent ?? tl.TasksRoot, index);
+                if (!IsTask(item)) continue;
+                dynamic t = item;
+                if (string.Equals((string)t.DisplayName, idOrName, StringComparison.OrdinalIgnoreCase)
+                    || string.Equals((string)t.DisplayId, idOrName, StringComparison.OrdinalIgnoreCase))
+                    return (t, parent ?? root, index);
             }
             throw new Exception($"TimeLiner task '{idOrName}' not found. Use navis_timeliner_list_tasks.");
         }
@@ -466,7 +502,7 @@ namespace BIMBotNavisPlugin.Core
             return d;
         }
 
-        private static void ApplyTaskFields(Document doc, TimelinerTask t, JObject p)
+        private static void ApplyTaskFields(Document doc, dynamic t, JObject p)
         {
             var name = Str(p, "name");
             if (name != "") t.DisplayName = name;
@@ -500,21 +536,28 @@ namespace BIMBotNavisPlugin.Core
             }
         }
 
-        private static JObject TaskJson(TimelinerTask t, int depth) => new JObject
+        private static JObject TaskJson(dynamic t, int depth)
         {
-            ["name"] = t.DisplayName ?? "",
-            ["displayId"] = t.DisplayId ?? "",
-            ["depth"] = depth,
-            ["taskType"] = t.SimulationTaskTypeName ?? "",
-            ["plannedStart"] = t.PlannedStartDate?.ToString("yyyy-MM-dd"),
-            ["plannedEnd"] = t.PlannedEndDate?.ToString("yyyy-MM-dd"),
-            ["actualStart"] = t.ActualStartDate?.ToString("yyyy-MM-dd"),
-            ["actualEnd"] = t.ActualEndDate?.ToString("yyyy-MM-dd"),
-            ["progressPercent"] = t.ProgressPercent,
-            ["status"] = t.TaskStatus.ToString(),
-            ["attached"] = t.Selection == null || t.Selection.IsClear ? "" : t.Selection.DisplayString,
-            ["childCount"] = t.Children.Count,
-        };
+            DateTime? plannedStart = t.PlannedStartDate, plannedEnd = t.PlannedEndDate;
+            DateTime? actualStart = t.ActualStartDate, actualEnd = t.ActualEndDate;
+            dynamic sel = t.Selection;
+            bool noSel = sel == null || (bool)sel.IsClear;
+            return new JObject
+            {
+                ["name"] = (string?)t.DisplayName ?? "",
+                ["displayId"] = (string?)t.DisplayId ?? "",
+                ["depth"] = depth,
+                ["taskType"] = (string?)t.SimulationTaskTypeName ?? "",
+                ["plannedStart"] = plannedStart?.ToString("yyyy-MM-dd"),
+                ["plannedEnd"] = plannedEnd?.ToString("yyyy-MM-dd"),
+                ["actualStart"] = actualStart?.ToString("yyyy-MM-dd"),
+                ["actualEnd"] = actualEnd?.ToString("yyyy-MM-dd"),
+                ["progressPercent"] = (double)t.ProgressPercent,
+                ["status"] = ((object)t.TaskStatus).ToString(),
+                ["attached"] = noSel ? "" : (string)sel.DisplayString,
+                ["childCount"] = ((SavedItemCollection)t.Children).Count,
+            };
+        }
 
         private static JObject TimelinerList(JObject p)
         {
@@ -527,14 +570,15 @@ namespace BIMBotNavisPlugin.Core
             {
                 foreach (SavedItem item in items)
                 {
-                    if (item is not TimelinerTask t) continue;
+                    if (!IsTask(item)) continue;
+                    dynamic t = item;
                     total++;
                     if (arr.Count < limit) arr.Add(TaskJson(t, depth));
-                    Recurse(t.Children, depth + 1);
+                    Recurse((SavedItemCollection)t.Children, depth + 1);
                 }
             }
-            Recurse(tl.Tasks, 0);
-            var types = new JArray(tl.SimulationTaskTypes.Cast<SavedItem>().Select(s => s.DisplayName));
+            Recurse((SavedItemCollection)tl.Tasks, 0);
+            var types = new JArray(((System.Collections.IEnumerable)tl.SimulationTaskTypes).Cast<SavedItem>().Select(s => s.DisplayName));
             return new JObject { ["total"] = total, ["returned"] = arr.Count, ["taskTypes"] = types, ["tasks"] = arr };
         }
 
@@ -543,37 +587,37 @@ namespace BIMBotNavisPlugin.Core
             var doc = ActiveDoc();
             var tl = Timeliner(doc);
             if (Str(p, "name") == "") throw new Exception("name is required.");
-            var t = new TimelinerTask();
+            var t = NewTask();
             if (p["taskType"] == null) t.SimulationTaskTypeName = "Construct";
             ApplyTaskFields(doc, t, p);
             var parentName = Str(p, "parent");
             if (parentName != "")
             {
-                var (parent, _, _) = FindTask(tl, parentName);
-                tl.TaskAddCopy(parent, t);
+                var found = FindTask(tl, parentName);
+                tl.TaskAddCopy(found.task, t);
             }
             else tl.TaskAddCopy(t);
-            return new JObject { ["added"] = t.DisplayName, ["parent"] = parentName };
+            return new JObject { ["added"] = (string)t.DisplayName, ["parent"] = parentName };
         }
 
         private static JObject TimelinerUpdate(JObject p)
         {
             var doc = ActiveDoc();
             var tl = Timeliner(doc);
-            var (task, parent, index) = FindTask(tl, Str(p, "task"));
-            var copy = task.CreateCopy();
+            var found = FindTask(tl, Str(p, "task"));
+            var copy = found.task.CreateCopy();
             ApplyTaskFields(doc, copy, p);
-            tl.TaskEdit(parent, index, copy);
-            return new JObject { ["updated"] = copy.DisplayName };
+            tl.TaskEdit(found.parent, found.index, copy);
+            return new JObject { ["updated"] = (string)copy.DisplayName };
         }
 
         private static JObject TimelinerDelete(JObject p)
         {
             var doc = ActiveDoc();
             var tl = Timeliner(doc);
-            var (task, parent, index) = FindTask(tl, Str(p, "task"));
-            tl.TaskRemoveAt(parent, index);
-            return new JObject { ["deleted"] = task.DisplayName };
+            var found = FindTask(tl, Str(p, "task"));
+            tl.TaskRemoveAt(found.parent, found.index);
+            return new JObject { ["deleted"] = (string)found.task.DisplayName };
         }
 
         // ── clash test authoring ──
@@ -627,7 +671,7 @@ namespace BIMBotNavisPlugin.Core
             if (name == "") throw new Exception("name is required.");
             var t = new ClashTest { DisplayName = name, TestType = ClashTestType.Hard };
             ApplyTestFields(doc, t, p, requireSelections: true);
-            data.TestsAddCopy(t);
+            AddClashTest(data, t);
             var created = FindTest(data, name);
             if (Bool(p, "run")) data.TestsRunTest(created);
             var results = new List<ClashResult>();
@@ -663,7 +707,7 @@ namespace BIMBotNavisPlugin.Core
             var data = ClashData(doc);
             var test = FindTest(data, Str(p, "test"));
             var name = test.DisplayName;
-            data.TestsRemove(test);
+            RemoveClashTest(data, test);
             return new JObject { ["deleted"] = name };
         }
 
@@ -679,14 +723,14 @@ namespace BIMBotNavisPlugin.Core
             int updated = 0;
             foreach (var r in all.Where(r => ids.Contains(r.Guid.ToString())))
             {
-                if (p["assignedTo"] != null) data.TestsEditResultAssignedTo(r, Str(p, "assignedTo"));
+                if (p["assignedTo"] != null) SetResultAssignedTo(data, r, Str(p, "assignedTo"));
                 if (p["description"] != null) data.TestsEditResultDescription(r, Str(p, "description"));
-                if (p["approvedBy"] != null) data.TestsEditResultApprovedBy(r, Str(p, "approvedBy"));
+                if (p["approvedBy"] != null) SetResultApprovedBy(data, r, Str(p, "approvedBy"));
                 var body = Str(p, "comment");
                 if (body != "")
                 {
                     var comments = new CommentCollection(r.Comments ?? new CommentCollection());
-                    comments.Add(new Comment(body, CommentStatus.New, Str(p, "author", Environment.UserName)));
+                    comments.Add(NewComment(body, CommentStatus.New, Str(p, "author", Environment.UserName)));
                     data.TestsEditResultComments(r, comments);
                 }
                 updated++;
@@ -789,7 +833,7 @@ namespace BIMBotNavisPlugin.Core
             var statusStr = Str(p, "status", "New");
             if (!Enum.TryParse(statusStr, true, out CommentStatus status))
                 throw new Exception("status must be New, Active, Approved or Resolved.");
-            var comment = new Comment(body, status, Str(p, "author", Environment.UserName));
+            var comment = NewComment(body, status, Str(p, "author", Environment.UserName));
             var target = Str(p, "target").ToLowerInvariant();
             var id = Str(p, "id");
             switch (target)

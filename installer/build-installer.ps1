@@ -34,14 +34,19 @@ foreach ($band in $revitBands) {
 Pop-Location
 Write-Host "  [OK] All plugin bands built"
 
-# 1b. Build the Navisworks plugin (single net48 DLL, API-compatible
-#     across Manage 2020-2026 — compiled against the local Manage API).
-Write-Host "[1b/4] Building Navisworks Plugin..."
+# 1b. Build the Navisworks plugin once PER Manage year (2020-2027): each year's
+#     API is strong-named with its own version, so one DLL cannot serve every year.
+#     API references come from the Speckle.Navisworks.API NuGet package per year.
+Write-Host "[1b/4] Building Navisworks Plugin (8 years: 2020-2027)..."
 Push-Location "$root\navis-mcp-plugin\BIMBotNavisPlugin"
-cmd /c "dotnet build -c Release >nul 2>&1"
-if ($LASTEXITCODE -ne 0) { Pop-Location; Write-Host "FAILED to build Navisworks plugin!"; exit 1 }
+foreach ($navisYear in 2020..2027) {
+    cmd /c "dotnet build -c Release -p:NavisYear=$navisYear >nul 2>&1"
+    if ($LASTEXITCODE -ne 0) { Pop-Location; Write-Host "FAILED to build Navisworks plugin for $navisYear!"; exit 1 }
+    if (-not (Test-Path "bin\N$navisYear\Release\net48\BIMBotNavisPlugin.dll")) { Pop-Location; Write-Host "Navisworks $navisYear build produced no DLL!"; exit 1 }
+    Write-Host "  [OK] Navisworks $navisYear"
+}
 Pop-Location
-Write-Host "  [OK] Navisworks plugin built"
+Write-Host "  [OK] All Navisworks plugin years built"
 
 # 2. Build MCP server
 Write-Host "[2/4] Building MCP Server..."

@@ -246,7 +246,7 @@ namespace BIMBotNavisPlugin.Core
 
         private static ClashTest FindTest(DocumentClashTests data, string idOrName)
         {
-            foreach (var t in AllTests(data.Tests))
+            foreach (var t in AllTests(ClashTestsOf(data)))
             {
                 if (string.Equals(t.DisplayName, idOrName, StringComparison.OrdinalIgnoreCase)
                     || string.Equals(t.Guid.ToString(), idOrName, StringComparison.OrdinalIgnoreCase))
@@ -528,7 +528,7 @@ namespace BIMBotNavisPlugin.Core
             var doc = ActiveDoc();
             var data = ClashData(doc);
             var arr = new JArray();
-            foreach (var t in AllTests(data.Tests))
+            foreach (var t in AllTests(ClashTestsOf(data)))
             {
                 int results = 0;
                 try
@@ -615,7 +615,7 @@ namespace BIMBotNavisPlugin.Core
             {
                 if (ids.Contains(r.Guid.ToString()))
                 {
-                    data.TestsEditResultStatus(r, status);
+                    SetResultStatus(data, r, status);
                     updated++;
                 }
             }
