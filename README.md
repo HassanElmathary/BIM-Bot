@@ -11,7 +11,7 @@
 
 ## ⚡ Quick Install
 
- 1. Download **`BIMBot-Setup-2.7.5.exe`** from [GitHub Releases](https://github.com/HassanElmathary/BIM-Bot/releases)
+ 1. Download **`BIMBot-Setup-2.7.6.exe`** from [GitHub Releases](https://github.com/HassanElmathary/BIM-Bot/releases)
 2. Run the installer as **Administrator**
 3. Follow the wizard — it will:
    - ✅ Auto-detect your Revit versions (2020–2027)
@@ -142,6 +142,7 @@ The uninstaller will automatically:
 - **Integrations** — Google Sheets, Excel, Notion, SQLite connectors
 - **Local AI Support** — Ollama integration for offline AI capabilities
 - **Revit 2020–2027** support — one plugin build per Revit version, each compiled against that year's API
+- **Navisworks Manage 2020–2027** support — one plugin build per Navisworks year, the same way
 - **Auto-updater** via GitHub Releases
 - **One-click installer** (.exe) with portable Node.js
 
@@ -180,6 +181,24 @@ are hard API gaps, not missing effort:
 
 Everything else behaves identically across all eight versions. The API
 differences are isolated in `revit-mcp-plugin/BIMBotPlugin/Core/Compat/`.
+
+## Supported Navisworks Versions
+
+Navisworks Manage 2020–2027 are supported. Like the Revit plugin, the Navisworks
+plugin is built once per year: each year's API is strong-named with its own
+version (2020 = 17 … 2027 = 24), and Navisworks only loads plugins built against
+its own version. Builds land in `bin\N<year>\` and the installer copies each
+selected year's DLL into `<Navisworks Manage <year>>\Plugins\BIMBotNavisPlugin\`.
+Build one year with `dotnet build -c Release -p:NavisYear=2025`; the API
+references come from the `Speckle.Navisworks.API` NuGet package for that year.
+
+| Navisworks Manage | Notes |
+|-------------------|-------|
+| 2020 | View capture (`navis_capture_view`, `navis_capture_clash`, Clash Snapshots) reports "needs 2021 or newer" — the 2020 API cannot render images |
+| 2021–2023 | Captures ignore section planes (the API has no sectioning switch before 2024) |
+| 2024–2027 | Everything supported |
+
+The differences are isolated in `navis-mcp-plugin/BIMBotNavisPlugin/Core/NavisCompat.cs`.
 
 ## Architecture
 

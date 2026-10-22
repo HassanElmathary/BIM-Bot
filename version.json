@@ -1,8 +1,8 @@
 {
-  "version": "2.7.5",
-  "releaseUrl": "https://github.com/HassanElmathary/BIM-Bot/releases/tag/v2.7.5",
-  "downloadUrl": "https://github.com/HassanElmathary/BIM-Bot/releases/download/v2.7.5/BIMBot-Setup-2.7.5.exe",
-  "assetFileName": "BIMBot-Setup-2.7.5.exe",
-  "changelog": "BIM-Bot v2.7.5 — fresh build of everything in 2.7.4, with the Navisworks connection re-verified live on Navisworks Manage 2024. Includes: navis_capture_view / navis_capture_clash (images the AI can see), the Clash Snapshots button and navis_export_clash_snapshots, the Navisworks <-> Revit clash bridge (navis_clash_to_revit, revit_selection_to_navis, navis_recheck_clash, navis_clash_handoff_table, navis_refresh_models) that works on federated NWD models, the manual bridge session (Navisworks BIM-Bot Bridge + Revit Join Bridge, navis_bridge_status), and OpenCode auto-connect. No functional changes since 2.7.4.",
+  "version": "2.7.6",
+  "releaseUrl": "https://github.com/HassanElmathary/BIM-Bot/releases/tag/v2.7.6",
+  "downloadUrl": "https://github.com/HassanElmathary/BIM-Bot/releases/download/v2.7.6/BIMBot-Setup-2.7.6.exe",
+  "assetFileName": "BIMBot-Setup-2.7.6.exe",
+  "changelog": "BIM-Bot v2.7.6 — Navisworks Manage 2020–2027. FIX: until now the installer copied a plugin built for Navisworks 2024 into every Navisworks version, but each Navisworks year only loads plugins built against its own API, so BIM-Bot only worked in Navisworks 2024. The plugin is now built separately for every year 2020–2027 and the installer deploys the right one to each version you select (Navisworks 2027 added). View capture needs Navisworks 2021 or newer, and section planes appear in captures on 2024 and newer. FIX: TimeLiner tools list task dates in your local time zone (they were shown one day early east of UTC).",
   "minVersion": "1.0.0"
 }

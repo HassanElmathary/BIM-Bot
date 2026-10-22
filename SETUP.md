@@ -17,7 +17,7 @@ node build/tests/test-startup.js
 ```
 
 ### 3. Install Plugin to Revit
- Download **`BIMBot-Setup-2.7.5.exe`** from [GitHub Releases](https://github.com/HassanElmathary/BIM-Bot/releases) and run as Administrator.
+ Download **`BIMBot-Setup-2.7.6.exe`** from [GitHub Releases](https://github.com/HassanElmathary/BIM-Bot/releases) and run as Administrator.
 
 Or build from source: compile `installer/setup.iss` with [Inno Setup](https://jrsoftware.org/isinfo.php).
 
