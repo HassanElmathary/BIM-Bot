@@ -539,6 +539,13 @@ namespace BIMBotNavisPlugin.Core
             }
         }
 
+        /// <summary>
+        /// TimeLiner stores dates in UTC (a task starting at local midnight on Nov 1 is 2026-10-31T21:00Z
+        /// at UTC+3); the Navisworks UI shows them in local time, so report the local calendar day.
+        /// </summary>
+        private static string? Day(DateTime? d) =>
+            d == null ? null : (d.Value.Kind == DateTimeKind.Utc ? d.Value.ToLocalTime() : d.Value).ToString("yyyy-MM-dd");
+
         private static JObject TaskJson(dynamic t, int depth)
         {
             DateTime? plannedStart = t.PlannedStartDate, plannedEnd = t.PlannedEndDate;
@@ -551,10 +558,10 @@ namespace BIMBotNavisPlugin.Core
                 ["displayId"] = (string?)t.DisplayId ?? "",
                 ["depth"] = depth,
                 ["taskType"] = (string?)t.SimulationTaskTypeName ?? "",
-                ["plannedStart"] = plannedStart?.ToString("yyyy-MM-dd"),
-                ["plannedEnd"] = plannedEnd?.ToString("yyyy-MM-dd"),
-                ["actualStart"] = actualStart?.ToString("yyyy-MM-dd"),
-                ["actualEnd"] = actualEnd?.ToString("yyyy-MM-dd"),
+                ["plannedStart"] = Day(plannedStart),
+                ["plannedEnd"] = Day(plannedEnd),
+                ["actualStart"] = Day(actualStart),
+                ["actualEnd"] = Day(actualEnd),
                 ["progressPercent"] = (double?)t.ProgressPercent, // null until progress is set
                 ["status"] = ((object)t.TaskStatus).ToString(),
                 ["attached"] = noSel ? "" : (string)sel.DisplayString,
