@@ -1,8 +1,8 @@
 {
-  "version": "2.7.4",
-  "releaseUrl": "https://github.com/HassanElmathary/BIM-Bot/releases/tag/v2.7.4",
-  "downloadUrl": "https://github.com/HassanElmathary/BIM-Bot/releases/download/v2.7.4/BIMBot-Setup-2.7.4.exe",
-  "assetFileName": "BIMBot-Setup-2.7.4.exe",
-  "changelog": "BIM-Bot v2.7.4 — OpenCode support and the Navisworks <-> Revit bridge session. NEW: OpenCode is auto-connected like Claude and ChatGPT (installer, Revit startup self-heal and the Connect Claude button write ~/.config/opencode/opencode.json); BIM-Bot tools stay hidden from OpenCode coding agents and appear in a dedicated BIM-Bot agent with checkpoint-before-write rules. NEW: manual bridge session — Navisworks Add-ins > BIM-Bot Bridge makes Navisworks the master and lists its discipline models; the Revit Join Bridge button attaches each open document as a slave, so navis_clash_to_revit selects and zooms both sides of a cross-discipline clash in the right Revit window; new navis_bridge_status. bimbot-doctor now checks OpenCode.",
+  "version": "2.7.5",
+  "releaseUrl": "https://github.com/HassanElmathary/BIM-Bot/releases/tag/v2.7.5",
+  "downloadUrl": "https://github.com/HassanElmathary/BIM-Bot/releases/download/v2.7.5/BIMBot-Setup-2.7.5.exe",
+  "assetFileName": "BIMBot-Setup-2.7.5.exe",
+  "changelog": "BIM-Bot v2.7.5 — fresh build of everything in 2.7.4, with the Navisworks connection re-verified live on Navisworks Manage 2024. Includes: navis_capture_view / navis_capture_clash (images the AI can see), the Clash Snapshots button and navis_export_clash_snapshots, the Navisworks <-> Revit clash bridge (navis_clash_to_revit, revit_selection_to_navis, navis_recheck_clash, navis_clash_handoff_table, navis_refresh_models) that works on federated NWD models, the manual bridge session (Navisworks BIM-Bot Bridge + Revit Join Bridge, navis_bridge_status), and OpenCode auto-connect. No functional changes since 2.7.4.",
   "minVersion": "1.0.0"
 }
