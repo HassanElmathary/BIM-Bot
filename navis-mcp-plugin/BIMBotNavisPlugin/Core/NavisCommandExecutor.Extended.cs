@@ -478,8 +478,11 @@ namespace BIMBotNavisPlugin.Core
         private static dynamic NewTask() =>
             Activator.CreateInstance(TimelinerAssembly().GetType(TimelinerTaskTypeName, true)!)!;
 
-        private static (dynamic task, GroupItem parent, int index) FindTask(dynamic tl, string idOrName)
+        // tl is typed object on purpose: passing a dynamic argument would make the call itself dynamic,
+        // and a dynamically returned tuple loses its element names (found.task would not resolve).
+        private static (dynamic task, GroupItem parent, int index) FindTask(object timeliner, string idOrName)
         {
+            dynamic tl = timeliner;
             var root = (GroupItem)tl.TasksRoot;
             foreach (var (item, parent, index) in WalkSaved((SavedItemCollection)tl.Tasks, root))
             {
@@ -552,7 +555,7 @@ namespace BIMBotNavisPlugin.Core
                 ["plannedEnd"] = plannedEnd?.ToString("yyyy-MM-dd"),
                 ["actualStart"] = actualStart?.ToString("yyyy-MM-dd"),
                 ["actualEnd"] = actualEnd?.ToString("yyyy-MM-dd"),
-                ["progressPercent"] = (double)t.ProgressPercent,
+                ["progressPercent"] = (double?)t.ProgressPercent, // null until progress is set
                 ["status"] = ((object)t.TaskStatus).ToString(),
                 ["attached"] = noSel ? "" : (string)sel.DisplayString,
                 ["childCount"] = ((SavedItemCollection)t.Children).Count,
@@ -593,7 +596,7 @@ namespace BIMBotNavisPlugin.Core
             var parentName = Str(p, "parent");
             if (parentName != "")
             {
-                var found = FindTask(tl, parentName);
+                var found = FindTask((object)tl, parentName);
                 tl.TaskAddCopy(found.task, t);
             }
             else tl.TaskAddCopy(t);
@@ -604,7 +607,7 @@ namespace BIMBotNavisPlugin.Core
         {
             var doc = ActiveDoc();
             var tl = Timeliner(doc);
-            var found = FindTask(tl, Str(p, "task"));
+            var found = FindTask((object)tl, Str(p, "task"));
             var copy = found.task.CreateCopy();
             ApplyTaskFields(doc, copy, p);
             tl.TaskEdit(found.parent, found.index, copy);
@@ -615,7 +618,7 @@ namespace BIMBotNavisPlugin.Core
         {
             var doc = ActiveDoc();
             var tl = Timeliner(doc);
-            var found = FindTask(tl, Str(p, "task"));
+            var found = FindTask((object)tl, Str(p, "task"));
             tl.TaskRemoveAt(found.parent, found.index);
             return new JObject { ["deleted"] = (string)found.task.DisplayName };
         }
