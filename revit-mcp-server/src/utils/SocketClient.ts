@@ -1,11 +1,14 @@
 import * as net from "net";
 import * as crypto from "crypto";
+import { serviceToken } from "./serviceAuth.js";
 
 export interface RevitCommand {
     jsonrpc: string;
     method: string;
     params: Record<string, unknown>;
     id: string;
+    /** Per-user token the plugins require (see serviceAuth.ts). */
+    auth: string;
 }
 
 const CONTENT_LENGTH_HEADER = "Content-Length: ";
@@ -254,6 +257,7 @@ export class RevitSocketClient {
                     method,
                     params,
                     id,
+                    auth: serviceToken(),
                 };
 
                 // Set up response callback with timeout

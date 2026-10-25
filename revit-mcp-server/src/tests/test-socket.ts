@@ -6,6 +6,7 @@
  */
 
 import net from "net";
+import { serviceToken } from "../utils/serviceAuth.js";
 
 const HOST = "localhost";
 const PORT = 8080;
@@ -60,6 +61,7 @@ async function sendCommand(
                 method,
                 params,
                 id: Date.now(),
+                auth: serviceToken(),
             };
             socket.write(JSON.stringify(command));
         });

@@ -45,12 +45,20 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+function Get-BimBotToken {
+    # Per-user token the plugin requires on every request (see revit-mcp-server/src/utils/serviceAuth.ts).
+    $path = Join-Path $env:LOCALAPPDATA 'BIMBot\auth.token'
+    if (Test-Path $path) { return (Get-Content -Raw $path).Trim() }
+    return ''
+}
+
 # Build JSON-RPC 2.0 request
 $request = @{
     jsonrpc = "2.0"
     method  = $Method
     params  = ($Params | ConvertFrom-Json)
     id      = 1
+    auth    = (Get-BimBotToken)
 } | ConvertTo-Json -Depth 10 -Compress
 
 function Send-RevitCommand {

@@ -54,6 +54,8 @@ namespace BIMBotNavisPlugin.Core
                     IsRunning = true;
                     Task.Run(() => AcceptLoopAsync(_cts.Token));
                     NavisServiceEndpoint.Publish(candidate);
+                    try { _ = NavisServiceAuth.Token; } // ready before the MCP server's first call
+                    catch (Exception ex) { NavisLogger.LogError("Failed to create service auth token", ex); }
                     return;
                 }
                 catch (SocketException ex) { last = ex; try { _listener?.Stop(); } catch { } _listener = null; }
@@ -149,7 +151,12 @@ namespace BIMBotNavisPlugin.Core
                     var method = req["method"]?.ToString() ?? "";
                     var pars = req["params"] as JObject ?? new JObject();
                     JObject response;
-                    try
+                    if (!NavisServiceAuth.IsAuthorized(req))
+                    {
+                        NavisLogger.Log($"Rejected unauthenticated request: {method}");
+                        response = NavisServiceAuth.UnauthorizedResponse(req);
+                    }
+                    else try
                     {
                         var result = await Task.Run(() => _handler(method, pars));
                         response = new JObject { ["jsonrpc"] = "2.0", ["id"] = id, ["result"] = result };
