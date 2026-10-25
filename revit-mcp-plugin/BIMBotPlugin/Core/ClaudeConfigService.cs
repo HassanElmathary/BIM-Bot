@@ -223,9 +223,9 @@ namespace BIMBotPlugin.Core
             }
 
             // Both entries: BIM-Bot (Revit, port 8080) and BIM-Bot-Navis
-            // (Navisworks, BIMBOT_NAVIS_PORT=8091). Same server binary — the
+            // (Navisworks, BIMBOT_NAVIS_PORT=8091, BIMBOT_SCOPE=navis). Same server binary — the
             // navis_* tools route via withNavisConnection.
-            var navisEnv = new Dictionary<string, string> { ["BIMBOT_NAVIS_PORT"] = "8091" };
+            var navisEnv = new Dictionary<string, string> { ["BIMBOT_NAVIS_PORT"] = "8091", ["BIMBOT_SCOPE"] = "navis" };
             var existing = mcpServers[ServerKey] as JObject;
             var existingNavis = mcpServers[NavisServerKey] as JObject;
             if (IsEntryValid(existing) && IsEntryValid(existingNavis) && !hadBom)
@@ -448,7 +448,7 @@ namespace BIMBotPlugin.Core
             var specs = new[]
             {
                 (Key: ServerKey, Env: (string?)null),
-                (Key: NavisServerKey, Env: "env = { BIMBOT_NAVIS_PORT = \"8091\" }"),
+                (Key: NavisServerKey, Env: "env = { BIMBOT_NAVIS_PORT = \"8091\", BIMBOT_SCOPE = \"navis\" }"),
             };
             // A BOM alone forces a rewrite (some parsers choke on it).
             bool changed = hadBom;
@@ -596,10 +596,10 @@ namespace BIMBotPlugin.Core
 
             var specs = new[]
             {
-                // Navisworks off by default: the same ~280 tools again, useful only
-                // with Navisworks open. The user flips "enabled" when needed.
+                // Navisworks off by default: the BIM-Bot entry already reaches
+                // Navisworks. The user flips "enabled" when they want it separate.
                 (Key: ServerKey, Env: new JObject(), Enabled: true),
-                (Key: NavisServerKey, Env: new JObject { ["BIMBOT_NAVIS_PORT"] = "8091" }, Enabled: false),
+                (Key: NavisServerKey, Env: new JObject { ["BIMBOT_NAVIS_PORT"] = "8091", ["BIMBOT_SCOPE"] = "navis" }, Enabled: false),
             };
             foreach (var spec in specs)
             {

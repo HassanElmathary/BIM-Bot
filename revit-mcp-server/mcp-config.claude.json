@@ -9,7 +9,8 @@
             "command": "C:\\Program Files\\BIMBot\\nodejs\\node.exe",
             "args": ["C:\\Program Files\\BIMBot\\server\\build\\index.js"],
             "env": {
-                "BIMBOT_NAVIS_PORT": "8091"
+                "BIMBOT_NAVIS_PORT": "8091",
+                "BIMBOT_SCOPE": "navis"
             }
         }
     }

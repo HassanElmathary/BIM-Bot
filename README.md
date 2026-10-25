@@ -89,7 +89,8 @@ load into every session. Switch to the **BIM-Bot** agent (Tab) to use them — i
 every Revit and Navisworks tool, read and write, and creates a checkpoint before changes.
 
 The `BIM-Bot` server already reaches Navisworks (it finds the running Navisworks plugin
-by itself), so the extra `BIM-Bot-Navis` entry is added with `"enabled": false` and can stay off.
+by itself), so the extra `BIM-Bot-Navis` entry (only the `navis_*` and bridge tools) is added with
+`"enabled": false` and can stay off.
 For a project folder, copy `server\opencode\AGENTS.md` (safety + `send_code_to_revit` rules)
 into its root. `server\opencode\opencode.sample.json` shows a full project config.
 Check with `opencode mcp list`. Keep provider keys in `opencode auth login`, not in a shared `opencode.json`.

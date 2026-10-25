@@ -12,7 +12,23 @@ import { registerModelDiffTools } from "./model_diff_tools.js";
 import { registerFamilySanitizerTools } from "./family_sanitizer_tools.js";
 import { registerCobieHandoverTools } from "./cobie_handover_tools.js";
 
-export async function registerTools(server: McpServer) {
+export type ToolScope = "all" | "navis";
+
+/**
+ * Which tools this server instance exposes.
+ * BIMBOT_SCOPE=navis|all wins. Without it, an instance that pins
+ * BIMBOT_NAVIS_PORT but not BIMBOT_PORT is the BIM-Bot-Navis entry
+ * (older installs wrote only the port), so it gets the Navis scope too.
+ * The Navis scope keeps navis_*.ts only — Navisworks tools plus the
+ * Revit↔Navis bridge — so the client doesn't see every Revit tool twice.
+ */
+export function resolveToolScope(env: NodeJS.ProcessEnv = process.env): ToolScope {
+    const explicit = env.BIMBOT_SCOPE?.trim().toLowerCase();
+    if (explicit === "navis" || explicit === "all") return explicit;
+    return env.BIMBOT_NAVIS_PORT && !env.BIMBOT_PORT ? "navis" : "all";
+}
+
+export async function registerTools(server: McpServer, scope: ToolScope = resolveToolScope()) {
     const __filename = fileURLToPath(import.meta.url);
     const __dirname = path.dirname(__filename);
 
@@ -34,7 +50,8 @@ export async function registerTools(server: McpServer) {
             !file.endsWith(".d.js") &&
             file !== "register.ts" &&
             file !== "register.js" &&
-            !newToolFiles.some(nf => file.includes(nf))
+            !newToolFiles.some(nf => file.includes(nf)) &&
+            (scope === "all" || file.startsWith("navis_"))
     );
 
     let registered = 0;
@@ -57,7 +74,12 @@ export async function registerTools(server: McpServer) {
         }
     }
 
-    // Explicitly register new tools
+    if (scope === "navis") {
+        console.error(`Total tools registered: ${registered} (Navis scope)`);
+        return;
+    }
+
+    // Explicitly register new tools (all Revit-side)
     registerFederatedQueryTools(server);
     console.error(`  ✓ Registered tool: federated_query_tools`);
     registerModelHealthTools(server);
