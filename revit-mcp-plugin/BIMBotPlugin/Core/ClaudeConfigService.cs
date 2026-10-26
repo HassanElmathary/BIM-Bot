@@ -615,8 +615,9 @@ namespace BIMBotPlugin.Core
                     ["command"] = new JArray { nodeExe, indexJs },
                     ["environment"] = spec.Env,
                     ["enabled"] = keepEnabled,
-                    // ~280 tool schemas plus a cold node start can exceed the 5 s default.
-                    ["timeout"] = 30000
+                    // ~280 tool schemas plus a cold node start under antivirus took 23 s on a
+                    // first launch, with every server starting at once; 30 s was not enough.
+                    ["timeout"] = 60000
                 };
             }
 

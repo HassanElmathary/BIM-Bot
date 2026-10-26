@@ -478,8 +478,9 @@ function ensureOpenCodeConfig(label, configPath, nodeExe, indexJs, createIfMissi
             // Keep the user's on/off choice across repairs.
             enabled: existing && typeof existing.enabled === "boolean" ? existing.enabled : enabled,
             // Tool listing: ~280 schemas plus a cold node start under antivirus
-            // can exceed OpenCode's 5 s default.
-            timeout: 30000,
+            // took 23 s on a first launch, and OpenCode starts every server at
+            // once, so 30 s was not enough.
+            timeout: 60000,
         };
     }
 

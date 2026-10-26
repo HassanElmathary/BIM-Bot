@@ -9,7 +9,7 @@
       ],
       "environment": {},
       "enabled": true,
-      "timeout": 30000
+      "timeout": 60000
     },
     "BIM-Bot-Navis": {
       "type": "local",
@@ -22,7 +22,7 @@
         "BIMBOT_SCOPE": "navis"
       },
       "enabled": false,
-      "timeout": 30000
+      "timeout": 60000
     }
   },
   "tools": {

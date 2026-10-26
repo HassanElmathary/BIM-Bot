@@ -78,7 +78,7 @@ OpenCode merges `command` + `args` into one array and calls `env` `environment`:
       "type": "local",
       "command": ["C:\\Program Files\\BIMBot\\nodejs\\node.exe", "C:\\Program Files\\BIMBot\\server\\build\\index.js"],
       "enabled": true,
-      "timeout": 30000
+      "timeout": 60000
     }
   }
 }
