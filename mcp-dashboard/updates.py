@@ -350,6 +350,9 @@ def _github_digest(version, asset):
 
 def precheck(targets, procs):
     """What must happen before the installer can run. procs: {pid: {name, ...}} from server.system_snapshot()."""
+    if not procs:
+        return ["Could not check which programs are running (PowerShell blocked?), so the update was not "
+                "started. Close Revit, Navisworks and your AI programs, then try again."]
     names = {(p.get("name") or "").lower() for p in procs.values()}
     blockers = []
     if any(t.startswith("revit") for t in targets) and "revit.exe" in names:
@@ -431,8 +434,19 @@ def _run_update(targets, end_pids):
 
 
 def start_update(targets, procs, bimbot_pids, end_processes=False):
-    if JOB.get("state") in ("downloading", "verifying", "installing"):
-        raise ValueError("An update is already running")
+    with LOCK:
+        if JOB.get("state") in ("downloading", "verifying", "installing", "starting"):
+            raise ValueError("An update is already running")
+        JOB.update(state="starting")
+    try:
+        _start_update(targets, procs, bimbot_pids, end_processes)
+    except Exception:
+        JOB.clear()
+        JOB.update(state="idle")
+        raise
+
+
+def _start_update(targets, procs, bimbot_pids, end_processes):
     if not MANIFEST["data"]:
         raise ValueError("Check for updates first")
     known = {p.get("task") or p["id"] for p in installed_parts()} | {"server"}

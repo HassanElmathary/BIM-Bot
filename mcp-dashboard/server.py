@@ -47,7 +47,7 @@ CONTROL_DIR = LOCALAPPDATA / "BIMBot" / "control"
 PROXY_DIR = CONTROL_DIR / "proxy"
 PROXY_EXE = PROXY_DIR / "bimbot-mcp-proxy.exe"
 VERSION_FILE = CONTROL_DIR / "version.txt"
-PANEL_VERSION = "1.2.0"
+PANEL_VERSION = "1.2.1"
 
 BIMBOT_DIR = LOCALAPPDATA / "Programs" / "BIMBot"
 BIMBOT_NODE = BIMBOT_DIR / "nodejs" / "node.exe"
@@ -241,7 +241,10 @@ def ensure_proxy():
 
 def _launcher_list():
     """Command that starts this app; with a `proxy` argument it runs proxy.py."""
-    if getattr(sys, "frozen", False):
+    if getattr(sys, "frozen", False) or PROXY_EXE.exists():
+        # Once the exe has installed the stable proxy, a run from source keeps
+        # using it too, so program configs never end up pointing at a script
+        # in a source checkout.
         return [str(PROXY_EXE)]
     py = Path(sys.executable)
     if py.name.lower() == "pythonw.exe":
@@ -379,8 +382,9 @@ def diagnose(prog, name, entry):
             issues.append("The tool-filter launcher has moved: " + " ".join(wrapper))
             fixes.append(dict(id="rewrap", label="Point at this copy of MCP Control", safe=True))
         elif wrapper != _launcher_list():
+            # Still works, so not part of "Fix all safe issues".
             issues.append("The tool-filter launcher is outdated: " + " ".join(wrapper))
-            fixes.append(dict(id="rewrap", label="Re-wrap tool-filter proxy at this copy of MCP Control", safe=True))
+            fixes.append(dict(id="rewrap", label="Re-wrap tool-filter proxy at this copy of MCP Control"))
     if not entry["command"]:
         issues.append("No command configured.")
     elif not resolve_command(entry["command"]):

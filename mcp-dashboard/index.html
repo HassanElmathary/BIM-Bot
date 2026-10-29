@@ -423,7 +423,7 @@ function hint(s, pr) {
   if (/ECONNREFUSED|connect|socket/i.test(e)) h = "The server couldn't reach its host application. Open Revit / Navisworks / Unreal with its add-in loaded, then test again. The Health tab shows which one is missing.";
   if (/not found|ENOENT|Cannot find module/i.test(e)) h = "A file or program in the command is missing. Use Configure to fix the path.";
   if (/api.?key|unauthori|401|403/i.test(e)) h = "This server needs an API key or sign-in. Add it under Configure → Environment variables.";
-  if (/-32001|token/i.test(e)) h = "The add-in rejected the connection token. Restart Revit / Navisworks so it reloads the token, then test again.";
+  if (/-32001|auth\.token|token (was )?(rejected|invalid|mismatch)|invalid token/i.test(e)) h = "The add-in rejected the connection token. Restart Revit / Navisworks so it reloads the token, then test again.";
   return h ? `<div class="sub" style="margin:4px 0">💡 ${esc(h)}</div>` : "";
 }
 
@@ -566,7 +566,7 @@ let upd = null, updPoll = null;
 const picked = new Set();
 const UPD_LABEL = { current: "Up to date", available: "Update available", skipped: "Skipped", "not-installed": "Not installed", unknown: "Not checked" };
 const JOB_BUSY = ["downloading", "verifying", "installing"];
-const updatable = p => !p.readonly && p.app !== "server" && (p.installed || p.host);
+const updatable = p => !p.readonly && (p.installed || p.host);
 
 async function loadUpdates(check) {
   if (check) { $("#updCheck").disabled = true; $("#updHead").textContent = "Checking for updates…"; }
@@ -671,7 +671,8 @@ $("#updGo").onclick = async () => {
     const pre = await api("/api/update-precheck", { targets });
     if (pre.blockers.length) { alert("Can't update yet:\n\n" + pre.blockers.join("\n\n")); return; }
     const navis = targets.some(t => t.startsWith("navis"));
-    let msg = `Download BIM-Bot v${upd.latest}, check its SHA-256, then install it for:\n\n• MCP server\n${labels.map(l => "• " + l).join("\n")}`;
+    const others = labels.filter(l => l !== upd.parts.find(p => p.app === "server").label);
+    let msg = `Download BIM-Bot v${upd.latest}, check its SHA-256, then install it for:\n\n• MCP server\n${others.map(l => "• " + l).join("\n")}`;
     if (pre.processes) msg += `\n\n${pre.processes} BIM-Bot server process(es) are running and will be ended (AI programs reconnect when you restart them).`;
     if (navis) msg += "\n\nWindows will ask once for admin rights to copy the Navisworks plugin.";
     if (!confirm(msg)) return;
