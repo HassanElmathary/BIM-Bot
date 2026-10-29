@@ -1,0 +1,35 @@
+[project]
+name = "bim-bot"
+version = "1.0.0"
+description = "Offline Revit Parameter Tracker - Scans .rvt files, tracks parameter changes, generates diff reports"
+requires-python = ">=3.9"
+license = {text = "MIT"}
+authors = [
+    {name = "BIM-BOT Team"}
+]
+
+dependencies = [
+    "PySide6>=6.5.0",
+    "revit-extractor>=0.0.1",
+    "ifcopenshell>=0.7.0",
+    "olefile>=0.47",
+    "pandas>=2.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pyinstaller>=6.0",
+]
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
