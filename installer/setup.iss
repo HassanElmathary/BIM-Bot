@@ -1,6 +1,6 @@
 ; ============================================================
 ;  BIM-Bot — Professional Installer (Inno Setup 6)
-;  AI-Powered BIM Automation • 267 MCP Tools • Revit 2020–2027 + Navisworks Manage
+;  AI-Powered BIM Automation • 267 MCP Tools • Revit 2020–2027 + Navisworks Manage + Unreal Engine
 ;  One plugin build per Revit version (plugin\R2020 .. plugin\R2027), each
 ;  compiled against that year's API. Do not point two years at one folder —
 ;  the ElementId/ForgeTypeId APIs differ across the range.
@@ -34,7 +34,9 @@ UsePreviousAppDir=no
 LicenseFile=..\LICENSE
 ; Output
 OutputDir=output
-OutputBaseFilename=BIMBot-Setup-{#MyAppVersion}
+; One installer for Revit, Navisworks and Unreal. The in-plugin updater takes
+; the asset name from version.json, so the name carries no version.
+OutputBaseFilename=BIM-Bot
 ; Branding
 SetupIconFile=assets\bimbot.ico
 WizardImageFile=assets\WizardImageFile.bmp
@@ -72,7 +74,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Messages]
 WelcomeLabel1=Welcome to {#MyAppName}
-WelcomeLabel2=This will install {#MyAppName} v{#MyAppVersion} on your computer.%n%n{#MyAppName} provides 267 AI-powered MCP tools for Autodesk Revit and Navisworks Manage, enabling intelligent BIM automation through Claude Desktop, ChatGPT, OpenCode, Cursor, Windsurf, and any MCP client.%n%nSupports Revit 2020–2027 and Navisworks Manage 2020–2027.
+WelcomeLabel2=This will install {#MyAppName} v{#MyAppVersion} on your computer.%n%n{#MyAppName} provides 267 AI-powered MCP tools for Autodesk Revit, Navisworks Manage and Unreal Engine, enabling intelligent BIM automation through Claude Desktop, ChatGPT, OpenCode, Cursor, Windsurf, and any MCP client.%n%nSupports Revit 2020–2027, Navisworks Manage 2020–2027 and Unreal Engine 5.
 FinishedHeadingLabel=Installation Complete!
 FinishedLabel={#MyAppName} has been successfully installed.%n%nNext Steps:%n  1. Open Revit → look for the "BIM-Bot" tab in the ribbon%n  2. Open Claude Desktop or ChatGPT Desktop → BIM-Bot tools are ready to use
 
@@ -85,6 +87,7 @@ Name: "custom"; Description: "Custom installation"; Flags: iscustom
 Name: "server"; Description: "MCP Server (Node.js) — 209 AI tools for BIM automation"; Types: full server custom; Flags: fixed
 Name: "nodejs"; Description: "Portable Node.js Runtime (v20 LTS)"; Types: full server custom; Flags: fixed
 Name: "plugin"; Description: "Revit Plugin — connects Revit to the MCP Server"; Types: full custom
+Name: "unreal"; Description: "Unreal Engine MCP Server (BIM-Bot-Unreal)"; Types: full custom
 Name: "claude"; Description: "Auto-connect Claude Desktop, ChatGPT Desktop, OpenCode & other MCP clients"; Types: full custom
 
 [Tasks]
@@ -153,6 +156,11 @@ Source: "..\navis-mcp-plugin\BIMBotNavisPlugin\bin\N2025\Release\net48\BIMBotNav
 Source: "..\navis-mcp-plugin\BIMBotNavisPlugin\bin\N2026\Release\net48\BIMBotNavisPlugin.dll"; DestDir: "{app}\plugin-navis\N2026"; Flags: ignoreversion uninsrestartdelete; Components: plugin; Tasks: navis2026
 Source: "..\navis-mcp-plugin\BIMBotNavisPlugin\bin\N2027\Release\net48\BIMBotNavisPlugin.dll"; DestDir: "{app}\plugin-navis\N2027"; Flags: ignoreversion uninsrestartdelete; Components: plugin; Tasks: navis2027
 
+; Unreal Engine MCP server — a single-file Node executable built by
+; unreal-mcp-server\build\build-exe.js. Its own --install copies it to
+; %LOCALAPPDATA%\Programs\BIM-Bot Unreal and registers it (see RegisterUnreal).
+Source: "..\unreal-mcp-server\dist\BIM-Bot-Unreal.exe"; DestDir: "{app}\unreal"; Flags: ignoreversion uninsrestartdelete; Components: unreal
+
 ; License
 Source: "..\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 
@@ -177,6 +185,7 @@ Type: filesandordirs; Name: "{app}\server"
 Type: filesandordirs; Name: "{app}\nodejs"
 Type: filesandordirs; Name: "{app}\plugin"
 Type: filesandordirs; Name: "{app}\plugin-navis"
+Type: filesandordirs; Name: "{app}\unreal"
 ; Files GENERATED at install time by [Code] (CreateLauncherScript /
 ; CreateMcpConfigReference). Inno only auto-deletes files listed in [Files],
 ; so without these entries they — and therefore {app} itself — survive every
@@ -1093,6 +1102,67 @@ begin
   end;
 end;
 
+// ── Unreal Engine MCP server ────────────────────────────────
+//
+// BIM-Bot-Unreal.exe registers itself: --install copies it to
+// %LOCALAPPDATA%\Programs\BIM-Bot Unreal and writes the BIM-Bot-Unreal entry
+// (plus tool permissions) into Claude Desktop, Claude Code and OpenCode;
+// --uninstall removes them. stdin comes from nul: with a console stdin the
+// exe asks which Unreal projects to set up and then waits for Enter, which
+// would hang setup on a hidden window. It runs as the original user so an
+// elevated install registers the person installing, not the admin account.
+
+function UnrealCmdParams(Flag: string): string;
+begin
+  Result := '/c ""' + ExpandConstant('{app}\unreal\BIM-Bot-Unreal.exe') + '" ' + Flag + ' <nul >nul 2>&1"';
+end;
+
+procedure RegisterUnreal();
+var
+  ResultCode: Integer;
+begin
+  if not FileExists(ExpandConstant('{app}\unreal\BIM-Bot-Unreal.exe')) then
+  begin
+    Log('Unreal: BIM-Bot-Unreal.exe missing — not registered');
+    Exit;
+  end;
+  if ExecAsOriginalUser(ExpandConstant('{cmd}'), UnrealCmdParams('--install'), '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+    Log('Unreal: BIM-Bot-Unreal.exe --install exited with code ' + IntToStr(ResultCode))
+  else
+    Log('Unreal: failed to run BIM-Bot-Unreal.exe --install');
+end;
+
+// Turns Remote Control, Python and Editor Scripting on by default in every
+// installed engine, so any Unreal project connects without its own setup.
+// The engines live in Program Files, hence 'runas' (one UAC prompt unless
+// setup already runs elevated). Declining only leaves per-project setup.
+procedure SetupUnrealEngines();
+var
+  ResultCode: Integer;
+begin
+  if not FileExists(ExpandConstant('{app}\unreal\BIM-Bot-Unreal.exe')) then
+    Exit;
+  if ShellExec('runas', ExpandConstant('{app}\unreal\BIM-Bot-Unreal.exe'), '--setup-engines --elevated', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+    Log('Unreal: BIM-Bot-Unreal.exe --setup-engines exited with code ' + IntToStr(ResultCode))
+  else
+    Log('Unreal: --setup-engines not run (UAC declined?) — run BIM-Bot-Unreal.exe --setup-engines later');
+end;
+
+procedure UnregisterUnreal();
+var
+  ResultCode: Integer;
+begin
+  if not FileExists(ExpandConstant('{app}\unreal\BIM-Bot-Unreal.exe')) then
+    Exit;
+  if Exec(ExpandConstant('{cmd}'), UnrealCmdParams('--uninstall'), '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+    Log('Unreal: BIM-Bot-Unreal.exe --uninstall exited with code ' + IntToStr(ResultCode))
+  else
+    Log('Unreal: failed to run BIM-Bot-Unreal.exe --uninstall');
+  // The copy --install made; a client still running it is removed on reboot.
+  if not DelTree(ExpandConstant('{localappdata}\Programs\BIM-Bot Unreal'), True, True, True) then
+    Log('Unreal: could not remove {localappdata}\Programs\BIM-Bot Unreal (in use?)');
+end;
+
 // ── Post-Install Hook ───────────────────────────────────────
 
 procedure CurStepChanged(CurStep: TSetupStep);
@@ -1144,6 +1214,12 @@ begin
     if WizardIsComponentSelected('claude') then
       ConfigureClaudeDesktop();
 
+    // Register the Unreal MCP server with the same clients
+    if WizardIsComponentSelected('unreal') and WizardIsComponentSelected('claude') then
+      RegisterUnreal();
+    if WizardIsComponentSelected('unreal') then
+      SetupUnrealEngines();
+
     // Create launcher script
     CreateLauncherScript();
 
@@ -1164,6 +1240,7 @@ begin
     // {app} files still present here: run the Node remover first, then
     // remove every Revit manifest/DLL copy in both scopes.
     RemoveMcpConfigsViaNode();
+    UnregisterUnreal();
 
     Years[0] := '2020';
     Years[1] := '2021';
