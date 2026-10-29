@@ -18,7 +18,8 @@ Navisworks Manage runs in parallel (port **8091** + `service-navis.json`).
 
 File: `%APPDATA%\Claude\claude_desktop_config.json` — copy from
 `revit-mcp-server/mcp-config.claude.json`. Restart Claude Desktop.
-`BIM-Bot` = Revit tools, `BIM-Bot-Navis` = `navis_*` tools.
+`BIM-Bot` = all tools (Revit, and Navisworks too). `BIM-Bot-Navis` (`BIMBOT_SCOPE=navis`) = only the
+`navis_*` and Revit↔Navis bridge tools, so a client with both entries doesn't list the Revit tools twice.
 
 ## 3. ChatGPT MCP (ChatGPT Desktop ≥ 2025 MCP support)
 

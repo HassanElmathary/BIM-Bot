@@ -103,6 +103,7 @@ namespace BIMBotPlugin.Core
 
                         // Tell the MCP server where we actually landed.
                         ServiceEndpoint.Publish(candidate, Application.Version);
+                        EnsureAuthToken();
                         return; // Success
                     }
                     catch (SocketException ex)
@@ -397,8 +398,17 @@ namespace BIMBotPlugin.Core
                 {
                     var request = JObject.Parse(jsonStr);
 
-                    // Process the request
-                    var response = await ProcessRequest(request);
+                    // Only callers holding the per-user token may drive Revit.
+                    JObject response;
+                    if (ServiceAuth.IsAuthorized(request))
+                    {
+                        response = await ProcessRequest(request);
+                    }
+                    else
+                    {
+                        Logger.Log($"⚠️ Rejected unauthenticated request: {request["method"]}");
+                        response = ServiceAuth.UnauthorizedResponse(request);
+                    }
 
                     // Send response using length-prefixed framing
                     var responseJson = JsonConvert.SerializeObject(response);
@@ -465,6 +475,17 @@ namespace BIMBotPlugin.Core
             }
 
             return -1; // Incomplete
+        }
+
+        /// <summary>
+        /// Create the auth token now rather than on the first request, so an MCP
+        /// server that starts after Revit finds it ready. Never throws — a failed
+        /// write is retried by <see cref="ServiceAuth.IsAuthorized"/>.
+        /// </summary>
+        private static void EnsureAuthToken()
+        {
+            try { _ = ServiceAuth.Token; }
+            catch (Exception ex) { Logger.LogError("Failed to create service auth token (will retry per request)", ex); }
         }
 
         private async Task<JObject> ProcessRequest(JObject request)

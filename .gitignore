@@ -55,3 +55,11 @@ scratch/
 # Standalone DLL/PDB (build artifacts at root)
 *.dll
 *.pdb
+
+# graphify knowledge graph output
+graphify-out/
+
+# Python caches and the tracker's generated reports
+__pycache__/
+*.py[cod]
+bim-bot-tracker/output/

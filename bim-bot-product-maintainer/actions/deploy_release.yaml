@@ -45,6 +45,9 @@ steps:
   - name: Attach Installer EXE
     action: Attach `BIMBot-Setup-<version_number>.exe` asset to the GitHub release page.
 
+  - name: Publish Installer SHA-256
+    action: Put the installer's SHA-256 (`(Get-FileHash BIMBot-Setup-<version_number>.exe -Algorithm SHA256).Hash.ToLower()`) in the `sha256` field of version.json, then deploy the website copy. The in-plugin updater refuses to run an installer whose hash does not match this field AND GitHub's own asset digest; it falls back to the GitHub digest alone if the field is missing.
+
   - name: Publish npm Package
     action: Execute build script and publish updated `revit-mcp-server` package to npm registry (`npm publish`).
 

@@ -17,6 +17,13 @@ const net = require("net");
 const os = require("os");
 const path = require("path");
 
+// Per-user token the plugin requires on every request (see src/utils/serviceAuth.ts).
+function readToken() {
+    const localAppData = process.env.LOCALAPPDATA || path.join(os.homedir(), "AppData", "Local");
+    try { return fs.readFileSync(path.join(localAppData, "BIMBot", "auth.token"), "utf8").replace(/^\uFEFF/, "").trim(); }
+    catch { return ""; }
+}
+
 function handshakePath() {
     const lad = process.env.LOCALAPPDATA || path.join(os.homedir(), "AppData", "Local");
     return path.join(lad, "BIMBot", "service.json");
@@ -79,13 +86,16 @@ function main() {
     sock.on("data", (d) => {
         buf = Buffer.concat([buf, d]);
         const s = buf.toString("utf8");
-        // Any well-formed JSON-RPC reply (result OR error) proves round-trip.
+        if (s.includes("-32001")) {
+            finish(1, `FAIL: Revit refused the auth token (${s.slice(0, 300)}). Reinstall BIM-Bot so the plugin and server match.`);
+        }
+        // Any other well-formed JSON-RPC reply (result OR error) proves round-trip.
         if (s.includes('"result"') || s.includes('"error"') || s.includes('"id"')) {
             finish(0, `OK: Revit answered (${s.slice(0, 300)})`);
         }
     });
     sock.connect(port, host, () => {
-        const body = Buffer.from(JSON.stringify({ jsonrpc: "2.0", id: "probe", method: "ping", params: {} }), "utf8");
+        const body = Buffer.from(JSON.stringify({ jsonrpc: "2.0", id: "probe", method: "ping", params: {}, auth: readToken() }), "utf8");
         sock.write(`Content-Length: ${body.length}\n`);
         sock.write(body);
     });

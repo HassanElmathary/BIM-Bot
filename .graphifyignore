@@ -1,0 +1,10 @@
+dist/
+scratch/
+temp_bimbot_zip_extract/
+temp_zip/
+**/bin/
+**/obj/
+**/node_modules/
+*.zip
+*.dll
+*.pdb

@@ -311,6 +311,13 @@ $toolAliases = @{
     "export to google"       = "export_to_google_sheets_integration"
 }
 
+function Get-BimBotToken {
+    # Per-user token the plugin requires on every request (see revit-mcp-server/src/utils/serviceAuth.ts).
+    $path = Join-Path $env:LOCALAPPDATA 'BIMBot\auth.token'
+    if (Test-Path $path) { return (Get-Content -Raw $path).Trim() }
+    return ''
+}
+
 function Send-RevitCommand {
     param([string]$Method, [string]$Params = "{}")
 
@@ -319,6 +326,7 @@ function Send-RevitCommand {
         method  = $Method
         params  = ($Params | ConvertFrom-Json)
         id      = 1
+        auth    = (Get-BimBotToken)
     } | ConvertTo-Json -Depth 10 -Compress
 
     try {

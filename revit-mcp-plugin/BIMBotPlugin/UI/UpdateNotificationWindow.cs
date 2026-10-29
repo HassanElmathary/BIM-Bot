@@ -345,9 +345,10 @@ namespace BIMBotPlugin.UI
                     _updateInfo.DownloadUrl != _updateInfo.ReleaseUrl)
                 {
                     var checker = new UpdateChecker();
-                    var filePath = await checker.DownloadUpdateAsync(_updateInfo.DownloadUrl, _updateInfo.AssetFileName);
+                    _statusText.Text = "Downloading and verifying the update (SHA-256)...";
+                    var filePath = await checker.DownloadUpdateAsync(_updateInfo);
 
-                    _statusText.Text = "✅ Download complete! Opening installer (no admin needed)...";
+                    _statusText.Text = "✅ Download verified! Opening installer (no admin needed)...";
                     _downloadBtn.Content = "✅  Downloaded!";
 
                     // Launch the installer / open the downloaded file
@@ -363,6 +364,20 @@ namespace BIMBotPlugin.UI
                     await Task.Delay(1000);
                     Close();
                 }
+            }
+            catch (UpdateVerificationException vex)
+            {
+                // Never run an unverified installer — hand the user the release page instead.
+                _statusText.Foreground = DarkTheme.FgWarning;
+                _statusText.Text = $"❌ {vex.Message}";
+                _downloadBtn.Content = "🌐  Open release page";
+                _downloadBtn.IsEnabled = true;
+                _downloadBtn.Click -= OnDownloadClicked;
+                _downloadBtn.Click += (_, __) =>
+                {
+                    try { Process.Start(new ProcessStartInfo(_updateInfo.ReleaseUrl) { UseShellExecute = true }); } catch { }
+                    Close();
+                };
             }
             catch (Exception ex)
             {

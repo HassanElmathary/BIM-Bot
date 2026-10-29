@@ -1,0 +1,24 @@
+{
+  "name": "bim-bot-unreal",
+  "version": "1.0.0",
+  "description": "BIM-Bot Unreal — MCP server for Unreal Engine",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "start:http": "node src/http-server.js",
+    "test": "node --test test/*.test.js",
+    "build:exe": "node build/build-exe.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.12",
+    "postject": "^1.0.0-alpha.6"
+  }
+}

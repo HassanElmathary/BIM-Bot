@@ -1,0 +1,20 @@
+{
+    "FileVersion": 3,
+    "Version": 1,
+    "VersionName": "1.0",
+    "FriendlyName": "UnrealMCPBridge",
+    "Description": "HTTP bridge on port 30011 for MCP (Model Context Protocol) — enables viewport screenshots, console commands, editor notifications, project info, and asset import from AI assistants.",
+    "Category": "Editor",
+    "CreatedBy": "Unreal MCP",
+    "CanContainContent": false,
+    "IsBetaVersion": false,
+    "IsExperimentalVersion": false,
+    "Installed": false,
+    "Modules": [
+        {
+            "Name": "UnrealMCPBridge",
+            "Type": "Editor",
+            "LoadingPhase": "PostEngineInit"
+        }
+    ]
+}

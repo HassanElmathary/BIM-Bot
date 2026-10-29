@@ -1,0 +1,826 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BIM-Bot MCP Control</title>
+<style>
+:root {
+  --bg: #f6f7f9; --panel: #ffffff; --panel-2: #f0f2f5; --border: #dde1e7;
+  --text: #1b1f24; --muted: #5d6673; --accent: #2f6fde; --accent-text: #fff;
+  --ok: #1f9d55; --bad: #d64545; --warn: #c98a12; --off: #8b95a3; --run: #2f6fde;
+  --shadow: 0 1px 2px rgba(0,0,0,.05);
+  --mono: ui-monospace, "Cascadia Code", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1216; --panel: #171b21; --panel-2: #1e232b; --border: #2b323c;
+    --text: #e6e9ee; --muted: #98a2b0; --accent: #5b8ff0;
+    --ok: #3ccf7e; --bad: #f06a6a; --warn: #e8b23a; --off: #6c7684; --run: #5b8ff0;
+    --shadow: none;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1216; --panel: #171b21; --panel-2: #1e232b; --border: #2b323c;
+  --text: #e6e9ee; --muted: #98a2b0; --accent: #5b8ff0;
+  --ok: #3ccf7e; --bad: #f06a6a; --warn: #e8b23a; --off: #6c7684; --run: #5b8ff0;
+  --shadow: none;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text);
+  font: 14px/1.45 "Segoe UI", system-ui, sans-serif; }
+.wrap { max-width: 1200px; margin: 0 auto; padding: 20px 16px 60px; }
+header { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+h1 { font-size: 20px; margin: 0; font-weight: 600; }
+.sub { color: var(--muted); font-size: 12.5px; }
+.spacer { flex: 1; }
+button { font: inherit; border: 1px solid var(--border); background: var(--panel); color: var(--text);
+  border-radius: 7px; padding: 5px 11px; cursor: pointer; }
+button:hover { border-color: var(--accent); }
+button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+button.fix { border-color: var(--warn); color: var(--warn); }
+button.danger { border-color: var(--bad); color: var(--bad); }
+button:disabled { opacity: .5; cursor: default; }
+button.sm { padding: 2px 8px; font-size: 12.5px; }
+
+nav.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 18px; }
+nav.tabs button { border: none; border-bottom: 2px solid transparent; border-radius: 0; background: none;
+  padding: 8px 14px; color: var(--muted); font-weight: 600; }
+nav.tabs button.active { color: var(--text); border-bottom-color: var(--accent); }
+nav.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin-left: 6px; border-radius: 9px;
+  background: var(--warn); color: #fff; font-size: 11px; line-height: 18px; text-align: center; }
+nav.tabs .badge[hidden] { display: none; }
+.matrix td a { color: inherit; text-decoration: none; }
+.matrix td a:hover { text-decoration: underline; }
+.tab[hidden] { display: none; }
+
+.banner { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; background: var(--panel);
+  border: 1px solid var(--warn); border-radius: 10px; padding: 10px 14px; margin-bottom: 14px; }
+.banner.info { border-color: var(--accent); }
+
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 18px; }
+.kpi { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px;
+  box-shadow: var(--shadow); cursor: pointer; }
+.kpi.active { border-color: var(--accent); }
+.kpi .n { font-size: 26px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.kpi .l { color: var(--muted); font-size: 12.5px; display: flex; align-items: center; gap: 6px; }
+
+.dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; flex: none; }
+.s-working, .s-ok { background: var(--ok); } .s-failed, .s-bad { background: var(--bad); }
+.s-misconfigured, .s-warn { background: var(--warn); } .s-off { background: var(--off); }
+.s-untested { background: transparent; border: 1.5px solid var(--muted); }
+.s-testing { background: var(--run); animation: pulse 1s infinite; }
+@keyframes pulse { 50% { opacity: .3; } }
+
+section.card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+  margin-bottom: 16px; box-shadow: var(--shadow); overflow: hidden; }
+.card-h { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 12px 14px;
+  border-bottom: 1px solid var(--border); }
+.card-h h2 { font-size: 15px; margin: 0; }
+.card-b { padding: 12px 14px; }
+.path { font-family: var(--mono); font-size: 11.5px; color: var(--muted); word-break: break-all; }
+
+.matrix { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; }
+th, td { padding: 7px 10px; border-bottom: 1px solid var(--border); text-align: left; white-space: nowrap; }
+th { font-size: 12px; color: var(--muted); font-weight: 600; }
+td.c { text-align: center; }
+tr:last-child td { border-bottom: none; }
+.cellbtn { border: 1px solid transparent; background: none; padding: 3px 6px; display: inline-flex; align-items: center; }
+.cellbtn:hover { border-color: var(--border); background: var(--panel-2); }
+.na { color: var(--border); }
+.rowbtns { display: inline-flex; gap: 4px; margin-left: 8px; visibility: hidden; }
+tr:hover .rowbtns { visibility: visible; }
+
+.row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: center;
+  padding: 10px 14px; border-bottom: 1px solid var(--border); }
+.row:last-child { border-bottom: none; }
+.name { font-weight: 600; }
+.meta { color: var(--muted); font-size: 12.5px; }
+.actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+.details { grid-column: 1 / -1; background: var(--panel-2); border-radius: 8px; padding: 10px 12px;
+  font-size: 12.5px; display: none; }
+.details.open { display: block; }
+.details pre, .card-b pre { font-family: var(--mono); font-size: 11.5px; white-space: pre-wrap; word-break: break-all;
+  margin: 4px 0 8px; max-height: 220px; overflow: auto; }
+.issue { color: var(--warn); } .err { color: var(--bad); }
+.tag { display: inline-block; font-size: 11px; padding: 0 6px; border-radius: 4px; background: var(--panel-2);
+  color: var(--muted); margin-left: 6px; font-weight: 500; }
+.tag.warn { color: var(--warn); }
+.empty { padding: 14px; color: var(--muted); }
+.toollist { columns: 3 180px; font-family: var(--mono); font-size: 11.5px; }
+
+.hosts { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.host { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; box-shadow: var(--shadow); }
+.host h3 { margin: 0 0 6px; font-size: 15px; display: flex; align-items: center; gap: 8px; }
+.host ul { margin: 6px 0 0; padding-left: 18px; color: var(--muted); font-size: 12.5px; }
+.kv { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 14px; font-size: 13px; }
+.kv .path { align-self: center; }
+.chip { display: inline-block; font-size: 11.5px; padding: 1px 8px; border-radius: 10px; border: 1px solid var(--border); white-space: nowrap; }
+.chip.current { color: var(--ok); border-color: var(--ok); }
+.chip.available { color: var(--accent-text); background: var(--accent); border-color: var(--accent); }
+.chip.skipped, .chip.unknown { color: var(--muted); }
+.chip.not-installed { color: var(--muted); border-style: dashed; }
+.urow { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto auto; gap: 10px; align-items: center;
+  padding: 8px 14px; border-bottom: 1px solid var(--border); }
+.urow:last-child { border-bottom: none; }
+.urow input[type=checkbox] { margin: 0; }
+.progress { height: 6px; background: var(--panel-2); border-radius: 3px; overflow: hidden; margin-top: 8px; }
+.progress div { height: 100%; background: var(--accent); transition: width .3s; }
+.progress.busy div { width: 35% !important; animation: slide 1.2s infinite linear; }
+@keyframes slide { from { margin-left: -35%; } to { margin-left: 100%; } }
+.inline-input { font: inherit; font-family: var(--mono); font-size: 12.5px; background: var(--bg); color: var(--text);
+  border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; flex: 1; min-width: 200px; }
+
+.switch { position: relative; width: 36px; height: 20px; flex: none; }
+.switch input { opacity: 0; width: 0; height: 0; }
+.switch span { position: absolute; inset: 0; background: var(--off); border-radius: 20px; cursor: pointer; transition: .15s; }
+.switch span::before { content: ""; position: absolute; width: 14px; height: 14px; left: 3px; top: 3px;
+  background: #fff; border-radius: 50%; transition: .15s; }
+.switch input:checked + span { background: var(--ok); }
+.switch input:checked + span::before { transform: translateX(16px); }
+.switch input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+dialog { border: 1px solid var(--border); border-radius: 12px; background: var(--panel); color: var(--text);
+  width: min(680px, calc(100vw - 32px)); padding: 0; }
+dialog::backdrop { background: rgba(0,0,0,.45); }
+dialog form { padding: 16px 18px; display: grid; gap: 10px; }
+dialog label { font-size: 12.5px; color: var(--muted); display: grid; gap: 4px; }
+dialog input, dialog textarea, dialog select { font: inherit; font-family: var(--mono); font-size: 12.5px;
+  background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; width: 100%; }
+dialog textarea { min-height: 70px; resize: vertical; }
+.dlg-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.tlist { max-height: min(55vh, 520px); overflow: auto; border: 1px solid var(--border); border-radius: 8px; }
+.tlist label { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; align-items: start;
+  padding: 6px 10px; border-bottom: 1px solid var(--border); color: var(--text); cursor: pointer; }
+.tlist label.gh { position: sticky; top: 0; z-index: 1; background: var(--panel-2); font-weight: 600; align-items: center; }
+.tlist label.gh .sub { font-weight: 400; margin-left: 6px; }
+.tlist input { width: auto; margin-top: 3px; }
+.tlist .tn { font-family: var(--mono); font-size: 12.5px; }
+.tlist .td { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tlist label.hidden { display: none; }
+
+#toast { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); background: var(--text); color: var(--bg);
+  padding: 9px 14px; border-radius: 8px; font-size: 13px; max-width: calc(100vw - 32px); opacity: 0; transition: .2s; pointer-events: none; }
+#toast.show { opacity: 1; }
+@media (max-width: 640px) {
+  .row { grid-template-columns: auto minmax(0, 1fr); }
+  .actions { grid-column: 1 / -1; justify-content: flex-start; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>BIM-Bot MCP Control</h1>
+      <div class="sub">Switch MCP servers and single tools on or off per AI program, test the connection to Revit, Navisworks and Unreal, and repair what's broken.</div>
+    </div>
+    <div class="spacer"></div>
+    <span class="sub" id="updated"></span>
+    <button id="showHidden" class="sm" hidden></button>
+    <button id="fixAll" class="fix" hidden></button>
+    <button id="testAll" class="primary">Test all servers</button>
+  </header>
+
+  <nav class="tabs" role="tablist">
+    <button data-tab="servers" role="tab">Servers</button>
+    <button data-tab="health" role="tab">Health<span class="badge" id="healthBadge" hidden></span></button>
+    <button data-tab="updates" role="tab">Updates<span class="badge" id="updBadge" hidden></span></button>
+    <button data-tab="backups" role="tab">Backups</button>
+  </nav>
+
+  <div class="tab" id="tab-servers">
+    <div id="banners"></div>
+    <div class="kpis" id="kpis"></div>
+    <section class="card">
+      <div class="card-h"><h2>Overview</h2><span class="sub">Server × program. Click a dot to switch it on or off; hover a row to switch it everywhere.</span></div>
+      <div class="matrix" id="matrix"></div>
+    </section>
+    <div id="programs"></div>
+  </div>
+
+  <div class="tab" id="tab-health" hidden>
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px">
+      <span class="sub" id="healthAt">Not checked yet.</span><div class="spacer"></div>
+      <button id="healthRefresh" class="primary">Check now</button>
+    </div>
+    <div id="health"></div>
+  </div>
+
+  <div class="tab" id="tab-updates" hidden>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px">
+      <span id="updHead" class="sub">Not checked yet.</span><div class="spacer"></div>
+      <button id="updCheck">Check now</button>
+      <button id="updGo" class="primary" disabled>Update selected</button>
+    </div>
+    <div id="updates"></div>
+  </div>
+
+  <div class="tab" id="tab-backups" hidden>
+    <div class="sub" style="margin-bottom:12px">Every change this app makes to a program's config file is backed up first. Restoring also backs up the current file, so you can always undo.</div>
+    <div id="backups"></div>
+  </div>
+</div>
+
+<dialog id="dlg">
+  <form method="dialog" id="dlgForm">
+    <h2 style="margin:0;font-size:16px" id="dlgTitle">Edit server</h2>
+    <label>Name <input name="name" required></label>
+    <label>Transport
+      <select name="type"><option value="stdio">stdio (local command)</option><option value="http">HTTP (remote URL)</option></select>
+    </label>
+    <label class="f-stdio">Command <input name="command" placeholder="C:\path\to\node.exe"></label>
+    <label class="f-stdio">Arguments (one per line) <textarea name="args"></textarea></label>
+    <label class="f-http">URL <input name="url" placeholder="https://…/mcp"></label>
+    <label>Environment variables (KEY=VALUE, one per line) <textarea name="env"></textarea></label>
+    <label class="f-timeout">Start-up timeout, ms (OpenCode only) <input name="timeout" type="number" min="0" step="1000"></label>
+    <div class="dlg-actions">
+      <button value="cancel" formnovalidate>Cancel</button>
+      <button value="save" class="primary" id="dlgSave">Save</button>
+    </div>
+  </form>
+</dialog>
+<dialog id="tdlg">
+  <form method="dialog" id="tForm">
+    <h2 style="margin:0;font-size:16px" id="tTitle">Tools</h2>
+    <div class="sub" id="tSub"></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <input id="tSearch" placeholder="Search tools…" style="flex:1;min-width:160px" autocomplete="off">
+      <select id="tPreset" style="width:auto" aria-label="Preset">
+        <option value="">Preset…</option>
+        <option value="all">Everything on</option>
+        <option value="nocode">No code execution</option>
+        <option value="readonly">Read-only (no model changes)</option>
+        <option value="navis">Navisworks only</option>
+      </select>
+      <button type="button" class="sm" id="tAllOn">All on</button>
+      <button type="button" class="sm" id="tAllOff">All off</button>
+    </div>
+    <div id="tList" class="tlist"></div>
+    <div class="dlg-actions">
+      <span class="sub" id="tCount" style="margin-right:auto;align-self:center"></span>
+      <button value="cancel" formnovalidate>Cancel</button>
+      <button value="save" class="primary">Save</button>
+    </div>
+  </form>
+</dialog>
+<div id="toast" role="status"></div>
+
+<script>
+const TOKEN = "__TOKEN__";
+const LABEL = { working: "Working", failed: "Failed", misconfigured: "Needs config", off: "Off", untested: "Not tested", testing: "Testing…" };
+const ORDER = ["working", "failed", "misconfigured", "off", "untested"];
+let state = null, filter = null, open = new Set(), poll = null, showHidden = false, tab = "servers", healthData = null;
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+async function api(path, body) {
+  const r = await fetch(path, {
+    method: body ? "POST" : "GET",
+    headers: { "X-Dashboard-Token": TOKEN, "Content-Type": "application/json" },
+    body: body ? JSON.stringify(body) : undefined });
+  const j = await r.json();
+  if (!r.ok) throw new Error(j.error || r.statusText);
+  return j;
+}
+
+function toast(msg, ms = 3500) {
+  const t = $("#toast"); t.textContent = msg; t.classList.add("show");
+  clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("show"), ms);
+}
+
+// ---- tabs
+function showTab(name) {
+  tab = name;
+  document.querySelectorAll("nav.tabs button").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
+  document.querySelectorAll(".tab").forEach(t => t.hidden = t.id !== "tab-" + name);
+  try { localStorage.setItem("mcpctl-tab", name); } catch (_) {}
+  if (name === "health" && !healthData) loadHealth();
+  if (name === "backups") loadBackups();
+  if (name === "updates") loadUpdates();
+}
+document.querySelectorAll("nav.tabs button").forEach(b => b.onclick = () => showTab(b.dataset.tab));
+
+async function load() {
+  try { state = await api("/api/state" + (showHidden ? "?all=1" : "")); }
+  catch (e) { toast("Could not load: " + e.message); return; }
+  render();
+  $("#updated").textContent = "Updated " + new Date().toLocaleTimeString();
+  const testing = state.programs.some(p => p.servers.some(s => s.status === "testing"));
+  clearTimeout(poll);
+  poll = setTimeout(load, testing ? 1500 : 15000);
+}
+
+function render() {
+  const hb = $("#showHidden");
+  hb.hidden = !state.hidden.length;
+  hb.textContent = showHidden ? "Hide other servers" : `Show ${state.hidden.length} other servers`;
+  hb.title = "Servers that aren't part of BIM-Bot: " + state.hidden.join(", ");
+  const all = state.programs.flatMap(p => p.servers.filter(s => !s.hidden).map(s => ({ ...s, program: p })));
+
+  const safe = all.reduce((n, s) => n + s.fixes.filter(f => f.safe).length, 0);
+  const fa = $("#fixAll");
+  fa.hidden = !safe;
+  fa.textContent = `Fix ${safe} safe issue${safe === 1 ? "" : "s"}`;
+  fa.title = "Applies path, launcher and timeout fixes in every program. Every file is backed up first.";
+
+  // banners: broken config files, BIM-Bot missing from installed programs
+  const broken = state.programs.filter(p => p.error);
+  const missing = {};
+  state.programs.forEach(p => p.can_add.forEach(n => (missing[n] = missing[n] || []).push(p.name)));
+  $("#banners").innerHTML = broken.map(p => `<div class="banner">
+      <span class="dot s-bad"></span><div style="flex:1;min-width:0"><b>${esc(p.name)}</b>: ${esc(p.error)}
+      <div class="path">${esc(p.path)}</div></div>
+      ${p.can_restore ? `<button class="sm fix" data-act="restore-last" data-p="${esc(p.id)}">Restore last good backup</button>` : `<span class="sub">No good backup — fix the file by hand.</span>`}
+    </div>`).join("") + (state.bimbot_installed ? Object.entries(missing).map(([n, progs]) => `<div class="banner info">
+      <div style="flex:1">${esc(n)} isn't registered in ${esc(progs.join(", "))}.</div>
+      <button class="sm primary" data-act="add-all" data-n="${esc(n)}">Add ${esc(n)} to ${progs.length === 1 ? esc(progs[0]) : `all ${progs.length}`}</button>
+    </div>`).join("") : "");
+
+  const counts = Object.fromEntries(ORDER.map(k => [k, 0]));
+  all.forEach(s => { const k = s.status === "testing" ? "untested" : s.status; counts[k]++; });
+  $("#kpis").innerHTML = ORDER.map(k => `
+    <div class="kpi ${filter === k ? "active" : ""}" data-filter="${k}" role="button" tabindex="0">
+      <div class="n">${counts[k]}</div><div class="l"><span class="dot s-${k}"></span>${LABEL[k]}</div>
+    </div>`).join("");
+
+  // matrix: every cell is a switch
+  const progs = state.programs.filter(p => p.servers.length);
+  const names = [...new Set(all.map(s => s.name))].sort((a, b) => a.localeCompare(b));
+  $("#matrix").innerHTML = names.length ? `<table><thead><tr><th>Server</th>${progs.map(p => `<th class="c">${esc(p.name)}</th>`).join("")}</tr></thead>
+    <tbody>${names.map(n => `<tr><td><a href="#${esc(id((progs.find(p => p.servers.some(s => s.name === n)) || {}).id, n))}">${esc(n)}</a>
+      <span class="rowbtns"><button class="sm" data-act="toggle-all" data-n="${esc(n)}" data-on="1">All on</button><button class="sm" data-act="toggle-all" data-n="${esc(n)}" data-on="0">All off</button></span></td>
+      ${progs.map(p => {
+      const s = p.servers.find(x => x.name === n);
+      return `<td class="c">${s ? `<button class="cellbtn" data-act="cell" data-p="${esc(p.id)}" data-n="${esc(n)}" data-on="${s.enabled ? "0" : "1"}" title="${esc(LABEL[s.status])} — click to switch ${s.enabled ? "off" : "on"} in ${esc(p.name)}" aria-label="${esc(n)} in ${esc(p.name)}: ${esc(LABEL[s.status])}"><span class="dot s-${s.status}"></span></button>` : `<span class="na">–</span>`}</td>`;
+    }).join("")}</tr>`).join("")}</tbody></table>` : `<div class="empty">No MCP servers found in any program.</div>`;
+
+  // program cards
+  $("#programs").innerHTML = state.programs.filter(p => !p.error && (p.exists || p.servers.length || p.can_add.length)).map(p => {
+    const rows = p.servers.filter(s => !filter || s.status === filter || (filter === "untested" && s.status === "testing"));
+    return `<section class="card">
+      <div class="card-h">
+        <h2>${esc(p.name)}</h2><span class="sub">${p.servers.filter(s => s.enabled).length} on · ${p.servers.length} total</span>
+        <div class="spacer"></div>
+        ${p.can_add.map(n => `<button class="sm" data-act="add-bimbot" data-p="${esc(p.id)}" data-n="${esc(n)}">+ Add ${esc(n)}</button>`).join("")}
+        <button class="sm" data-act="new" data-p="${esc(p.id)}">+ Add server</button>
+        <div style="flex-basis:100%" class="path">${esc(p.path)}${p.exists ? "" : " (will be created)"}</div>
+      </div>
+      ${rows.length ? rows.map(s => row(p, s)).join("") : `<div class="empty">${p.servers.length ? "Nothing matches this filter." : "No MCP servers configured."}</div>`}
+    </section>`;
+  }).join("");
+}
+
+const id = (p, n) => "srv-" + p + "-" + n.replace(/[^\w-]/g, "_");
+
+function row(p, s) {
+  const k = id(p.id, s.name);
+  const pr = s.probe;
+  let meta = LABEL[s.status];
+  if (s.status === "working" && pr) meta += ` · ${pr.tools == null ? "?" : pr.tools - s.tools_off.length} of ${pr.tools ?? "?"} tools on · ${(pr.ms / 1000).toFixed(1)} s`;
+  else if (s.tools_off.length) meta += ` · ${s.tools_off.length} tools off`;
+  if (s.status === "failed" && pr) meta += ` · ${pr.error}`;
+  if (s.status === "misconfigured") meta += ` · ${s.issues[0]}`;
+  if (s.status === "off" && pr) meta += pr.ok ? ` · last test OK (${pr.tools} tools)` : ` · last test failed`;
+  const cmd = s.type === "http" ? s.url : [s.command, ...s.args].join(" ");
+  return `<div class="row" id="${esc(k)}">
+    <span class="dot s-${s.status}" title="${esc(LABEL[s.status])}"></span>
+    <div style="min-width:0">
+      <div class="name">${esc(s.name)}${s.type === "http" ? '<span class="tag">HTTP</span>' : ""}${s.filtered ? '<span class="tag">filtered</span>' : ""}</div>
+      <div class="meta" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(meta)}</div>
+    </div>
+    <div class="actions">
+      ${s.fixes.map(f => `<button class="sm fix" data-act="fix" data-p="${esc(p.id)}" data-n="${esc(s.name)}" data-fix="${esc(f.id)}">Fix: ${esc(f.label)}</button>`).join("")}
+      <button class="sm" data-act="probe" data-p="${esc(p.id)}" data-n="${esc(s.name)}" ${s.status === "testing" ? "disabled" : ""}>Test</button>
+      ${s.type === "stdio" ? `<button class="sm" data-act="tools" data-p="${esc(p.id)}" data-n="${esc(s.name)}">Tools${s.tools_off.length ? ` (${s.tools_off.length} off)` : ""}</button>` : ""}
+      <button class="sm" data-act="edit" data-p="${esc(p.id)}" data-n="${esc(s.name)}">Configure</button>
+      <button class="sm" data-act="details" data-k="${esc(k)}">${open.has(k) ? "Less" : "Details"}</button>
+      <button class="sm" data-act="hide" data-n="${esc(s.name)}" data-h="${s.hidden ? "0" : "1"}" title="${s.hidden ? "Show this server in the app again" : "Not part of BIM-Bot? Hide it from this app (its settings in each program stay as they are)"}">${s.hidden ? "Unhide" : "Hide"}</button>
+      <label class="switch" title="${s.enabled ? "On" : "Off"} in ${esc(p.name)}">
+        <input type="checkbox" data-act="toggle" data-p="${esc(p.id)}" data-n="${esc(s.name)}" ${s.enabled ? "checked" : ""} aria-label="Enable ${esc(s.name)} in ${esc(p.name)}">
+        <span></span></label>
+    </div>
+    <div class="details ${open.has(k) ? "open" : ""}">
+      <div><b>${s.type === "http" ? "URL" : "Command"}</b><pre>${esc(cmd)}</pre></div>
+      ${Object.keys(s.env).length ? `<div><b>Environment</b><pre>${esc(Object.entries(s.env).map(([a, b]) => a + "=" + b).join("\n"))}</pre></div>` : ""}
+      ${s.timeout ? `<div><b>Timeout</b> ${s.timeout} ms</div>` : ""}
+      ${s.issues.map(i => `<div class="issue">⚠ ${esc(i)}</div>`).join("")}
+      ${pr ? `<div style="margin-top:6px"><b>Last test</b> ${esc(pr.at)} · ${pr.ok ? `OK — ${esc(pr.server)}` : `<span class="err">${esc(pr.error)}</span>`}</div>` : ""}
+      ${pr && !pr.ok ? hint(s, pr) : ""}
+      ${pr && pr.stderr ? `<div><b>Server log (stderr)</b><pre>${esc(pr.stderr)}</pre></div>` : ""}
+      ${s.tools_off.length ? `<div><b>Switched-off tools (${s.tools_off.length})</b><div class="toollist">${s.tools_off.map(esc).join("<br>")}</div></div>` : ""}
+      ${s.stashed ? `<div class="sub">Switched off by this dashboard — the entry is kept aside and restored when you switch it on.</div>` : ""}
+    </div>
+  </div>`;
+}
+
+function hint(s, pr) {
+  const e = (pr.error || "") + " " + (pr.stderr || "");
+  let h = "";
+  if (/No response within/.test(e)) h = "The server started but didn't answer. Some servers download packages or wait for their host app on first run — try Test again.";
+  if (/ECONNREFUSED|connect|socket/i.test(e)) h = "The server couldn't reach its host application. Open Revit / Navisworks / Unreal with its add-in loaded, then test again. The Health tab shows which one is missing.";
+  if (/not found|ENOENT|Cannot find module/i.test(e)) h = "A file or program in the command is missing. Use Configure to fix the path.";
+  if (/api.?key|unauthori|401|403/i.test(e)) h = "This server needs an API key or sign-in. Add it under Configure → Environment variables.";
+  if (/-32001|auth\.token|token (was )?(rejected|invalid|mismatch)|invalid token/i.test(e)) h = "The add-in rejected the connection token. Restart Revit / Navisworks so it reloads the token, then test again.";
+  return h ? `<div class="sub" style="margin:4px 0">💡 ${esc(h)}</div>` : "";
+}
+
+function restartNote(pid) {
+  const p = state.programs.find(x => x.id === pid);
+  return p ? ` ${p.restart}` : "";
+}
+
+document.addEventListener("click", async e => {
+  const kp = e.target.closest(".kpi");
+  if (kp) { filter = filter === kp.dataset.filter ? null : kp.dataset.filter; render(); return; }
+  const b = e.target.closest("button[data-act]");
+  if (!b) return;
+  const { act, p, n } = b.dataset;
+  try {
+    if (act === "details") { open.has(b.dataset.k) ? open.delete(b.dataset.k) : open.add(b.dataset.k); render(); return; }
+    if (act === "probe") { await api("/api/probe", { program: p, name: n }); toast(`Testing ${n}…`); }
+    if (act === "fix") { await api("/api/fix", { program: p, name: n, fix: b.dataset.fix }); toast("Fixed." + restartNote(p), 6000); if (b.dataset.fix !== "disable-duplicate") await api("/api/probe", { program: p, name: n }); }
+    if (act === "add-bimbot") { await api("/api/add-bimbot", { program: p, name: n }); toast(`${n} added.` + restartNote(p), 6000); }
+    if (act === "add-all") { const r = await api("/api/add-bimbot-all", { name: n }); toast(`${n} added to ${r.added.join(", ") || "no program"}. Restart those programs to load it.`, 7000); }
+    if (act === "cell" || act === "toggle-all") {
+      const on = b.dataset.on === "1";
+      if (act === "cell") { await api("/api/toggle", { program: p, name: n, enabled: on }); toast(`${n} switched ${on ? "on" : "off"}.` + restartNote(p), 6000); }
+      else { const r = await api("/api/toggle-all", { name: n, enabled: on }); toast(r.changed.length ? `${n} switched ${on ? "on" : "off"} in ${r.changed.join(", ")}. Restart those programs to apply.` : `${n} was already ${on ? "on" : "off"} everywhere.`, 7000); }
+    }
+    if (act === "restore-last") {
+      const prog = state.programs.find(x => x.id === p);
+      if (!confirm(`Replace ${prog.path} with its newest valid backup?\n\nThe current (broken) file is backed up first.`)) return;
+      const r = await api("/api/restore", { program: p }); toast(`Restored ${r.restored}.` + restartNote(p), 7000);
+    }
+    if (act === "restore") {
+      if (!confirm(`Replace ${b.dataset.path}\nwith the backup from ${b.dataset.at}?\n\nThe current file is backed up first.`)) return;
+      await api("/api/restore", { program: p, file: b.dataset.file }); toast("Restored." + restartNote(p), 7000); loadBackups();
+    }
+    if (act === "kill") {
+      if (!confirm(`End ${b.dataset.kind} process ${b.dataset.pid}?\n\nThe AI program that started it loses its BIM-Bot connection until it restarts the server.`)) return;
+      await api("/api/kill", { pid: Number(b.dataset.pid) }); toast(`Process ${b.dataset.pid} ended.`); return loadHealth();
+    }
+    if (act === "kill-orphans") {
+      if (!confirm(`End ${b.dataset.count} leftover BIM-Bot process(es) whose AI program has already closed?`)) return;
+      const r = await api("/api/kill-orphans", {}); toast(`Ended ${r.ended} leftover process(es).`); return loadHealth();
+    }
+    if (act === "health-fix") { await api("/api/health-fix", { fix: b.dataset.fix }); toast("Done."); return loadHealth(); }
+    if (act === "goto-servers") { showTab("servers"); return; }
+    if (act === "edit") return openEditor(p, n);
+    if (act === "tools") return openTools(p, n);
+    if (act === "hide") { await api("/api/hide", { name: n, hidden: b.dataset.h === "1" }); toast(b.dataset.h === "1" ? `${n} hidden from this app. Its settings in each program are unchanged.` : `${n} shown again.`, 5000); }
+    if (act === "new") return openEditor(p, null);
+    load();
+  } catch (err) { toast("Error: " + err.message, 6000); }
+});
+
+document.addEventListener("keydown", e => {
+  if ((e.key === "Enter" || e.key === " ") && e.target.classList.contains("kpi")) { e.preventDefault(); e.target.click(); }
+});
+
+document.addEventListener("change", async e => {
+  const t = e.target;
+  if (t.dataset.act !== "toggle") return;
+  try {
+    await api("/api/toggle", { program: t.dataset.p, name: t.dataset.n, enabled: t.checked });
+    toast(`${t.dataset.n} switched ${t.checked ? "on" : "off"}.` + restartNote(t.dataset.p), 6000);
+  } catch (err) { toast("Error: " + err.message, 6000); }
+  load();
+});
+
+$("#showHidden").onclick = () => { showHidden = !showHidden; load(); };
+
+$("#testAll").onclick = async () => {
+  try { const r = await api("/api/probe-all", {}); toast(`Testing ${r.started} servers (up to ${state.probe_timeout} s each)…`); load(); }
+  catch (err) { toast("Error: " + err.message); }
+};
+
+$("#fixAll").onclick = async () => {
+  try {
+    const r = await api("/api/fix-all", {});
+    toast(`Fixed ${r.fixed} issue(s).` + (r.failed.length ? ` ${r.failed.length} failed: ${r.failed[0]}` : " Restart the affected programs to apply."), 8000);
+    await api("/api/probe-all", {});
+  } catch (err) { toast("Error: " + err.message, 6000); }
+  load();
+};
+
+// ---- health
+async function loadHealth() {
+  $("#healthRefresh").disabled = true;
+  $("#healthAt").textContent = "Checking Revit, Navisworks, Unreal and running BIM-Bot processes…";
+  try { healthData = await api("/api/health", {}); renderHealth(); }
+  catch (err) { toast("Error: " + err.message, 6000); $("#healthAt").textContent = "Check failed."; }
+  $("#healthRefresh").disabled = false;
+}
+$("#healthRefresh").onclick = loadHealth;
+
+function renderHealth() {
+  const h = healthData;
+  $("#healthAt").textContent = "Checked " + new Date(h.checked).toLocaleTimeString() + (h.system_ok ? "" : " · could not list running programs (PowerShell blocked?)");
+  const problems = h.hosts.filter(x => x.state === "warn" || x.state === "bad").length + h.processes.filter(p => p.orphan).length + (h.server.installed ? 0 : 1);
+  const badge = $("#healthBadge"); badge.hidden = !problems; badge.textContent = problems;
+  const orphans = h.processes.filter(p => p.orphan);
+  const s = h.server;
+  const anyHostUp = h.hosts.some(x => x.id !== "unreal" && x.state !== "off");
+  $("#health").innerHTML = `
+    <div class="hosts">${h.hosts.map(x => `<div class="host">
+      <h3><span class="dot s-${x.state}"></span>${esc(x.name)}</h3>
+      <div>${esc(x.summary)}</div>
+      ${x.details.length ? `<ul>${x.details.map(d => `<li>${esc(d)}</li>`).join("")}</ul>` : ""}
+      ${x.fixes.length ? `<div style="margin-top:8px">${x.fixes.map(f => `<button class="sm fix" data-act="health-fix" data-fix="${esc(f.id)}">Fix: ${esc(f.label)}</button>`).join(" ")}</div>` : ""}
+    </div>`).join("")}</div>
+
+    <section class="card"><div class="card-h"><h2>BIM-Bot MCP server</h2><span class="dot s-${s.installed && s.node ? "ok" : "bad"}"></span></div>
+      <div class="card-b kv">
+        <span class="sub">Installed</span><span>${s.installed ? `Yes${s.version ? " — version " + esc(s.version) : ""}` : `<span class="err">No — run the BIM-Bot installer</span>`}</span>
+        <span class="sub">Server</span><span class="path">${esc(s.path)}</span>
+        <span class="sub">Node.js</span><span class="path">${s.node ? esc(s.node) : '<span class="err">Not found</span>'}</span>
+        <span class="sub">Socket token</span><span>${s.token ? "Present" : (anyHostUp ? '<span class="issue">Missing — restart Revit / Navisworks so the add-in creates it</span>' : '<span class="sub">Not created yet — the Revit / Navisworks add-in creates it when it starts</span>')} <span class="path">${esc(s.token_path)}</span></span>
+        <span class="sub">Panel version</span><span>${esc(h.panel_version)}</span>
+      </div></section>
+
+    <section class="card"><div class="card-h"><h2>Running MCP processes</h2>
+      <span class="sub">${h.processes.length} running${orphans.length ? ` · <span class="issue">${orphans.length} left over from closed programs</span>` : ""}</span>
+      <div class="spacer"></div>
+      ${orphans.length ? `<button class="sm danger" data-act="kill-orphans" data-count="${orphans.length}">End ${orphans.length} leftover</button>` : ""}
+    </div>
+    ${h.processes.length ? `<div class="matrix"><table><thead><tr><th>PID</th><th>Kind</th><th>Started by</th><th>Started</th><th>Command</th><th></th></tr></thead><tbody>
+      ${h.processes.map(p => `<tr><td>${p.pid}</td><td>${esc(p.kind)}${p.navis ? '<span class="tag">Navis</span>' : ""}</td>
+        <td>${p.orphan ? '<span class="issue">closed program</span>' : esc(p.parent) + ` <span class="sub">(${p.parent_pid})</span>`}</td>
+        <td>${esc((p.started || "").replace("T", " "))}</td>
+        <td class="path" style="white-space:normal;max-width:420px">${esc(p.cmd)}</td>
+        <td><button class="sm ${p.orphan ? "danger" : ""}" data-act="kill" data-pid="${p.pid}" data-kind="${esc(p.kind)}">End</button></td></tr>`).join("")}
+    </tbody></table></div>` : `<div class="empty">No BIM-Bot MCP processes are running. They start when an AI program opens a chat that uses BIM-Bot.</div>`}
+    </section>
+
+    <section class="card"><div class="card-h"><h2>AI programs running now</h2></div>
+      <div class="card-b">${h.ai_programs.length ? h.ai_programs.map(a => `<span class="tag" style="font-size:12.5px;margin:0 6px 6px 0">${esc(a.name)}</span>`).join("") : '<span class="sub">None of the known AI programs is running.</span>'}
+      <div class="sub" style="margin-top:6px">After switching servers or tools, restart the program for it to take effect.</div></div>
+    </section>`;
+}
+
+// ---- updates
+let upd = null, updPoll = null;
+const picked = new Set();
+const UPD_LABEL = { current: "Up to date", available: "Update available", skipped: "Skipped", "not-installed": "Not installed", unknown: "Not checked" };
+const JOB_BUSY = ["downloading", "verifying", "installing"];
+const updatable = p => !p.readonly && (p.installed || p.host);
+
+async function loadUpdates(check) {
+  if (check) { $("#updCheck").disabled = true; $("#updHead").textContent = "Checking for updates…"; }
+  try { upd = await api(check ? "/api/updates-check" : "/api/updates", {}); }
+  catch (err) { toast("Error: " + err.message, 6000); }
+  $("#updCheck").disabled = false;
+  if (!upd) return;
+  if (!picked.size && !JOB_BUSY.includes(upd.job.state)) upd.parts.filter(p => p.state === "available" && updatable(p)).forEach(p => picked.add(p.task || p.id));
+  renderUpdates();
+  clearTimeout(updPoll);
+  if (JOB_BUSY.includes(upd.job.state)) updPoll = setTimeout(() => loadUpdates(), 1500);
+}
+$("#updCheck").onclick = () => loadUpdates(true);
+
+function renderUpdates() {
+  const u = upd, job = u.job, busy = JOB_BUSY.includes(job.state);
+  const avail = u.parts.filter(p => p.state === "available").length;
+  const b = $("#updBadge"); b.hidden = !avail; b.textContent = avail;
+  $("#updHead").innerHTML = u.latest
+    ? `Latest release <b>v${esc(u.latest)}</b> · checked ${esc((u.checked || "").replace("T", " "))}${u.source === "cache" ? " (saved copy)" : ""}`
+    : "Press Check now to look for updates.";
+  const go = $("#updGo");
+  go.disabled = busy || !picked.size || !u.latest;
+  go.textContent = picked.size ? `Update ${picked.size} selected` : "Update selected";
+
+  const jobCard = job.state === "idle" ? "" : `<div class="banner ${job.state === "failed" ? "" : "info"}" style="display:block">
+      <div style="display:flex;gap:8px;align-items:center"><span class="dot s-${job.state === "done" ? "ok" : job.state === "failed" ? "bad" : "testing"}"></span>
+      <b>${esc({ downloading: "Downloading", verifying: "Verifying", installing: "Installing", done: "Update finished", failed: "Update not installed" }[job.state] || job.state)}</b></div>
+      <div style="margin-top:4px">${esc(job.message || "")}</div>
+      ${busy ? `<div class="progress ${job.state === "downloading" && job.total ? "" : "busy"}"><div style="width:${job.total ? Math.round(100 * job.progress / job.total) : 0}%"></div></div>
+        ${job.state === "downloading" && job.progress ? `<div class="sub" style="margin-top:4px">${(job.progress / 1048576).toFixed(1)}${job.total ? " of " + (job.total / 1048576).toFixed(1) : ""} MB</div>` : ""}` : ""}
+    </div>`;
+
+  const sections = u.apps.map(a => {
+    const parts = u.parts.filter(p => p.app === a.id);
+    if (!parts.length) return "";
+    const skippable = u.latest && a.id !== "control" && parts.some(p => p.state === "available" || p.state === "skipped");
+    const skipped = a.skip && a.skip === u.latest;
+    return `<section class="card">
+      <div class="card-h"><h2>${esc(a.name)}</h2>
+        ${a.id === "revit" ? '<span class="sub">Settings shared with the plugin inside Revit</span>' : ""}
+        <div class="spacer"></div>
+        ${skippable ? `<button class="sm" data-act="upd-skip" data-app="${esc(a.id)}" data-v="${skipped ? "" : esc(u.latest)}">${skipped ? "Un-skip v" + esc(u.latest) : "Skip v" + esc(u.latest)}</button>` : ""}
+        <label class="sub" style="display:flex;gap:6px;align-items:center" title="Look for updates automatically (once a day)">Auto-check
+          <span class="switch"><input type="checkbox" data-upd-auto="${esc(a.id)}" ${a.autoCheck ? "checked" : ""}><span></span></span></label>
+      </div>
+      ${parts.map(p => {
+        const key = p.task || p.id, can = updatable(p) && !busy;
+        const action = !p.installed && p.host ? "Install" : "Update";
+        return `<div class="urow">
+          ${updatable(p) ? `<input type="checkbox" data-upd-pick="${esc(key)}" ${picked.has(key) ? "checked" : ""} ${can ? "" : "disabled"} aria-label="${action} ${esc(p.label)}" title="${action} ${esc(p.label)}">` : `<span></span>`}
+          <div style="min-width:0"><div class="name">${esc(p.label)}${p.admin ? '<span class="tag warn" title="Navisworks loads plugins only from its Program Files folder">admin prompt</span>' : ""}</div>
+            <div class="meta">${p.installed ? "Installed v" + esc(p.version || "?") : "Not installed"}${p.app === "server" ? " · updated together with any other part" : ""}${p.note ? ` · <span class="issue">${esc(p.note)}</span>` : ""}</div></div>
+          <span class="chip ${esc(p.state)}">${esc(UPD_LABEL[p.state] || p.state)}${p.state === "available" ? " v" + esc(p.latest) : ""}</span>
+          ${p.project ? `<button class="sm" data-act="upd-unproj" data-path="${esc(p.project)}">Remove</button>` : p.app === "control" && p.state === "available" && u.controlUrl ? `<a href="${esc(u.controlUrl)}" target="_blank" rel="noopener" class="sub">Download</a>` : "<span></span>"}
+        </div>`;
+      }).join("")}
+      ${a.id === "unreal" ? `<div class="urow" style="grid-template-columns:minmax(0,1fr) auto">
+        <input class="inline-input" id="updProj" placeholder="Add an Unreal project folder to track its BIM-Bot plugin, e.g. D:\\Unreal\\MyTwin">
+        <button class="sm" data-act="upd-addproj">Add project</button></div>` : ""}
+    </section>`;
+  }).join("");
+
+  $("#updates").innerHTML = (u.error ? `<div class="banner"><span class="dot s-bad"></span><div>${esc(u.error)}</div></div>` : "") + jobCard + sections +
+    (u.changelog ? `<section class="card"><div class="card-h"><h2>What's new in v${esc(u.latest)}</h2>${u.releaseUrl ? `<a class="sub" href="${esc(u.releaseUrl)}" target="_blank" rel="noopener">Release page</a>` : ""}</div>
+      <div class="card-b" style="white-space:pre-wrap">${esc(u.changelog)}</div></section>` : "") +
+    `<div class="sub">Updates run the BIM-Bot installer for your Windows user only — no admin password, except one prompt when a Navisworks plugin is included. The download is installed only if its SHA-256 checksum matches the published one.</div>`;
+}
+
+document.addEventListener("change", async e => {
+  const t = e.target;
+  if (t.dataset.updPick) { t.checked ? picked.add(t.dataset.updPick) : picked.delete(t.dataset.updPick); renderUpdates(); return; }
+  if (t.dataset.updAuto) {
+    try { await api("/api/updates-setting", { app: t.dataset.updAuto, autoCheck: t.checked });
+      toast(`Auto-check ${t.checked ? "on" : "off"} for ${upd.apps.find(a => a.id === t.dataset.updAuto).name}.`); }
+    catch (err) { toast("Error: " + err.message, 6000); }
+    loadUpdates();
+  }
+});
+
+document.addEventListener("click", async e => {
+  const b = e.target.closest("button[data-act^='upd-']");
+  if (!b) return;
+  try {
+    if (b.dataset.act === "upd-skip") {
+      await api("/api/updates-setting", { app: b.dataset.app, skip: b.dataset.v });
+      toast(b.dataset.v ? `v${b.dataset.v} skipped — you won't be asked about it again.` : "Skip removed.");
+    }
+    if (b.dataset.act === "upd-addproj" || b.dataset.act === "upd-unproj") {
+      const cur = upd.unrealProjects;
+      const next = b.dataset.act === "upd-addproj" ? [...cur, $("#updProj").value.trim()].filter(Boolean) : cur.filter(x => x !== b.dataset.path);
+      await api("/api/updates-projects", { paths: next });
+    }
+    loadUpdates();
+  } catch (err) { toast("Error: " + err.message, 7000); }
+});
+
+$("#updGo").onclick = async () => {
+  const targets = [...picked];
+  const labels = upd.parts.filter(p => picked.has(p.task || p.id)).map(p => p.label);
+  try {
+    const pre = await api("/api/update-precheck", { targets });
+    if (pre.blockers.length) { alert("Can't update yet:\n\n" + pre.blockers.join("\n\n")); return; }
+    const navis = targets.some(t => t.startsWith("navis"));
+    const others = labels.filter(l => l !== upd.parts.find(p => p.app === "server").label);
+    let msg = `Download BIM-Bot v${upd.latest}, check its SHA-256, then install it for:\n\n• MCP server\n${others.map(l => "• " + l).join("\n")}`;
+    if (pre.processes) msg += `\n\n${pre.processes} BIM-Bot server process(es) are running and will be ended (AI programs reconnect when you restart them).`;
+    if (navis) msg += "\n\nWindows will ask once for admin rights to copy the Navisworks plugin.";
+    if (!confirm(msg)) return;
+    await api("/api/update", { targets, endProcesses: true });
+    picked.clear();
+    toast("Update started.");
+  } catch (err) { toast("Error: " + err.message, 8000); }
+  loadUpdates();
+};
+
+// ---- backups
+async function loadBackups() {
+  let r;
+  try { r = await api("/api/backups", {}); } catch (err) { toast("Error: " + err.message, 6000); return; }
+  $("#backups").innerHTML = r.programs.map(p => `<section class="card">
+    <div class="card-h"><h2>${esc(p.name)}</h2>${p.error ? `<span class="err">${esc(p.error)}</span>` : `<span class="sub">${p.backups.length} backup${p.backups.length === 1 ? "" : "s"}</span>`}
+      <div style="flex-basis:100%" class="path">${esc(p.path)}</div></div>
+    ${p.backups.length ? `<div class="matrix"><table><tbody>${p.backups.map(b => `<tr>
+      <td>${esc(b.at)}</td><td class="sub">${(b.size / 1024).toFixed(1)} KB</td>
+      <td>${b.valid ? "" : '<span class="err">not valid JSON</span>'}</td>
+      <td style="text-align:right"><button class="sm" data-act="restore" data-p="${esc(p.id)}" data-file="${esc(b.file)}" data-at="${esc(b.at)}" data-path="${esc(p.path)}" ${b.valid ? "" : "disabled"}>Restore</button></td>
+    </tr>`).join("")}</tbody></table></div>` : `<div class="empty">No backups yet — one is made before every change.</div>`}
+  </section>`).join("") || `<div class="empty">No program config files found.</div>`;
+}
+
+// ---- editor
+const dlg = $("#dlg"), form = $("#dlgForm");
+let editing = null;
+function syncType() {
+  const http = form.type.value === "http";
+  form.querySelectorAll(".f-stdio").forEach(x => x.style.display = http ? "none" : "");
+  form.querySelectorAll(".f-http").forEach(x => x.style.display = http ? "" : "none");
+}
+form.type.onchange = syncType;
+
+async function openEditor(pid, name) {
+  let e = { type: "stdio", command: "", args: [], env: {}, url: "", timeout: null };
+  if (name) e = (await api("/api/entry", { program: pid, name })).entry;
+  editing = { pid, name };
+  const prog = state.programs.find(x => x.id === pid);
+  $("#dlgTitle").textContent = name ? `Configure ${name} — ${prog.name}` : `Add server to ${prog.name}`;
+  form.name.value = name || ""; form.name.disabled = !!name;
+  form.type.value = e.type; form.command.value = e.command; form.url.value = e.url || "";
+  form.args.value = e.args.join("\n");
+  form.env.value = Object.entries(e.env).map(([k, v]) => `${k}=${v}`).join("\n");
+  form.timeout.value = e.timeout || "";
+  form.querySelector(".f-timeout").style.display = pid === "opencode" ? "" : "none";
+  syncType();
+  dlg.showModal();
+}
+
+dlg.addEventListener("close", async () => {
+  if (dlg.returnValue !== "save" || !editing) return;
+  const env = {};
+  form.env.value.split("\n").map(l => l.trim()).filter(Boolean).forEach(l => {
+    const i = l.indexOf("="); if (i > 0) env[l.slice(0, i).trim()] = l.slice(i + 1).trim();
+  });
+  const entry = { type: form.type.value, command: form.command.value.trim(), url: form.url.value.trim(),
+    args: form.args.value.split("\n").map(x => x.trim()).filter(Boolean), env,
+    timeout: form.timeout.value ? Number(form.timeout.value) : null };
+  const name = editing.name || form.name.value.trim();
+  try {
+    await api("/api/save", { program: editing.pid, name, entry, new: !editing.name });
+    toast("Saved." + restartNote(editing.pid), 6000);
+    await api("/api/probe", { program: editing.pid, name });
+  } catch (err) { toast("Error: " + err.message, 6000); }
+  load();
+});
+
+// ---- per-tool switches, grouped by feature
+const tdlg = $("#tdlg");
+let toolsFor = null;
+
+function openTools(pid, name) {
+  const prog = state.programs.find(x => x.id === pid);
+  const s = prog.servers.find(x => x.name === name);
+  const list = (s.probe && s.probe.tool_list) || [];
+  if (!list.length) {
+    toast(`Testing ${name} to read its tool list — open Tools again in a moment.`, 6000);
+    api("/api/probe", { program: pid, name }).then(load);
+    return;
+  }
+  toolsFor = { pid, name };
+  const off = new Set(s.tools_off);
+  const known = new Set(list.map(t => t.name));
+  const rows = [...list, ...s.tools_off.filter(t => !known.has(t)).map(t => ({ name: t, description: "(no longer offered by the server)", group: "read" }))];
+  $("#tTitle").textContent = `${name} tools in ${prog.name}`;
+  $("#tSub").textContent = "Switched-off tools are hidden from this program only. Other programs keep their own choice. Tick a group to switch the whole feature.";
+  const toolRow = t => `<label data-q="${esc((t.name + " " + t.description).toLowerCase())}" data-g="${esc(t.group)}">
+    <input type="checkbox" class="tbox" value="${esc(t.name)}" data-g="${esc(t.group)}" data-risky="${t.risky ? 1 : 0}" data-writes="${t.writes ? 1 : 0}" ${off.has(t.name) ? "" : "checked"}>
+    <div style="min-width:0"><div class="tn">${esc(t.name)}${t.risky ? '<span class="tag warn">runs code</span>' : ""}</div><div class="td" title="${esc(t.description)}">${esc(t.description)}</div></div></label>`;
+  $("#tList").innerHTML = state.groups.map(g => {
+    const ts = rows.filter(t => (t.group || "read") === g.id);
+    if (!ts.length) return "";
+    return `<label class="gh" data-gh="${esc(g.id)}"><input type="checkbox" class="gbox" data-g="${esc(g.id)}">
+      <div>${esc(g.label)}${g.risky ? '<span class="tag warn">risky</span>' : ""}<span class="sub" data-gc="${esc(g.id)}"></span></div></label>${ts.map(toolRow).join("")}`;
+  }).join("");
+  $("#tSearch").value = ""; $("#tPreset").value = "";
+  countTools();
+  tdlg.showModal();
+}
+
+const tboxes = () => [...$("#tList").querySelectorAll("input.tbox")];
+function countTools() {
+  const boxes = tboxes();
+  $("#tCount").textContent = `${boxes.filter(b => b.checked).length} of ${boxes.length} on`;
+  $("#tList").querySelectorAll("input.gbox").forEach(g => {
+    const mine = boxes.filter(b => b.dataset.g === g.dataset.g), on = mine.filter(b => b.checked).length;
+    g.checked = on === mine.length; g.indeterminate = on > 0 && on < mine.length;
+    $(`#tList [data-gc="${g.dataset.g}"]`).textContent = `${on} of ${mine.length} on`;
+  });
+}
+$("#tList").addEventListener("change", e => {
+  if (e.target.classList.contains("gbox")) tboxes().filter(b => b.dataset.g === e.target.dataset.g).forEach(b => b.checked = e.target.checked);
+  countTools();
+});
+$("#tSearch").addEventListener("input", e => {
+  const q = e.target.value.trim().toLowerCase();
+  $("#tList").querySelectorAll("label:not(.gh)").forEach(l => l.classList.toggle("hidden", !!q && !l.dataset.q.includes(q)));
+  $("#tList").querySelectorAll("label.gh").forEach(h => h.classList.toggle("hidden",
+    !!q && ![...$("#tList").querySelectorAll(`label[data-g="${h.dataset.gh}"]:not(.hidden)`)].length));
+});
+const setVisible = on => { $("#tList").querySelectorAll("label:not(.hidden) input.tbox").forEach(b => b.checked = on); countTools(); };
+$("#tAllOn").onclick = () => setVisible(true);
+$("#tAllOff").onclick = () => setVisible(false);
+$("#tPreset").onchange = e => {
+  const p = e.target.value;
+  const keep = { all: () => true, nocode: b => b.dataset.risky !== "1", readonly: b => b.dataset.writes !== "1",
+                 navis: b => b.dataset.g === "navis" }[p];
+  if (keep) { tboxes().forEach(b => b.checked = keep(b)); countTools(); toast("Preset applied — press Save to keep it."); }
+};
+
+tdlg.addEventListener("close", async () => {
+  if (tdlg.returnValue !== "save" || !toolsFor) return;
+  const disabled = tboxes().filter(b => !b.checked).map(b => b.value);
+  try {
+    await api("/api/tools", { program: toolsFor.pid, name: toolsFor.name, disabled });
+    toast(`${toolsFor.name}: ${disabled.length} tools off.` + (disabled.length ? " Programs that support live updates refresh now; otherwise" : "") + restartNote(toolsFor.pid), 7000);
+  } catch (err) { toast("Error: " + err.message, 6000); }
+  load();
+});
+
+let startTab = "servers";
+try { startTab = localStorage.getItem("mcpctl-tab") || "servers"; } catch (_) {}
+showTab(["servers", "health", "updates", "backups"].includes(startTab) ? startTab : "servers");
+load();
+if (startTab !== "health") loadHealth();   // fills the Health badge in the background
+if (startTab !== "updates") loadUpdates();  // fills the Updates badge from the last (or start-up) check
+</script>
+</body>
+</html>

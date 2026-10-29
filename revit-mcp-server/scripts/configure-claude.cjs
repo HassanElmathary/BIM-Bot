@@ -41,7 +41,9 @@ const NAVIS_SERVER_KEY = "BIM-Bot-Navis";
 // publishes %LOCALAPPDATA%\BIMBot\service-navis.json. The env pin wins over
 // the handshake file (see navisEndpoint.ts); the plain BIM-Bot entry keeps
 // working for Revit on 8080 either way.
-const NAVIS_ENV = { BIMBOT_NAVIS_PORT: "8091" };
+// BIMBOT_SCOPE=navis: this entry registers only navis_* tools (Navisworks +
+// bridge); the Revit tools stay on the plain BIM-Bot entry.
+const NAVIS_ENV = { BIMBOT_NAVIS_PORT: "8091", BIMBOT_SCOPE: "navis" };
 
 function parseArgs() {
     const args = process.argv.slice(2);
@@ -126,7 +128,7 @@ function ensureConfig(label, configPath, nodeExe, indexJs, createIfMissing, opts
     }
 
     // Both entries: BIM-Bot (Revit, port 8080) and BIM-Bot-Navis
-    // (Navisworks, BIMBOT_NAVIS_PORT=8091). Same server binary — the
+    // (Navisworks, BIMBOT_NAVIS_PORT=8091, BIMBOT_SCOPE=navis). Same server binary — the
     // navis_* tools route via withNavisConnection.
     const specs = [
         { key: SERVER_KEY, env: {} },
@@ -459,8 +461,8 @@ function ensureOpenCodeConfig(label, configPath, nodeExe, indexJs, createIfMissi
     const firstTime = !config.mcp[SERVER_KEY];
 
     const specs = [
-        // Navisworks off by default: same ~280 tools again, only useful with
-        // Navisworks open. The user flips "enabled" when they need it.
+        // Navisworks off by default: the BIM-Bot entry already reaches
+        // Navisworks. The user flips "enabled" when they want it separate.
         { key: SERVER_KEY, environment: {}, enabled: true },
         { key: NAVIS_SERVER_KEY, environment: { ...NAVIS_ENV }, enabled: false },
     ];
@@ -476,8 +478,9 @@ function ensureOpenCodeConfig(label, configPath, nodeExe, indexJs, createIfMissi
             // Keep the user's on/off choice across repairs.
             enabled: existing && typeof existing.enabled === "boolean" ? existing.enabled : enabled,
             // Tool listing: ~280 schemas plus a cold node start under antivirus
-            // can exceed OpenCode's 5 s default.
-            timeout: 30000,
+            // took 23 s on a first launch, and OpenCode starts every server at
+            // once, so 30 s was not enough.
+            timeout: 60000,
         };
     }
 

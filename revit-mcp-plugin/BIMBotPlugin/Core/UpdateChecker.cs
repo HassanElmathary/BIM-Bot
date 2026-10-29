@@ -1,7 +1,9 @@
 using System;
 using System.IO;
 using System.Net;
+using System.Collections.Generic;
 using System.Net.Http;
+using System.Security.Cryptography;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 
@@ -172,6 +174,7 @@ namespace BIMBotPlugin.Core
                 var releaseUrl = manifest["releaseUrl"]?.ToString() ?? "";
                 var downloadUrl = manifest["downloadUrl"]?.ToString() ?? releaseUrl;
                 var assetFileName = manifest["assetFileName"]?.ToString() ?? "";
+                var sha256 = NormalizeSha256(manifest["sha256"]?.ToString());
 
                 var currentVersion = new Version(Application.Version);
                 var latestVersion = new Version(latestTag);
@@ -183,7 +186,8 @@ namespace BIMBotPlugin.Core
                     Changelog = changelog.Length > 1000 ? changelog.Substring(0, 1000) + "..." : changelog,
                     DownloadUrl = downloadUrl,
                     AssetFileName = assetFileName,
-                    ReleaseUrl = releaseUrl
+                    ReleaseUrl = releaseUrl,
+                    Sha256 = sha256
                 };
             }
             catch (Exception ex)
@@ -194,11 +198,61 @@ namespace BIMBotPlugin.Core
         }
 
         /// <summary>
-        /// Downloads the update asset to a temp folder and returns the file path.
+        /// Downloads the update asset, verifies its SHA-256 and returns the file
+        /// path. Throws (and deletes the file) when no checksum is published or
+        /// the file does not match, so the caller never runs an installer it
+        /// could not verify.
         /// </summary>
-        public async Task<string> DownloadUpdateAsync(string downloadUrl, string fileName)
+        public async Task<string> DownloadUpdateAsync(UpdateInfo info)
         {
             try
+            {
+                // Gather the checksums BEFORE downloading: the manifest (website /
+                // raw GitHub) and GitHub's own per-asset digest. Two independent
+                // sources mean tampering with one of them alone is caught.
+                var expected = new List<KeyValuePair<string, string>>();
+                if (!string.IsNullOrEmpty(info.Sha256))
+                    expected.Add(new KeyValuePair<string, string>("version manifest", info.Sha256));
+                var githubDigest = await FetchGitHubAssetDigestAsync(info.LatestVersion, info.AssetFileName);
+                if (!string.IsNullOrEmpty(githubDigest))
+                    expected.Add(new KeyValuePair<string, string>("GitHub release", githubDigest!));
+
+                if (expected.Count == 0)
+                    throw new UpdateVerificationException(
+                        "No SHA-256 checksum is published for this update, so it was not installed. " +
+                        "Download it from the GitHub release page instead.");
+
+                var filePath = await DownloadFileAsync(info.DownloadUrl, info.AssetFileName);
+
+                var actual = ComputeSha256(filePath);
+                foreach (var e in expected)
+                {
+                    if (!string.Equals(actual, e.Value, StringComparison.OrdinalIgnoreCase))
+                    {
+                        try { File.Delete(filePath); } catch { }
+                        Logger.LogError($"Update checksum mismatch ({e.Key}): expected {e.Value}, got {actual}");
+                        throw new UpdateVerificationException(
+                            $"The downloaded file does not match the {e.Key} checksum, so it was deleted and not installed. " +
+                            "Try again later, or download it from the GitHub release page.");
+                    }
+                }
+
+                Logger.Log($"Update verified (SHA-256 {actual}) against: {string.Join(", ", expected.ConvertAll(e => e.Key))}");
+                return filePath;
+            }
+            catch (UpdateVerificationException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError("Update download failed", ex);
+                throw new Exception($"Failed to download update: {ex.Message}");
+            }
+        }
+
+        private async Task<string> DownloadFileAsync(string downloadUrl, string fileName)
+        {
             {
                 var downloadDir = Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -234,10 +288,55 @@ namespace BIMBotPlugin.Core
                 Logger.Log($"Update downloaded to: {filePath}");
                 return filePath;
             }
+        }
+
+        /// <summary>
+        /// GitHub publishes a "sha256:..." digest for every release asset. Returns
+        /// null when the release, the asset or the digest is not available (rate
+        /// limit, offline) -- the manifest checksum may still cover it.
+        /// </summary>
+        private async Task<string?> FetchGitHubAssetDigestAsync(string latestVersion, string fileName)
+        {
+            try
+            {
+                var tag = "v" + latestVersion.TrimStart('v');
+                var url = $"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/releases/tags/{tag}";
+                var release = JObject.Parse(await _httpClient.GetStringAsync(url));
+                if (release["assets"] is JArray assets)
+                {
+                    foreach (JObject asset in assets)
+                    {
+                        if (string.Equals(asset["name"]?.ToString(), fileName, StringComparison.OrdinalIgnoreCase))
+                            return NormalizeSha256(asset["digest"]?.ToString());
+                    }
+                }
+            }
             catch (Exception ex)
             {
-                Logger.LogError("Update download failed", ex);
-                throw new Exception($"Failed to download update: {ex.Message}");
+                Logger.Log($"Could not read GitHub asset digest (non-fatal): {ex.Message}");
+            }
+            return null;
+        }
+
+        /// <summary>Accepts "abc..." or "sha256:abc..."; returns 64 lowercase hex chars, or "" if invalid.</summary>
+        private static string NormalizeSha256(string? value)
+        {
+            var v = (value ?? "").Trim();
+            if (v.StartsWith("sha256:", StringComparison.OrdinalIgnoreCase)) v = v.Substring(7);
+            v = v.ToLowerInvariant();
+            if (v.Length != 64) return "";
+            foreach (var c in v)
+                if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'))) return "";
+            return v;
+        }
+
+        private static string ComputeSha256(string filePath)
+        {
+            using (var sha = SHA256.Create())
+            using (var stream = File.OpenRead(filePath))
+            {
+                var hash = sha.ComputeHash(stream);
+                return BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
             }
         }
 
@@ -303,6 +402,7 @@ namespace BIMBotPlugin.Core
             // Find the .exe or .zip asset for download
             var downloadUrl = htmlUrl;
             string assetFileName = "";
+            string sha256 = "";
             var assets = release["assets"] as JArray;
             if (assets != null)
             {
@@ -313,6 +413,7 @@ namespace BIMBotPlugin.Core
                     {
                         downloadUrl = asset["browser_download_url"]?.ToString() ?? htmlUrl;
                         assetFileName = name;
+                        sha256 = NormalizeSha256(asset["digest"]?.ToString());
                         break;
                     }
                 }
@@ -328,7 +429,8 @@ namespace BIMBotPlugin.Core
                 Changelog = changelog.Length > 1000 ? changelog.Substring(0, 1000) + "..." : changelog,
                 DownloadUrl = downloadUrl,
                 AssetFileName = assetFileName,
-                ReleaseUrl = htmlUrl
+                ReleaseUrl = htmlUrl,
+                Sha256 = sha256
             };
         }
     }
@@ -341,5 +443,13 @@ namespace BIMBotPlugin.Core
         public string DownloadUrl { get; set; } = "";
         public string AssetFileName { get; set; } = "";
         public string ReleaseUrl { get; set; } = "";
+        /// <summary>Expected SHA-256 of the asset (64 hex chars), or "" when the source published none.</summary>
+        public string Sha256 { get; set; } = "";
+    }
+
+    /// <summary>The update could not be verified; its message is shown to the user as-is.</summary>
+    public class UpdateVerificationException : Exception
+    {
+        public UpdateVerificationException(string message) : base(message) { }
     }
 }

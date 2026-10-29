@@ -1,8 +1,9 @@
 # Build & Package the BIM-Bot Installer for distribution
 # Run: powershell -ExecutionPolicy Bypass -File installer\build-installer.ps1
 #
-# Output: installer\output\BIMBot-Setup-<version>.exe  (full Inno Setup installer:
-#         Revit plugin + MCP server + portable Node.js + Claude auto-config)
+# Output: installer\output\BIM-Bot.exe  (full Inno Setup installer: Revit +
+#         Navisworks plugins, MCP server, Unreal MCP server, portable Node.js,
+#         Claude auto-config)
 
 Write-Host "============================================"
 Write-Host "  BIM-Bot Installer - Build Script"
@@ -56,18 +57,35 @@ if ($LASTEXITCODE -ne 0) { Pop-Location; Write-Host "FAILED to build MCP server!
 Pop-Location
 Write-Host "  [OK] MCP server built"
 
+# 2b. Build the Unreal MCP server as a single-file exe (Node SEA). The exe
+#     embeds the node.exe that runs this script, so that node must be 20+.
+Write-Host "[2b/4] Building Unreal MCP Server..."
+Push-Location "$root\unreal-mcp-server"
+if (-not (Test-Path "node_modules")) { cmd /c "npm ci >nul 2>&1" }
+cmd /c "npm test >nul 2>&1"
+if ($LASTEXITCODE -ne 0) { Pop-Location; Write-Host "FAILED: Unreal MCP server tests!"; exit 1 }
+$unrealStart = Get-Date
+cmd /c "npm run build:exe >nul 2>&1"
+$unrealExe = "$root\unreal-mcp-server\dist\BIM-Bot-Unreal.exe"
+if ($LASTEXITCODE -ne 0 -or -not (Test-Path $unrealExe) -or (Get-Item $unrealExe).LastWriteTime -lt $unrealStart) {
+    Pop-Location; Write-Host "FAILED to build BIM-Bot-Unreal.exe!"; exit 1
+}
+Pop-Location
+Write-Host "  [OK] BIM-Bot-Unreal.exe built"
+
 # 3. Compile the Inno Setup installer (bundles plugin, server, nodejs, assets)
 Write-Host "[3/4] Compiling Inno Setup installer..."
 $iscc = "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe"
 if (-not (Test-Path $iscc)) { $iscc = "$env:LOCALAPPDATA\Programs\Inno\ISCC.exe" }
 if (-not (Test-Path $iscc)) { $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" }
 if (-not (Test-Path $iscc)) { Write-Host "FAILED: ISCC.exe not found - install Inno Setup 6"; exit 1 }
+$isccStart = Get-Date
 & $iscc $issPath /Q
 if ($LASTEXITCODE -ne 0) { Write-Host "FAILED to compile installer!"; exit 1 }
-$setupExe = "$root\installer\output\BIMBot-Setup-$version.exe"
-if (-not (Test-Path $setupExe)) { Write-Host "FAILED: $setupExe was not produced!"; exit 1 }
+$setupExe = "$root\installer\output\BIM-Bot.exe"
+if (-not (Test-Path $setupExe) -or (Get-Item $setupExe).LastWriteTime -lt $isccStart) { Write-Host "FAILED: $setupExe was not produced!"; exit 1 }
 $exeSizeMB = [math]::Round((Get-Item $setupExe).Length / 1048576, 1)
-Write-Host "  [OK] BIMBot-Setup-$version.exe compiled ($exeSizeMB MB)"
+Write-Host "  [OK] BIM-Bot.exe v$version compiled ($exeSizeMB MB)"
 
 # 4. Done
 Write-Host ""

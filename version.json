@@ -3,6 +3,7 @@
   "releaseUrl": "https://github.com/HassanElmathary/BIM-Bot/releases/tag/v2.7.6",
   "downloadUrl": "https://github.com/HassanElmathary/BIM-Bot/releases/download/v2.7.6/BIMBot-Setup-2.7.6.exe",
   "assetFileName": "BIMBot-Setup-2.7.6.exe",
+  "sha256": "e4fd94af674f4e580ef9af54729e1f2e4e13bbbf64dcc20bc274ac5c269f1c9f",
   "changelog": "BIM-Bot v2.7.6 — Navisworks Manage 2020–2027. FIX: until now the installer copied a plugin built for Navisworks 2024 into every Navisworks version, but each Navisworks year only loads plugins built against its own API, so BIM-Bot only worked in Navisworks 2024. The plugin is now built separately for every year 2020–2027 and the installer deploys the right one to each version you select (Navisworks 2027 added). View capture needs Navisworks 2021 or newer, and section planes appear in captures on 2024 and newer. FIX: TimeLiner tools list task dates in your local time zone (they were shown one day early east of UTC).",
   "minVersion": "1.0.0"
 }

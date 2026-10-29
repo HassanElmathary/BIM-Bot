@@ -9,7 +9,7 @@
       ],
       "environment": {},
       "enabled": true,
-      "timeout": 30000
+      "timeout": 60000
     },
     "BIM-Bot-Navis": {
       "type": "local",
@@ -18,10 +18,11 @@
         "C:\\Program Files\\BIMBot\\server\\build\\index.js"
       ],
       "environment": {
-        "BIMBOT_NAVIS_PORT": "8091"
+        "BIMBOT_NAVIS_PORT": "8091",
+        "BIMBOT_SCOPE": "navis"
       },
       "enabled": false,
-      "timeout": 30000
+      "timeout": 60000
     }
   },
   "tools": {

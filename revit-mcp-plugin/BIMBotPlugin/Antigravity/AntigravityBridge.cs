@@ -244,7 +244,8 @@ namespace BIMBotPlugin.Antigravity
                 ["jsonrpc"] = "2.0",
                 ["method"] = method,
                 ["params"] = JToken.Parse(paramsJson),
-                ["id"] = 1
+                ["id"] = 1,
+                [Core.ServiceAuth.FieldName] = Core.ServiceAuth.Token
             };
 
             var requestStr = request.ToString(Formatting.None);
