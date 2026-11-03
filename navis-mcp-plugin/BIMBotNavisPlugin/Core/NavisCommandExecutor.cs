@@ -43,6 +43,7 @@ namespace BIMBotNavisPlugin.Core
                 case "navis_hide_items": return HideItems(pars);
                 default:
                     return ExecuteExtended(method, pars)
+                           ?? ExecuteDashboard(method, pars)
                            ?? throw new Exception($"Unknown Navisworks command '{method}'.");
             }
         }

@@ -1,0 +1,43 @@
+{
+  "SchemaVersion": 1,
+  "Name": "Default Dashboard",
+  "Description": "Model overview and clash coordination, with the interactive 3D model on both pages.",
+  "Origin": "default",
+  "Pages": [
+    {
+      "Id": "overview",
+      "Name": "Model Overview",
+      "ShowViewer": true,
+      "Visuals": [
+        { "Id": "ovTitle", "Type": "text", "Title": "{{PROJECT_NAME}} — Model Overview", "Fields": {} },
+        { "Id": "ovCardElements", "Type": "card", "Title": "Elements", "Fields": { "Values": [ "Elements.[Element Count]" ] } },
+        { "Id": "ovCardModels", "Type": "card", "Title": "Models", "Fields": { "Values": [ "Elements.[Model Count]" ] } },
+        { "Id": "ovCardCategories", "Type": "card", "Title": "Categories", "Fields": { "Values": [ "Elements.[Category Count]" ] } },
+        { "Id": "ovCardOpenClashes", "Type": "card", "Title": "Open Clashes", "Fields": { "Values": [ "Clashes.[Open Clashes]" ] } },
+        { "Id": "ovSlicerModel", "Type": "slicer", "Title": "Model", "Fields": { "Values": [ "Elements.Model" ] } },
+        { "Id": "ovSlicerCategory", "Type": "slicer", "Title": "Category", "Fields": { "Values": [ "Elements.Category" ] } },
+        { "Id": "ovSlicerLevel", "Type": "slicer", "Title": "Level", "Fields": { "Values": [ "Elements.Level" ] } },
+        { "Id": "ovBarCategory", "Type": "bar", "Title": "Elements by Category", "Fields": { "Category": [ "Elements.Category" ], "Y": [ "Elements.[Element Count]" ] } },
+        { "Id": "ovDonutDiscipline", "Type": "donut", "Title": "Elements by Discipline", "Fields": { "Category": [ "Elements.Discipline" ], "Y": [ "Elements.[Element Count]" ] } }
+      ]
+    },
+    {
+      "Id": "clashes",
+      "Name": "Clash Coordination",
+      "ShowViewer": true,
+      "Visuals": [
+        { "Id": "clTitle", "Type": "text", "Title": "{{PROJECT_NAME}} — Clash Coordination", "Fields": {} },
+        { "Id": "clCardTotal", "Type": "card", "Title": "Total Clashes", "Fields": { "Values": [ "Clashes.[Clash Count]" ] } },
+        { "Id": "clCardNew", "Type": "card", "Title": "New", "Fields": { "Values": [ "Clashes.[New Clashes]" ] } },
+        { "Id": "clCardActive", "Type": "card", "Title": "Active", "Fields": { "Values": [ "Clashes.[Active Clashes]" ] } },
+        { "Id": "clCardResolved", "Type": "card", "Title": "Resolved", "Fields": { "Values": [ "Clashes.[Resolved Clashes]" ] } },
+        { "Id": "clSlicerTest", "Type": "slicer", "Title": "Clash Test", "Fields": { "Values": [ "Clashes.Test" ] } },
+        { "Id": "clBarTest", "Type": "bar", "Title": "Clashes by Test", "Fields": { "Category": [ "Clashes.Test" ], "Y": [ "Clashes.[Clash Count]" ] } },
+        { "Id": "clDonutStatus", "Type": "donut", "Title": "Clashes by Status", "Fields": { "Category": [ "Clashes.Status" ], "Y": [ "Clashes.[Clash Count]" ] } },
+        { "Id": "clTable", "Type": "table", "Title": "Clash List", "Fields": { "Values": [ "Clashes.Test", "Clashes.ClashName", "Clashes.Status", "Clashes.DistanceM", "Clashes.Found" ] } }
+      ]
+    }
+  ],
+  "Viewer": { "Enabled": true, "HideUnselected": false, "GhostOpacity": 0.12, "BackgroundColor": "#16162A", "ColorBy": "Category" },
+  "Export": { "Scope": "full", "Format": "pbit", "RefreshMode": "live", "IncludeGeometry": true, "IncludeClashes": true, "PropertyTabs": [ "Element" ], "MaxPropertiesPerElement": 200 }
+}

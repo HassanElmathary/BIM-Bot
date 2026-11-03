@@ -112,7 +112,7 @@ namespace BIMBotPlugin.AI
                 throw new InvalidOperationException("API key not configured. Go to Settings to add your key.");
 
             // Strategy A: Ollama uses keyword-based filtering; all other providers get ALL tools
-            _currentGroups = _settings.IsOllama ? GetRelevantGroups(userMessage) : null;
+            _currentGroups = null;
 
             _history.Add(new JObject
             {
@@ -472,7 +472,7 @@ namespace BIMBotPlugin.AI
             {
                 requestBody["options"] = new JObject
                 {
-                    ["num_ctx"] = 16384,
+                    ["num_ctx"] = 32768,
                     ["num_predict"] = 4096,
                     ["repeat_penalty"] = 1.1,
                     ["top_p"] = 0.9
@@ -938,10 +938,6 @@ Use get_integration_status to check configured integrations (Excel, Notion, Goog
         // ============ STRATEGIES A+D: Grouped & compressed tool declarations ============
         private JArray GetFunctionDeclarations(HashSet<ToolGroup> groups = null)
         {
-            // Ollama local models: send only essential tools to avoid overwhelming the small model
-            if (_settings.IsOllama)
-                return GetOllamaFunctionDeclarations(groups);
-
             var d = new JArray();
 
             // ===== READING (16 tools) =====

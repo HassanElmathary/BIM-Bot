@@ -1,9 +1,9 @@
 {
-  "version": "2.7.6",
-  "releaseUrl": "https://github.com/HassanElmathary/BIM-Bot/releases/tag/v2.7.6",
-  "downloadUrl": "https://github.com/HassanElmathary/BIM-Bot/releases/download/v2.7.6/BIMBot-Setup-2.7.6.exe",
-  "assetFileName": "BIMBot-Setup-2.7.6.exe",
-  "sha256": "e4fd94af674f4e580ef9af54729e1f2e4e13bbbf64dcc20bc274ac5c269f1c9f",
-  "changelog": "BIM-Bot v2.7.6 — Navisworks Manage 2020–2027. FIX: until now the installer copied a plugin built for Navisworks 2024 into every Navisworks version, but each Navisworks year only loads plugins built against its own API, so BIM-Bot only worked in Navisworks 2024. The plugin is now built separately for every year 2020–2027 and the installer deploys the right one to each version you select (Navisworks 2027 added). View capture needs Navisworks 2021 or newer, and section planes appear in captures on 2024 and newer. FIX: TimeLiner tools list task dates in your local time zone (they were shown one day early east of UTC).",
+  "version": "2.8.0",
+  "releaseUrl": "https://github.com/HassanElmathary/BIM-Bot/releases/tag/v2.8.0",
+  "downloadUrl": "https://github.com/HassanElmathary/BIM-Bot/releases/download/v2.8.0/BIMBot-Setup-2.8.0.exe",
+  "assetFileName": "BIMBot-Setup-2.8.0.exe",
+  "sha256": "c16e48f39d46633238b5f1f348a9fe9b408553fdcbbbb892d0facca3ae945017",
+  "changelog": "BIM-Bot v2.8.0 — NEW: Navisworks → Power BI dashboards. Export the open federated model to a ready-to-open Power BI template (.pbit) with the interactive BIM-Bot 3D Viewer bound to every visual: click an element to filter the report, filter the data to isolate elements in 3D. A default dashboard (Model Overview + Clash Coordination: KPI cards, slicers, charts, clash list) or a custom one; dashboards are saved per project next to the NWF so they can be edited and re-exported. Re-exports are update-aware: when only the model data changed, the report file is left untouched so manual Power BI edits survive — press Refresh. Full model or selection/selection-set scope; live (refreshable) or static snapshot exports. New AI tools: navis_dashboard_catalog, _list, _get, _create, _update, _delete, _export.",
   "minVersion": "1.0.0"
 }
