@@ -1,0 +1,57 @@
+BIM-Bot — Proprietary Software License
+
+Copyright (c) 2026 Hassan Ahmed Elmathary. All rights reserved.
+
+This software, including the Revit plugin, Navisworks plugin, MCP servers,
+dashboard, tracker, installer and all related files and documentation (the
+"Software"), is proprietary and confidential. It is licensed, not sold.
+
+1. Licence to use
+   You may install and use the Software only while you hold an active BIM-Bot
+   user account issued by the copyright holder, and only on the number of
+   devices allowed for that account. The Software does not operate without
+   signing in with a valid username and password.
+
+2. Account credentials
+   Your username and password are personal. You may not share them, let others
+   use your account, or use another person's account.
+
+3. Restrictions
+   Unless the copyright holder gives written permission, you may not:
+   a. copy, modify, adapt or create derivative works of the Software;
+   b. reverse engineer, decompile or disassemble the Software, except to the
+      extent applicable law expressly permits this despite this restriction;
+   c. remove, disable or circumvent the sign-in, licensing or any other
+      access-control feature of the Software;
+   d. distribute, sublicense, rent, lease, lend, sell or publish the Software
+      or any part of it;
+   e. remove or alter any copyright or proprietary notice.
+
+4. Termination
+   This licence ends automatically if you break any of its terms, or when your
+   account is disabled or expires. When it ends you must stop using the
+   Software and delete all copies.
+
+5. Third-party components
+   The Software includes third-party components (for example Node.js and npm
+   packages) that are licensed under their own terms. Those terms apply to
+   those components only.
+
+6. No warranty
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT.
+
+7. Limitation of liability
+   TO THE MAXIMUM EXTENT PERMITTED BY LAW, IN NO EVENT SHALL THE COPYRIGHT
+   HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, INCLUDING LOSS
+   OF DATA, MODELS OR PROFITS, ARISING FROM OR IN CONNECTION WITH THE SOFTWARE
+   OR ITS USE. BACK UP YOUR MODELS BEFORE USING AUTOMATION TOOLS.
+
+8. Earlier versions
+   Versions released before this licence (2.8.0 and earlier) were published
+   under the MIT License, and copies of those versions remain under that
+   licence. This licence applies to all later versions.
+
+Contact: through the BIM-Bot website or the "Request an account" link in the
+Software.

@@ -1,0 +1,9 @@
+{
+  "version": "2.8.0",
+  "releaseUrl": "https://github.com/HassanElmathary/BIM-Bot/releases/tag/v2.8.0",
+  "downloadUrl": "https://github.com/HassanElmathary/BIM-Bot/releases/download/v2.8.0/BIMBot-Setup-2.8.0.exe",
+  "assetFileName": "BIMBot-Setup-2.8.0.exe",
+  "sha256": "c16e48f39d46633238b5f1f348a9fe9b408553fdcbbbb892d0facca3ae945017",
+  "changelog": "BIM-Bot v2.8.0 — NEW: Navisworks → Power BI dashboards. Export the open federated model to a ready-to-open Power BI template (.pbit) with the interactive BIM-Bot 3D Viewer bound to every visual: click an element to filter the report, filter the data to isolate elements in 3D. A default dashboard (Model Overview + Clash Coordination: KPI cards, slicers, charts, clash list) or a custom one; dashboards are saved per project next to the NWF so they can be edited and re-exported. Re-exports are update-aware: when only the model data changed, the report file is left untouched so manual Power BI edits survive — press Refresh. Full model or selection/selection-set scope; live (refreshable) or static snapshot exports. New AI tools: navis_dashboard_catalog, _list, _get, _create, _update, _delete, _export.",
+  "minVersion": "1.0.0"
+}
