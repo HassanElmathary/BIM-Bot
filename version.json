@@ -1,9 +1,9 @@
 {
-  "version": "2.8.0",
-  "releaseUrl": "https://github.com/HassanElmathary/BIM-Bot/releases/tag/v2.8.0",
-  "downloadUrl": "https://github.com/HassanElmathary/BIM-Bot/releases/download/v2.8.0/BIMBot-Setup-2.8.0.exe",
-  "assetFileName": "BIMBot-Setup-2.8.0.exe",
-  "sha256": "49a8149d4d2fa0a3eef6046fcda8144484a9cee5af90cb00764c9de68e1acd06",
-  "changelog": "BIM-Bot v2.8.0 — NEW: Navisworks → Power BI dashboards. Export the open federated model to a ready-to-open Power BI template (.pbit) with the interactive BIM-Bot 3D Viewer bound to every visual: click an element to filter the report, filter the data to isolate elements in 3D. A default dashboard (Model Overview + Clash Coordination: KPI cards, slicers, charts, clash list) or a custom one; dashboards are saved per project next to the NWF so they can be edited and re-exported. Re-exports are update-aware: when only the model data changed, the report file is left untouched so manual Power BI edits survive — press Refresh. Full model or selection/selection-set scope; live (refreshable) or static snapshot exports. New AI tools: navis_dashboard_catalog, _list, _get, _create, _update, _delete, _export.",
+  "version": "2.9.0",
+  "releaseUrl": "https://github.com/HassanElmathary/BIM-Bot/releases/tag/v2.9.0",
+  "downloadUrl": "https://github.com/HassanElmathary/BIM-Bot/releases/download/v2.9.0/BIMBot-Setup-2.9.0.exe",
+  "assetFileName": "BIMBot-Setup-2.9.0.exe",
+  "sha256": "9a61315a88300bc9f7f0e4c450e2d1a7fa3cf4031c5c3a6a0d059c4e2a4ca362",
+  "changelog": "BIM-Bot is in BETA: every user gets 14 days of access, and BIM-Bot shows the days left each time Revit or Navisworks starts. We need testers: report issues and ideas, and get listed on the Contributors page of our website. Need more access? Contact Hassan on LinkedIn (linkedin.com/in/hassan-elmathary) or at help@elmthary.space. BIM-Bot v2.9.0 — NEW: BIM-Bot Access. After updating, sign up once with your name and email: we email a 6-digit code, enter it and BIM-Bot unlocks (works offline up to 7 days). NEW: BIM-Bot Control Panel app to choose which MCP servers and tools each AI program can use, check health and install updates. NEW Navisworks commands: Select by Properties and Export Viewer Package. The Navisworks plugin now installs per user without admin rights.",
   "minVersion": "1.0.0"
 }
