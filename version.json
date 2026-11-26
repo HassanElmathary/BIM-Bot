@@ -1,9 +1,9 @@
 {
-  "version": "2.9.0",
-  "releaseUrl": "https://github.com/HassanElmathary/BIM-Bot/releases/tag/v2.9.0",
-  "downloadUrl": "https://github.com/HassanElmathary/BIM-Bot/releases/download/v2.9.0/BIMBot-Setup-2.9.0.exe",
-  "assetFileName": "BIMBot-Setup-2.9.0.exe",
-  "sha256": "9a61315a88300bc9f7f0e4c450e2d1a7fa3cf4031c5c3a6a0d059c4e2a4ca362",
-  "changelog": "BIM-Bot is in BETA: every user gets 14 days of access, and BIM-Bot shows the days left each time Revit or Navisworks starts. We need testers: report issues and ideas, and get listed on the Contributors page of our website. Need more access? Contact Hassan on LinkedIn (linkedin.com/in/hassan-elmathary) or at help@elmthary.space. BIM-Bot v2.9.0 — NEW: BIM-Bot Access. After updating, sign up once with your name and email: we email a 6-digit code, enter it and BIM-Bot unlocks (works offline up to 7 days). NEW: BIM-Bot Control Panel app to choose which MCP servers and tools each AI program can use, check health and install updates. NEW Navisworks commands: Select by Properties and Export Viewer Package. The Navisworks plugin now installs per user without admin rights.",
+  "version": "3.0.0",
+  "releaseUrl": "https://github.com/HassanElmathary/BIM-Bot/releases/tag/v3.0.0",
+  "downloadUrl": "https://github.com/HassanElmathary/BIM-Bot/releases/download/v3.0.0/BIMBot-Setup-3.0.0.exe",
+  "assetFileName": "BIMBot-Setup-3.0.0.exe",
+  "sha256": "0876bd7d5629ef92c07c1d6b4514eba4bfbfeb4a27b60e9a1948231575744425",
+  "changelog": "BIM-Bot is in BETA: every user gets 14 days of access, and BIM-Bot shows the days left each time Revit or Navisworks starts. We need testers: report issues and ideas, and get listed on the Contributors page of our website. Need more access? Contact Hassan on LinkedIn (linkedin.com/in/hassan-elmathary) or at help@elmthary.space. BIM-Bot v3.0.0 — BIM-Bot Access with a live connection. Sign up once with your name and email: we email a 6-digit code, enter it and BIM-Bot unlocks. While BIM-Bot is open it confirms your access about once a minute; if access is turned off, BIM-Bot shuts down within about a minute (its windows close and the AI connection stops) and unlocks again by itself when access is turned back on. Works offline up to 7 days. Already signed up with 2.9.0? Nothing to do. Also: BIM-Bot Control Panel app; Navisworks Select by Properties and Export Viewer Package; per-user Navisworks install without admin rights.",
   "minVersion": "1.0.0"
 }
